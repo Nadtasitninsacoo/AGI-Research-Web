@@ -79,6 +79,55 @@
 .ipi-toolbar-act { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ipi-confirm { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; color: #f5c451; }
 
+/* Delete by place name */
+.ipi-byplace {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 9px 11px;
+  background: rgba(248, 30, 54, 0.04);
+  border: 1px solid rgba(248, 30, 54, 0.18);
+  border-radius: 9px;
+}
+.ipi-byplace > svg { width: 14px; height: 14px; color: #ff8491; flex: none; }
+.ipi-byplace input {
+  flex: 1 1 260px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 11px;
+  color: var(--text);
+  font-size: 12px;
+  background: linear-gradient(180deg, rgba(20, 24, 33, 0.9), rgba(10, 13, 19, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  outline: none;
+}
+.ipi-byplace input:focus { border-color: rgba(248, 30, 54, 0.5); box-shadow: 0 0 0 3px rgba(248, 30, 54, 0.12); }
+.ipi-byplace-msg { font-size: 11px; color: #5fd38a; }
+
+/* Multi-select bar */
+.ipi-selbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding: 8px 11px;
+  color: #f5c451;
+  font-size: 11px;
+  background: rgba(245, 196, 81, 0.08);
+  border: 1px solid rgba(245, 196, 81, 0.28);
+  border-radius: 8px;
+}
+
+/* Row checkboxes */
+.ipi-check { width: 34px; text-align: center; }
+.ipi-check input { width: 15px; height: 15px; margin: 0; cursor: pointer; accent-color: var(--red-hot); }
+.ipi-table tr.is-sel td { background: rgba(248, 30, 54, 0.06); }
+
 /* Table */
 .ipi-table td { vertical-align: middle; }
 .ipi-ip { font-family: var(--font-geist-mono), monospace; font-weight: 600; color: #ff9aa2; font-variant-numeric: tabular-nums; }

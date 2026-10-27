@@ -7,7 +7,7 @@ import {
   breakdown, buildWhere, countSavedIps, listSavedIps, NoSavedIpsTable, statsSavedIps,
   type Breakdown, type SavedIp, type Stats,
 } from "./query";
-import { ClearAllButton, DeleteIpButton } from "./IpActions";
+import { ClearAllButton, DeleteByPlaceBar, IpTable } from "./IpActions";
 
 export const metadata = { title: "IP Intel // AGI Research" };
 
@@ -100,31 +100,13 @@ async function Content({ searchParams }: { searchParams: SP }) {
               </div>
             </div>
 
+            <DeleteByPlaceBar />
+
             {data.rows.length === 0 ? (
               <p className="muted">ไม่พบรายการ{q || country ? "ที่ตรงกับตัวกรอง" : " — ยังไม่ได้บันทึก IP"}</p>
             ) : (
               <>
-                <div className="table-scroll">
-                  <table className="grid-table ipi-table">
-                    <thead>
-                      <tr>
-                        <th>IP</th><th>เขต/เมือง</th><th>จังหวัด</th><th>ประเทศ</th><th>บันทึกเมื่อ</th><th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.rows.map((r) => (
-                        <tr key={r.id}>
-                          <td className="ipi-ip">{r.ip}</td>
-                          <td>{r.city || "—"}</td>
-                          <td className="muted">{r.region || "—"}</td>
-                          <td><span className="ipi-cc">{r.country || "—"}</span></td>
-                          <td className="muted ipi-when">{r.created_at}</td>
-                          <td className="ipi-rowact"><DeleteIpButton id={r.id} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <IpTable rows={data.rows} />
                 <Pager base="/ip-intel" params={{ q: q || undefined, country: country || undefined }} page={page} total={data.total} size={PAGE_SIZE} />
               </>
             )}

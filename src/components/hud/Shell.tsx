@@ -63,9 +63,9 @@ export function Pager({
   };
   return (
     <nav className="pager" aria-label="Pagination">
-      {page > 1 ? <Link href={href(page - 1)} className="btn btn-ghost">PREV</Link> : <span className="btn btn-ghost is-off">PREV</span>}
+      {page > 1 ? <Link href={href(page - 1)} scroll={false} className="btn btn-ghost">PREV</Link> : <span className="btn btn-ghost is-off">PREV</span>}
       <span className="pager-meta">PAGE {page} / {pages} · {total} TOTAL</span>
-      {page < pages ? <Link href={href(page + 1)} className="btn btn-ghost">NEXT</Link> : <span className="btn btn-ghost is-off">NEXT</span>}
+      {page < pages ? <Link href={href(page + 1)} scroll={false} className="btn btn-ghost">NEXT</Link> : <span className="btn btn-ghost is-off">NEXT</span>}
     </nav>
   );
 }
