@@ -1,0 +1,371 @@
+/* ============================================================
+   11 / AGENT REGISTRY
+   ============================================================ */
+
+.registry {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.registry li {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) minmax(70px, 1.1fr) 34px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 7px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 3px;
+  transition: background 140ms ease;
+}
+
+.registry li:last-child {
+  border-bottom: 0;
+}
+
+.registry li:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.reg-name {
+  min-width: 0;
+}
+
+.reg-name b {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--text-strong);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+}
+
+.reg-name small,
+.reg-meter small {
+  color: var(--dim);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+}
+
+.reg-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.reg-load {
+  color: var(--dim);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid #74747d;
+  border-radius: 50%;
+}
+
+.dot-running {
+  background: var(--red-hot);
+  border-color: var(--red-hot);
+  box-shadow: 0 0 0 3px var(--red-halo);
+  animation: cerberus-pulse 1.8s infinite;
+}
+
+.dot-error {
+  background: transparent;
+  border-color: var(--red-hot);
+  box-shadow: inset 0 0 0 2px var(--red-hot);
+}
+
+.dot-paused {
+  border-color: var(--warn);
+}
+
+/* ============================================================
+   12 / TABLES AND STATUS TAGS
+   ============================================================ */
+
+.table-scroll {
+  margin: 0 -3px;
+  padding: 0 3px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9px;
+  letter-spacing: 0.015em;
+}
+
+.grid-table th {
+  padding: 9px 8px;
+  color: #9b9ba4;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+td {
+  padding: 9px 8px;
+  color: #c6c6cc;
+  line-height: 1.5;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  white-space: nowrap;
+}
+
+tbody tr {
+  transition: background 120ms ease;
+}
+
+tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+tr:last-child td {
+  border-bottom: 0;
+}
+
+.grid-table td {
+  vertical-align: middle;
+}
+
+.grid-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.grid-table .strong {
+  color: #f0f0f3;
+  font-weight: 500;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 19px;
+  padding: 2px 7px;
+  color: #b4b4bc;
+  font-size: 8px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: #242428;
+  border: 1px solid #39393f;
+  border-radius: 3px;
+}
+
+.tag-succeeded {
+  color: var(--ok);
+  background: rgba(66, 199, 129, 0.07);
+  border-color: rgba(66, 199, 129, 0.24);
+}
+
+.tag-failed {
+  color: #fff;
+  background: var(--grad-red-deep);
+  border-color: rgba(248, 30, 54, 0.5);
+  box-shadow: var(--bevel-up);
+}
+
+.tag-running {
+  color: #fff;
+  background: var(--grad-red);
+  border-color: var(--red-hot);
+  box-shadow:
+    var(--bevel-up),
+    0 0 8px var(--red-glow);
+  animation: cerberus-pulse 2s infinite;
+}
+
+.tag-queued {
+  color: #c0c0c7;
+  background: #29292e;
+  border-color: #3c3c43;
+}
+
+.tag-idle {
+  color: #a2a2aa;
+}
+
+/* Blinking status light — shows at a glance which job is working vs waiting. */
+.tag-led {
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.tag-led-running {
+  background: #fff;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.9);
+  animation: tag-led-blink 0.9s steps(1, end) infinite;
+}
+
+.tag-led-queued {
+  background: var(--warn);
+  box-shadow: 0 0 5px rgba(235, 171, 64, 0.7);
+  animation: tag-led-blink 1.8s steps(1, end) infinite;
+}
+
+@keyframes tag-led-blink {
+  0%, 60% { opacity: 1; }
+  61%, 100% { opacity: 0.18; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tag-led { animation: none; opacity: 1; }
+}
+
+/* ============================================================
+   13 / BENCHMARKS
+   ============================================================ */
+
+.bench {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 15px;
+}
+
+.bench > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bench span {
+  color: var(--dim);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+
+.bench b {
+  color: var(--text-strong);
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   14 / ACTIVITY LOG
+   ============================================================ */
+
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 320px;
+  overflow: auto;
+  font-size: 9px;
+  list-style: none;
+  scrollbar-gutter: stable;
+}
+
+.log li {
+  display: grid;
+  grid-template-columns: 48px 62px minmax(0, 1fr);
+  gap: 8px;
+  padding: 7px 8px;
+  color: #a3a3ac;
+  line-height: 1.55;
+  letter-spacing: 0;
+  border-left: 2px solid #38383e;
+}
+
+.log time {
+  color: #777780;
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.log b {
+  overflow: hidden;
+  color: #dedee3;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.log-warn {
+  border-left-color: var(--warn);
+}
+
+.log-error {
+  color: #f0a5ad;
+  background: linear-gradient(
+    90deg,
+    rgba(242, 27, 50, 0.08),
+    transparent
+  );
+  border-left-color: var(--red-hot);
+}
+
+.log-error b {
+  color: #ff6878;
+}
+
+.log li span {
+  overflow-wrap: anywhere;
+}
+
+/* Inline error beside a job delete button. */
+.job-err {
+  display: block;
+  margin-top: 4px;
+  color: var(--error);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+/* ---- jobs bulk-select toolbar + row selection ---- */
+.bulkbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+/* Light up when something is selected. */
+.bulkbar:has(.btn-danger:not(:disabled)) {
+  border-color: var(--line-hot);
+  background: linear-gradient(180deg, rgba(242, 27, 50, 0.08), rgba(242, 27, 50, 0.02));
+}
+
+.bulk-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  user-select: none;
+}
+
+.bulkbar:has(.btn-danger:not(:disabled)) .bulk-check { color: var(--text-strong); }
+
+.col-check { width: 34px; text-align: center; }
+.grid-table td.col-check, .grid-table th.col-check { padding-left: 10px; padding-right: 0; }
+
+.row-selected { background: rgba(242, 27, 50, 0.09); }
+.row-selected td { border-color: rgba(242, 27, 50, 0.18); }

@@ -6,15 +6,29 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test \"engine/test/**/*.test.mjs\"",
+    "db:setup": "node scripts/db-setup.mjs",
+    "db:seed": "node --env-file=.env.local scripts/db-seed.mjs",
+    "engine": "node --env-file=.env.local engine/src/index.mjs",
+    "queue": "node --env-file=.env.local scripts/queue-run.mjs",
+    "scope": "node --env-file=.env.local scripts/set-scope.mjs",
+    "seed-agents": "node --env-file=.env.local scripts/seed-agents.mjs",
+    "test-prompts": "node --env-file=.env.local scripts/test-prompts.mjs",
+    "reset-demo": "node --env-file=.env.local scripts/reset-demo.mjs"
   },
   "dependencies": {
+    "leaflet": "^1.9.4",
+    "libphonenumber-geo-carrier": "^2.0.0",
+    "libphonenumber-js": "^1.12.31",
+    "mysql2": "^3.24.6",
     "next": "16.4.2",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
+    "@types/leaflet": "^1.9.22",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

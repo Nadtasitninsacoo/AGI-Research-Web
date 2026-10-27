@@ -1,0 +1,188 @@
+/* ============================================================
+   AGI // CERBERUS — DARK TACTICAL HUD
+   Palette: Graphite / Black / Blood Red / Signal Red
+   Design: Ultra-thin, compact, precise, high-contrast
+   Framework: Next.js + Tailwind CSS v4
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces — deep-space base; panels are glassy so the cosmos shows through. */
+  --bg: #090a0e;
+  --bg-raised: #1b1e25;
+  --surface: #20242d;
+  --surface-hover: #272c37;
+  --card: #1e222b;
+  --card-raised: #252b36;
+  --ink: #0d0e11;
+  --ink-2: #121318;
+
+  /* Dimensional surface gradients — top-lit for depth, slightly translucent
+     so the starfield/nebula behind them reads without hurting text contrast. */
+  --grad-card: linear-gradient(180deg, rgba(38, 43, 53, 0.82) 0%, rgba(22, 26, 34, 0.84) 100%);
+  --grad-raised: linear-gradient(180deg, rgba(45, 51, 63, 0.86) 0%, rgba(30, 36, 46, 0.88) 100%);
+  --grad-chrome: linear-gradient(180deg, #2b303b 0%, #171a21 100%);
+
+  /* Typography */
+  --text: #dcdce2;
+  --text-strong: #f5f6f9;
+  --dim: #9a9ba6;
+  --faint: #6a6b77;
+
+  /* Borders */
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --line-hot: rgba(239, 24, 42, 0.4);
+  --line-dark: rgba(255, 255, 255, 0.08);
+
+  /* Signal colors — solid red, dark -> bright shades */
+  --red: #cf1326;
+  --red-hot: #f81e36;
+  --red-deep: #7a0a18;
+  --red-dark: #3a080f;
+  --red-glow: rgba(248, 30, 54, 0.22);
+  --red-halo: rgba(248, 30, 54, 0.1);
+  --grad-red: linear-gradient(180deg, #f6243b 0%, #a50f1e 100%);
+  --grad-red-deep: linear-gradient(180deg, #b01021 0%, #6c0714 100%);
+
+  --ok: #3fce83;
+  --warn: #ebab40;
+  --error: #ff3a4e;
+
+  /* Dark surfaces */
+  --on-dark: #eeeeF1;
+  --on-dark-dim: #85858e;
+
+  /* Layout */
+  --sidebar-w: 220px;
+  --nav-h: 48px;
+
+  /* Elevation — layered drop shadow + bevels for a 3D, moulded feel */
+  --shadow:
+    0 2px 5px rgba(0, 0, 0, 0.28),
+    0 10px 26px rgba(0, 0, 0, 0.38);
+
+  --shadow-hover:
+    0 5px 12px rgba(0, 0, 0, 0.34),
+    0 18px 44px rgba(0, 0, 0, 0.5);
+
+  --bevel-up:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+
+  --bevel-in:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.03);
+
+  --radius: 7px;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* ============================================================
+   01 / BASE
+   ============================================================ */
+
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #414147 transparent;
+}
+
+html {
+  min-height: 100%;
+  background: var(--bg);
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(
+      ellipse at 82% -12%,
+      rgba(194, 14, 32, 0.09),
+      transparent 36%
+    ),
+    radial-gradient(
+      ellipse at 4% 100%,
+      rgba(255, 255, 255, 0.018),
+      transparent 36%
+    ),
+    var(--bg);
+  background-attachment: fixed;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+small,
+.mono,
+.panel-head,
+.nav-title,
+.chip,
+.crumbs,
+.clock,
+.tag,
+table,
+.log,
+.kpi span,
+.bench span,
+.field > span,
+.pager-meta,
+.kv dt,
+.sub,
+.block,
+.btn,
+.filter,
+.avatar {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+::selection {
+  color: #fff;
+  background: var(--red);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 1px solid var(--red-hot);
+  outline-offset: 3px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: inherit;
+}
+
+img,
+svg {
+  max-width: 100%;
+}

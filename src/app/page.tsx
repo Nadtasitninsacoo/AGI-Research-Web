@@ -1,69 +1,469 @@
-import Image from "next/image";
+import { Suspense } from "react";
+import { connection } from "next/server";
+import { Navbar } from "@/components/hud/Navbar";
+import { Nexus } from "@/components/hud/Nexus";
+import { Sidebar } from "@/components/hud/Sidebar";
+import { getDashboardData, type DashboardData } from "@/lib/queries";
+
+const EMPTY: DashboardData = {
+  totals: {
+    agents: 0,
+    agentsRunning: 0,
+    projects: 0,
+    experiments: 0,
+    runs: 0,
+    runsRunning: 0,
+    runsQueued: 0,
+    runsSucceeded: 0,
+    runsFailed: 0,
+  },
+  agents: [],
+  runs: [],
+  logs: [],
+  benchmarks: [],
+};
+
+const pct = (n: number, d: number) =>
+  d > 0 ? Math.round((n / d) * 100) : 0;
+
+const hhmm = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "--:--"
+    : date.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+};
+
+const number = (value: number) => value.toLocaleString("en-US");
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="shell" id="top">
+      <Suspense
+        fallback={
+          <>
+            <Sidebar online />
+            <Booting />
+          </>
+        }
+      >
+        <DashboardFrame />
+      </Suspense>
     </div>
+  );
+}
+
+function Booting() {
+  return (
+    <div className="main">
+      <div className="booting">
+        <span className="status-pulse" />
+        INITIALIZING CORE
+        <span className="booting-dots">...</span>
+      </div>
+    </div>
+  );
+}
+
+async function DashboardFrame() {
+  await connection();
+
+  let data = EMPTY;
+  let online = true;
+
+  try {
+    data = await getDashboardData();
+  } catch {
+    online = false;
+  }
+
+  const { totals: t, agents, runs, logs, benchmarks } = data;
+
+  const finished = t.runsSucceeded + t.runsFailed;
+  const successRate = pct(t.runsSucceeded, finished);
+  const maxRuns = Math.max(1, ...agents.map((agent) => agent.runs));
+
+  const kpis = [
+    {
+      label: "TOTAL AGENTS",
+      value: number(t.agents),
+      sub: `${t.agentsRunning} ACTIVE`,
+      fill: pct(t.agentsRunning, t.agents),
+      index: "01",
+      accent: "red",
+    },
+    {
+      label: "PROJECTS",
+      value: number(t.projects),
+      sub: "REGISTERED",
+      fill: Math.min(100, t.projects * 8),
+      index: "02",
+      accent: "neutral",
+    },
+    {
+      label: "EXPERIMENTS",
+      value: number(t.experiments),
+      sub: "REGISTERED",
+      fill: Math.min(100, t.experiments * 3),
+      index: "03",
+      accent: "neutral",
+    },
+    {
+      label: "TOTAL RUNS",
+      value: number(t.runs),
+      sub: `${t.runsRunning} LIVE / ${t.runsQueued} QUEUED`,
+      fill: pct(t.runsRunning + t.runsQueued, t.runs),
+      index: "04",
+      accent: "red",
+    },
+    {
+      label: "SUCCESS RATE",
+      value: `${successRate}%`,
+      sub: `${t.runsFailed} FAILED`,
+      fill: successRate,
+      index: "05",
+      accent: "success",
+    },
+  ];
+
+  const mix = [
+    { key: "succeeded", label: "SUCCEEDED", n: t.runsSucceeded },
+    { key: "running", label: "RUNNING", n: t.runsRunning },
+    { key: "queued", label: "QUEUED", n: t.runsQueued },
+    { key: "failed", label: "FAILED", n: t.runsFailed },
+  ];
+
+  return (
+    <>
+      <Sidebar online={online} />
+
+      <div className="main">
+        <Navbar
+          online={online}
+          agentsActive={t.agentsRunning}
+          runsInFlight={t.runsRunning}
+        />
+
+        <main className="content mission-control">
+          <header className="hero mission-hero">
+            <div className="hero-copy">
+              <div className="eyebrow">
+                <span className="eyebrow-mark" />
+                AGI RESEARCH
+                <span className="eyebrow-separator">/</span>
+                COMMAND CENTER
+              </div>
+
+              <h1>
+                Mission <em>Control</em>
+              </h1>
+
+              <p className="hero-description">
+                Autonomous intelligence monitoring and execution overview.
+              </p>
+            </div>
+
+            <div className="hero-status">
+              <span className={`system-indicator ${online ? "is-online" : "is-offline"}`}>
+                <i />
+                {online ? "SYSTEM OPERATIONAL" : "DATABASE OFFLINE"}
+              </span>
+
+              <div className="hero-status-meta">
+                <span>ACTIVE PROCESSES</span>
+                <b>{number(t.runsRunning)}</b>
+              </div>
+
+              <div className="hero-status-meta">
+                <span>SUCCESS RATE</span>
+                <b>{successRate}%</b>
+              </div>
+            </div>
+          </header>
+
+          <section className="kpis mission-kpis" aria-label="System metrics">
+            {kpis.map((kpi) => (
+              <article
+                className={`kpi mission-kpi accent-${kpi.accent}`}
+                key={kpi.label}
+              >
+                <div className="kpi-topline">
+                  <small>{kpi.label}</small>
+                  <span>{kpi.index}</span>
+                </div>
+
+                <b className="kpi-value">{kpi.value}</b>
+
+                <div className="kpi-bottom">
+                  <span>{kpi.sub}</span>
+                </div>
+
+                <div
+                  className="hair"
+                  role="progressbar"
+                  aria-label={`${kpi.label} indicator`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={kpi.fill}
+                >
+                  <i style={{ width: `${kpi.fill}%` }} />
+                </div>
+              </article>
+            ))}
+          </section>
+
+          <div className="section-divider">
+            <span>LIVE INTELLIGENCE</span>
+            <i />
+            <span className="section-divider-meta">MONITORING / 01</span>
+          </div>
+
+          <div className="dashboard-grid">
+            <section className="panel span-7 mission-panel" id="nexus">
+              <header className="panel-head">
+                <div className="panel-heading">
+                  <span className="panel-index">01</span>
+                  <span>NEXUS</span>
+                  <em>AGENT ORBIT MAP</em>
+                </div>
+
+                <span className="panel-live">
+                  <i />
+                  LIVE
+                </span>
+              </header>
+
+              <div className="nexus-stage">
+                <Nexus agents={agents} successRate={successRate} />
+              </div>
+
+              <div className="mix mission-mix">
+                <div className="mix-heading">
+                  <span>EXECUTION DISTRIBUTION</span>
+                  <span>{number(t.runs)} TOTAL</span>
+                </div>
+
+                <div
+                  className="mix-bar"
+                  role="img"
+                  aria-label={mix
+                    .map((item) => `${item.label}: ${item.n}`)
+                    .join(", ")}
+                >
+                  {mix.map((item) => (
+                    <i
+                      key={item.key}
+                      className={`mix-${item.key}`}
+                      style={{ flex: item.n, minWidth: item.n > 0 ? 3 : 0 }}
+                    />
+                  ))}
+                </div>
+
+                <ul>
+                  {mix.map((item) => (
+                    <li key={item.key}>
+                      <i className={`mix-${item.key}`} />
+                      <span>{item.label}</span>
+                      <b>{number(item.n)}</b>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+
+            <section className="panel span-5 mission-panel" id="agents">
+              <header className="panel-head">
+                <div className="panel-heading">
+                  <span className="panel-index">02</span>
+                  <span>AGENT REGISTRY</span>
+                </div>
+
+                <em>{agents.length.toString().padStart(2, "0")} REGISTERED</em>
+              </header>
+
+              <ul className="registry mission-registry">
+                {agents.length === 0 && (
+                  <li className="muted empty-state">
+                    <span className="empty-state-mark">—</span>
+                    No agents registered
+                  </li>
+                )}
+
+                {agents.map((agent) => {
+                  const completion = pct(agent.succeeded, agent.runs);
+
+                  return (
+                    <li key={agent.id}>
+                      <i className={`dot dot-${agent.status}`} />
+
+                      <div className="reg-name">
+                        <b title={agent.name}>{agent.name}</b>
+                        <small title={agent.model ?? "unassigned"}>
+                          {agent.model ?? "UNASSIGNED"}
+                        </small>
+                      </div>
+
+                      <div className="reg-meter">
+                        <div className="hair">
+                          <i style={{ width: `${completion}%` }} />
+                        </div>
+                        <small>
+                          {completion}% <span>·</span> {agent.runs} RUNS
+                        </small>
+                      </div>
+
+                      <span className="reg-load" title="Relative run volume">
+                        {pct(agent.runs, maxRuns)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <footer className="panel-foot">
+                <span>ACTIVE AGENTS</span>
+                <b>{t.agentsRunning.toString().padStart(2, "0")}</b>
+                <span className="foot-separator">/</span>
+                <span>{t.agents.toString().padStart(2, "0")} TOTAL</span>
+              </footer>
+            </section>
+
+            <section className="panel span-5 mission-panel" id="runs">
+              <header className="panel-head">
+                <div className="panel-heading">
+                  <span className="panel-index">03</span>
+                  <span>RUN STREAM</span>
+                </div>
+                <em>LATEST {runs.length.toString().padStart(2, "0")}</em>
+              </header>
+
+              <div className="table-scroll">
+                <table className="mission-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">ID</th>
+                      <th scope="col">EXPERIMENT</th>
+                      <th scope="col">AGENT</th>
+                      <th scope="col">ACC.</th>
+                      <th scope="col">STATUS</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {runs.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="muted empty-table">
+                          No runs recorded
+                        </td>
+                      </tr>
+                    )}
+
+                    {runs.map((run) => (
+                      <tr key={run.id}>
+                        <td className="muted run-id">#{run.id}</td>
+                        <td className="run-experiment" title={run.experiment}>
+                          {run.experiment}
+                        </td>
+                        <td className="muted run-agent" title={run.agent ?? "—"}>
+                          {run.agent ?? "—"}
+                        </td>
+                        <td className="run-accuracy">
+                          {run.accuracy != null
+                            ? `${(run.accuracy * 100).toFixed(1)}%`
+                            : "—"}
+                        </td>
+                        <td>
+                          <span className={`tag tag-${run.status}`}>
+                            {run.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="panel span-3 mission-panel" id="benchmarks">
+              <header className="panel-head">
+                <div className="panel-heading">
+                  <span className="panel-index">04</span>
+                  <span>BENCHMARKS</span>
+                </div>
+                <em>AVG SCORE</em>
+              </header>
+
+              <div className="benchmark-list">
+                {benchmarks.length === 0 && (
+                  <p className="muted empty-state">No evaluations yet</p>
+                )}
+
+                {benchmarks.map((benchmark) => {
+                  const score = Math.max(
+                    0,
+                    Math.min(100, Math.round(benchmark.score * 100)),
+                  );
+
+                  return (
+                    <div className="bench" key={benchmark.benchmark}>
+                      <div>
+                        <span title={benchmark.benchmark}>
+                          {benchmark.benchmark}
+                        </span>
+                        <b>{(benchmark.score * 100).toFixed(1)}</b>
+                      </div>
+
+                      <div
+                        className="hair"
+                        role="progressbar"
+                        aria-label={`${benchmark.benchmark} score`}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={score}
+                      >
+                        <i style={{ width: `${score}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="panel span-4 mission-panel" id="logs">
+              <header className="panel-head">
+                <div className="panel-heading">
+                  <span className="panel-index">05</span>
+                  <span>SYSTEM LOG</span>
+                </div>
+                <em>TAIL {logs.length.toString().padStart(2, "0")}</em>
+              </header>
+
+              <ul className="log mission-log">
+                {logs.length === 0 && (
+                  <li className="muted empty-state">System log is empty</li>
+                )}
+
+                {logs.map((log) => (
+                  <li key={log.id} className={`log-${log.level}`}>
+                    <time dateTime={log.createdAt}>{hhmm(log.createdAt)}</time>
+                    <b title={log.agent}>{log.agent}</b>
+                    <span title={log.message}>{log.message}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+
+          <footer className="dashboard-footer">
+            <span>AGI RESEARCH SYSTEM</span>
+            <span>MISSION CONTROL <i>{"///"}</i> OVERVIEW</span>
+            <a href="#top">BACK TO TOP ↑</a>
+          </footer>
+        </main>
+      </div>
+    </>
   );
 }

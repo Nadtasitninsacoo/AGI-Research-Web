@@ -1,0 +1,211 @@
+/* ============================================================
+   20 / GRID RESPONSIVENESS
+   ============================================================ */
+
+.span-3,
+.span-4,
+.span-5,
+.span-7,
+.span-8,
+.span-12 {
+  min-width: 0;
+}
+
+@media (min-width: 1600px) {
+  .content {
+    gap: 14px;
+    padding: 24px 28px 40px;
+  }
+
+  .panel {
+    padding: 17px 18px 18px;
+  }
+
+  .kpis {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 1280px) {
+  :root {
+    --sidebar-w: 200px;
+  }
+
+  .content {
+    gap: 10px;
+    padding: 17px 16px 30px;
+  }
+
+  .span-7,
+  .span-5,
+  .span-8 {
+    grid-column: 1 / -1;
+  }
+
+  .span-3,
+  .span-4 {
+    grid-column: span 6;
+  }
+
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1000px) {
+  :root {
+    --sidebar-w: 58px;
+  }
+
+  .sidebar {
+    align-items: center;
+    gap: 17px;
+    padding: 13px 7px;
+  }
+
+  .brand {
+    justify-content: center;
+    padding: 4px 0 12px;
+    border-bottom: 0;
+  }
+
+  .brand-text,
+  .nav-title,
+  .nav-item span,
+  .nav-item em,
+  .core-card div {
+    display: none;
+  }
+
+  .nav-group {
+    width: 100%;
+    align-items: center;
+  }
+
+  .nav-item {
+    justify-content: center;
+    width: 38px;
+    height: 36px;
+    padding: 0;
+  }
+
+  .nav-item.active::before {
+    left: -7px;
+  }
+
+  .core-card {
+    justify-content: center;
+    padding: 9px;
+  }
+
+  .chips {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .content {
+    gap: 9px;
+    padding: 12px 10px 24px;
+  }
+
+  .navbar {
+    gap: 8px;
+    height: 43px;
+    padding: 0 10px;
+  }
+
+  .crumbs {
+    gap: 5px;
+    font-size: 8px;
+    letter-spacing: 0.07em;
+  }
+
+  .clock {
+    font-size: 9px;
+  }
+
+  .hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 7px;
+    padding-bottom: 5px;
+  }
+
+  .hero h1 {
+    font-size: 24px;
+  }
+
+  .hero p {
+    font-size: 8px;
+    text-align: left;
+  }
+
+  .span-3,
+  .span-4,
+  .span-5,
+  .span-7,
+  .span-8 {
+    grid-column: 1 / -1;
+  }
+
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .kpi {
+    padding: 11px;
+  }
+
+  .kpi b {
+    font-size: 25px;
+  }
+
+  .panel {
+    padding: 12px 11px 13px;
+  }
+
+  .panel-head span {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+  }
+
+  .registry li {
+    grid-template-columns: 8px minmax(0, 1fr) 32px;
+    gap: 8px;
+  }
+
+  .reg-meter {
+    display: none;
+  }
+
+  .field-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kv {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .kv dd {
+    margin-bottom: 7px;
+  }
+
+  .pager {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .log li {
+    grid-template-columns: 44px 48px minmax(0, 1fr);
+    gap: 6px;
+    padding-left: 7px;
+  }
+
+  .table-scroll {
+    margin: 0;
+    padding: 0;
+  }
+}

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Separate package with its own tsconfig.
+    "agent-orchestrator/**",
   ]),
 ]);
 

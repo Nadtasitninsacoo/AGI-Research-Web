@@ -1,0 +1,248 @@
+/* ============================================================
+   09 / NEXUS SYSTEM VISUALIZATION
+   ============================================================ */
+
+.nexus {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+}
+
+.nexus svg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+#nexus {
+  background: radial-gradient(
+    circle at 50% 45%,
+    #222226 0%,
+    #19191d 55%,
+    #151518 100%
+  );
+}
+
+.sweep {
+  position: absolute;
+  inset: 7%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 290deg,
+    rgba(242, 27, 50, 0.035) 340deg,
+    rgba(242, 27, 50, 0.2) 360deg
+  );
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(
+    circle,
+    transparent 0 12%,
+    #000 13%
+  );
+  mask: radial-gradient(
+    circle,
+    transparent 0 12%,
+    #000 13%
+  );
+  opacity: 0.7;
+  animation: cerberus-spin 12s linear infinite;
+}
+
+.ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.13);
+  stroke-width: 0.6;
+}
+
+.ring-dash {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 0.6;
+  stroke-dasharray: 2 6;
+}
+
+.ring-ticks {
+  fill: none;
+  stroke: rgba(242, 27, 50, 0.55);
+  stroke-width: 5;
+  stroke-dasharray: 0.8 11.2;
+}
+
+.cross {
+  stroke: rgba(255, 255, 255, 0.055);
+  stroke-width: 0.6;
+}
+
+.rot-slow {
+  transform-origin: 250px 250px;
+  animation: cerberus-spin 120s linear infinite;
+}
+
+.rot-rev {
+  transform-origin: 250px 250px;
+  animation: cerberus-spin 80s linear infinite reverse;
+}
+
+.core-ring {
+  fill: #0d0d0f;
+  stroke: var(--red-hot);
+  stroke-width: 1.2;
+}
+
+.core-num {
+  fill: #fff;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 17px;
+  font-weight: 300;
+  text-anchor: middle;
+}
+
+.core-cap {
+  fill: #a2a2ab;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 5px;
+  letter-spacing: 1.6px;
+  text-anchor: middle;
+}
+
+.spoke {
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 0.6;
+}
+
+.node-halo {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.15);
+  stroke-width: 0.6;
+}
+
+.node-name {
+  fill: #eeeeF1;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 1.4px;
+  paint-order: stroke;
+  stroke: #19191d;
+  stroke-width: 3px;
+}
+
+.node-sub {
+  fill: #9999a2;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 6.5px;
+  letter-spacing: 1px;
+  paint-order: stroke;
+  stroke: #19191d;
+  stroke-width: 3px;
+}
+
+.n-live .node {
+  fill: var(--red-hot);
+}
+
+.n-live .node-halo {
+  stroke: var(--red-hot);
+}
+
+.n-live .spoke {
+  stroke: rgba(242, 27, 50, 0.5);
+}
+
+.n-bad .node {
+  fill: none;
+  stroke: var(--red-hot);
+  stroke-width: 1;
+}
+
+.n-bad .node-halo {
+  stroke: var(--red-hot);
+  stroke-dasharray: 2 2;
+}
+
+.n-pause .node {
+  fill: var(--warn);
+}
+
+.n-idle .node {
+  fill: #777780;
+}
+
+.ping {
+  fill: none;
+  stroke: var(--red-hot);
+  stroke-width: 0.8;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cerberus-ping 2.2s ease-out infinite;
+}
+
+/* ============================================================
+   10 / MIX STATUS
+   ============================================================ */
+
+.mix {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.mix-bar {
+  display: flex;
+  gap: 2px;
+  height: 3px;
+  overflow: hidden;
+  background: #29292e;
+  border-radius: 1px;
+}
+
+.mix-bar i {
+  min-width: 0;
+}
+
+.mix ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--dim);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  list-style: none;
+}
+
+.mix li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mix li b {
+  color: var(--text-strong);
+  font-weight: 500;
+}
+
+.mix li i {
+  width: 7px;
+  height: 3px;
+  border-radius: 1px;
+}
+
+.mix-succeeded {
+  background: #e4e4e7;
+}
+
+.mix-running {
+  background: var(--red-hot);
+}
+
+.mix-queued {
+  background: #606067;
+}
+
+.mix-failed {
+  background: var(--red-deep);
+}

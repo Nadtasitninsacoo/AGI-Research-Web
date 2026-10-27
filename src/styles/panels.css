@@ -1,0 +1,275 @@
+/* ============================================================
+   05 / HERO
+   ============================================================ */
+
+.hero {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 3px 1px 7px;
+}
+
+.hero small {
+  color: var(--red-hot);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.25em;
+}
+
+.hero h1 {
+  margin: 6px 0 0;
+  color: var(--text-strong);
+  font-size: clamp(24px, 2.2vw, 32px);
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+}
+
+.hero h1 em {
+  color: #fff;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.hero p {
+  max-width: 350px;
+  color: var(--dim);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  line-height: 1.8;
+  letter-spacing: 0.1em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   06 / KPI CARDS
+   ============================================================ */
+
+.kpis {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.kpi {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px 14px 14px;
+  overflow: hidden;
+  background: var(--grad-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), var(--bevel-up);
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.kpi:hover {
+  transform: translateY(-2px);
+  background: var(--grad-raised);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-hover), var(--bevel-up);
+}
+
+.kpi small {
+  color: var(--dim);
+  font-size: 8px;
+  letter-spacing: 0.17em;
+}
+
+.kpi b {
+  color: var(--text-strong);
+  font-size: clamp(24px, 2.1vw, 33px);
+  font-weight: 300;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi span {
+  margin-bottom: 5px;
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.kpi:first-child {
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(248, 30, 54, 0.22),
+      transparent 60%
+    ),
+    var(--grad-raised);
+  border-color: rgba(248, 30, 54, 0.3);
+}
+
+.kpi:first-child small,
+.kpi:first-child span {
+  color: #a4a0a5;
+}
+
+.kpi:first-child b {
+  color: #fff;
+}
+
+.kpi:first-child .hair {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.kpi:first-child::after {
+  position: absolute;
+  top: -30px;
+  right: -30px;
+  width: 85px;
+  height: 85px;
+  background: radial-gradient(
+    circle,
+    rgba(242, 27, 50, 0.13),
+    transparent 72%
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.kpi:not(:first-child)::after {
+  position: absolute;
+  top: -25px;
+  right: -25px;
+  width: 65px;
+  height: 65px;
+  background: radial-gradient(
+    circle,
+    rgba(242, 27, 50, 0.06),
+    transparent 72%
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.kpi:last-child b {
+  color: var(--red-hot);
+}
+
+/* ============================================================
+   07 / PANELS
+   ============================================================ */
+
+.panel {
+  position: relative;
+  min-width: 0;
+  padding: 14px 15px 16px;
+  overflow: hidden;
+  background: var(--grad-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), var(--bevel-up);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.panel:hover {
+  border-color: rgba(255, 255, 255, 0.105);
+  box-shadow: var(--shadow-hover), var(--bevel-up);
+}
+
+.panel::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 25px;
+  height: 2px;
+  background: var(--red-hot);
+  content: "";
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line);
+}
+
+.panel-head span {
+  color: #dedee3;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+}
+
+.panel-head em {
+  color: var(--faint);
+  font-size: 8px;
+  font-style: normal;
+  letter-spacing: 0.12em;
+}
+
+.muted {
+  color: var(--dim);
+}
+
+.span-3 {
+  grid-column: span 3;
+}
+
+.span-4 {
+  grid-column: span 4;
+}
+
+.span-5 {
+  grid-column: span 5;
+}
+
+.span-7 {
+  grid-column: span 7;
+}
+
+.span-8 {
+  grid-column: span 8;
+}
+
+.span-12 {
+  grid-column: 1 / -1;
+}
+
+/* ============================================================
+   08 / PROGRESS BARS
+   ============================================================ */
+
+.hair {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  background: #121419;
+  border-radius: 2px;
+  box-shadow: var(--bevel-in);
+}
+
+.hair i {
+  position: relative;
+  display: block;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--red-deep),
+    var(--red-hot)
+  );
+  border-radius: 2px;
+  box-shadow:
+    0 0 8px var(--red-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}

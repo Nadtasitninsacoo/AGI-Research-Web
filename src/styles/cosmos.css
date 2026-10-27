@@ -1,0 +1,87 @@
+/* ============================================================
+   00 / COSMIC BACKGROUND — deep-space atmosphere
+   A single fixed, non-interactive layer behind the whole app.
+   CSS-only: nebula + vignette + HUD grid on the element, star
+   fields on the pseudo-elements. Sits at z-index -1 so it shows
+   through the shell's gutters but never covers panels or input.
+   ============================================================ */
+
+.cosmos {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    /* faint HUD grid, fading out toward the centre */
+    linear-gradient(rgba(255, 255, 255, 0.016) 1px, transparent 1px) 0 0 / 46px 46px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.016) 1px, transparent 1px) 0 0 / 46px 46px,
+    /* crimson nebula clouds */
+    radial-gradient(ellipse 72% 52% at 84% -6%, rgba(214, 22, 44, 0.28), transparent 60%),
+    radial-gradient(ellipse 66% 56% at 6% 108%, rgba(140, 12, 30, 0.24), transparent 62%),
+    radial-gradient(ellipse 54% 44% at 48% 58%, rgba(104, 14, 34, 0.14), transparent 72%),
+    /* vignette + deep-space base */
+    radial-gradient(circle at 50% 40%, transparent 62%, rgba(0, 0, 0, 0.5) 100%),
+    #06070b;
+  /* fade the grid so it reads as a HUD, not graph paper */
+  -webkit-mask-image: radial-gradient(ellipse 120% 90% at 50% 30%, #000 40%, transparent 92%);
+  mask-image: radial-gradient(ellipse 120% 90% at 50% 30%, #000 40%, transparent 92%);
+}
+
+/* Two parallax star fields. Each layer is a set of tiny radial dots tiled
+   across a repeating tile, drifting slowly for a sense of depth. */
+.cosmos::before,
+.cosmos::after {
+  position: absolute;
+  inset: -20%;
+  content: "";
+  background-repeat: repeat;
+}
+
+.cosmos::before {
+  background-image:
+    radial-gradient(1px 1px at 20px 32px, rgba(255, 255, 255, 0.9), transparent),
+    radial-gradient(1px 1px at 120px 80px, rgba(255, 255, 255, 0.55), transparent),
+    radial-gradient(1px 1px at 180px 140px, rgba(255, 220, 220, 0.6), transparent),
+    radial-gradient(1px 1px at 60px 180px, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(2px 2px at 230px 50px, rgba(255, 255, 255, 0.5), transparent);
+  background-size: 260px 260px;
+  opacity: 0.9;
+  animation: cosmos-drift 150s linear infinite alternate;
+}
+
+.cosmos::after {
+  background-image:
+    radial-gradient(1.5px 1.5px at 40px 60px, rgba(255, 255, 255, 0.95), transparent),
+    radial-gradient(1px 1px at 160px 20px, rgba(255, 200, 205, 0.7), transparent),
+    radial-gradient(2px 2px at 300px 200px, rgba(248, 30, 54, 0.45), transparent),
+    radial-gradient(1px 1px at 250px 120px, rgba(255, 255, 255, 0.5), transparent);
+  background-size: 420px 420px;
+  opacity: 0.7;
+  animation: cosmos-drift 240s linear infinite alternate-reverse;
+}
+
+@keyframes cosmos-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-34px, -52px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cosmos::before,
+  .cosmos::after {
+    animation: none;
+  }
+}
+
+/* Glass surfaces: a light blur behind the translucent panels so the starfield
+   and nebula glow through them, giving the "HUD over deep space" depth. The
+   panel gradients (base.css) stay dark enough to keep text crisp. */
+.panel,
+.kpi {
+  backdrop-filter: blur(7px) saturate(1.05);
+  -webkit-backdrop-filter: blur(7px) saturate(1.05);
+}

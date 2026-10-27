@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+.next-dev.log
+
+# agent-orchestrator
+/agent-orchestrator/node_modules
+/agent-orchestrator/logs
+/agent-orchestrator/scratchpad
+/agent-orchestrator/state
+
+# engine runtime log (started from the dashboard button)
+engine-runtime.log

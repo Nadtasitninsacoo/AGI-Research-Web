@@ -1,0 +1,44 @@
+/* ============================================================
+   21 / ANIMATIONS
+   ============================================================ */
+
+@keyframes cerberus-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes cerberus-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes cerberus-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes cerberus-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+
+  100% {
+    transform: scale(3.4);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

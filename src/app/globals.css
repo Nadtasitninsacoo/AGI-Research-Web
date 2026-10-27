@@ -1,26 +1,17 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+/* Design system is split by area in src/styles/. Keep this order: later files override earlier ones. */
+@import "../styles/base.css";
+@import "../styles/cosmos.css";
+@import "../styles/shell.css";
+@import "../styles/panels.css";
+@import "../styles/nexus.css";
+@import "../styles/data.css";
+@import "../styles/controls.css";
+@import "../styles/responsive.css";
+@import "../styles/motion.css";
+@import "../styles/overview.css";
+@import "../styles/agents.css";
+@import "../styles/radar.css";
+@import "../styles/map.css";
