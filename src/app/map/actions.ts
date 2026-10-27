@@ -155,6 +155,25 @@ function cleanTarget(raw: string): { ok: true; target: string } | { ok: false; m
   return { ok: true, target: h };
 }
 
+/** Validate an operator-supplied nmap port spec: "80", "80,443", "1-1000",
+ *  "22,80,8000-8100". Digits/commas/hyphens only, each port 1-65535, lo<=hi,
+ *  a bounded number of groups. Returns a normalized spec or an error. */
+function cleanPorts(spec?: string): { ok: true; ports?: string } | { ok: false; message: string } {
+  const s = (spec || "").trim();
+  if (!s) return { ok: true, ports: undefined };
+  if (!/^\d{1,5}(?:-\d{1,5})?(?:,\d{1,5}(?:-\d{1,5})?)*$/.test(s)) {
+    return { ok: false, message: "รูปแบบพอร์ตไม่ถูกต้อง — ใช้ได้เช่น 80,443 หรือ 1-1000" };
+  }
+  const groups = s.split(",");
+  if (groups.length > 64) return { ok: false, message: "ระบุพอร์ตมากกลุ่มเกินไป (จำกัด 64 กลุ่ม)" };
+  for (const g of groups) {
+    const [lo, hi] = g.split("-").map(Number);
+    if (lo < 1 || lo > 65535) return { ok: false, message: `พอร์ต ${lo} อยู่นอกช่วง 1-65535` };
+    if (hi !== undefined && (hi < 1 || hi > 65535 || hi < lo)) return { ok: false, message: `ช่วงพอร์ต ${g} ไม่ถูกต้อง` };
+  }
+  return { ok: true, ports: s };
+}
+
 /** nmap grepable "Ports:" field → rows. Each port is a/b/c/d/e/f/g split by "/". */
 function parseGrepable(out: string): { up: boolean; open: PortRow[] } {
   let up = false;
@@ -192,16 +211,27 @@ function parseGrepable(out: string): { up: boolean; open: PortRow[] } {
  * can't be turned into a flooder, and a hard wall-clock timeout. Arguments are
  * passed to execFile as an array (never a shell string), so the target can't inject.
  */
-export async function portScanAction(input: string, opts?: { allPorts?: boolean }): Promise<PortScan> {
+export async function portScanAction(
+  input: string,
+  opts?: { allPorts?: boolean; ports?: string },
+): Promise<PortScan> {
   const c = cleanTarget(input);
   if (!c.ok) return c;
-  const topPorts = opts?.allPorts ? "1000" : "100";
-  const scanned = opts?.allPorts ? "top 1000 TCP" : "top 100 TCP";
+  const cp = cleanPorts(opts?.ports);
+  if (!cp.ok) return cp;
+  // Explicit ports win; otherwise the top-N set. An explicit range can be large,
+  // but the --host-timeout still bounds total scan time so it can't become a flood.
+  const portArgs = cp.ports
+    ? ["-p", cp.ports]
+    : ["--top-ports", opts?.allPorts ? "1000" : "100"];
+  const scanned = cp.ports
+    ? `พอร์ต ${cp.ports}`
+    : opts?.allPorts ? "top 1000 TCP" : "top 100 TCP";
   const args = [
     "-sT",                    // TCP connect scan — no raw sockets, no admin needed
     "-Pn",                    // treat host as up (many hosts drop ping); we report "up" from port replies
     "-sV", "--version-light", // identify services, but the fast probe set only
-    "--top-ports", topPorts,
+    ...portArgs,
     "-T4",                    // brisk but not the flood-prone -T5
     "--host-timeout", "90s",
     "-n",                     // we resolve/validate ourselves; let nmap skip rDNS

@@ -580,9 +580,10 @@ export function StrategicMap() {
 
   // Geolocate the IP/host in the target field and pin its approximate position.
   // This is OSINT only (DNS + geo-IP DB) — it does NOT scan or connect to the host.
-  const geoLocateIp = useCallback(async () => {
-    const q = host.trim();
+  const geoLocateIp = useCallback(async (targetArg?: string) => {
+    const q = (targetArg ?? host).trim();
     if (!q || geoBusy) return;
+    if (targetArg) setHost(targetArg);
     setGeoBusy(true);
     setGeoMsg("");
     const r = await geoipAction(q);
@@ -604,13 +605,14 @@ export function StrategicMap() {
 
   // ACTIVE port scan of the target host with nmap. This DOES connect to the host
   // (unlike the OSINT geolocate) — for authorized engagements only.
-  const portScan = useCallback(async (allPorts: boolean, targetArg?: string) => {
+  const portScan = useCallback(async (allPorts: boolean, targetArg?: string, portsArg?: string) => {
     const q = (targetArg ?? host).trim();
     if (!q || scanBusy) return;
+    if (targetArg) setHost(targetArg);
     setScanBusy(true);
-    setScanMsg(`กำลังสแกน ${q} ด้วย nmap...`);
+    setScanMsg(`กำลังสแกน ${q}${portsArg ? ` พอร์ต ${portsArg}` : ""} ด้วย nmap...`);
     setPorts(null);
-    const r = await portScanAction(q, { allPorts });
+    const r = await portScanAction(q, { allPorts, ports: portsArg });
     setScanBusy(false);
     if (!r.ok) { setScanMsg(r.message); setPorts(null); return; }
     setPorts(r.open);
@@ -712,20 +714,43 @@ export function StrategicMap() {
       return;
     }
 
-    // Port-scan intent: "สแกนพอร์ต 8.8.8.8", "scan ports scanme.nmap.org",
-    // "nmap 10.10.10.5 ครบ". Pull the target from the command, else the field.
+    // --- Recon intents: nmap port scan and/or IP geolocate, in any combination.
+    //     "สแกนพอร์ต 8.8.8.8", "สแกนพอร์ต 80,443 ของ 1.2.3.4", "nmap 10.0.0.5 ครบ",
+    //     "สแกน 1.2.3.4 แล้วปักหมุด", "ปักหมุด scanme.nmap.org". ---
+    const ipM = raw.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
+    const hostM = raw.match(/\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+\b/i);
+    const reconTarget = (ipM?.[0] || hostM?.[0] || "").trim();
+    // Test keywords with the target removed, so a hostname that happens to
+    // contain "nmap"/"scan" (e.g. scanme.nmap.org) can't fake a scan intent.
+    const lcs = (reconTarget ? raw.split(reconTarget).join(" ") : raw).toLowerCase();
     const scanIntent =
-      /(สแกนพอร์ต|สแกนพอร์ท|สแกน\s*port|scan\s*ports?|nmap|พอร์ตเปิด|open\s*ports?)/i.test(lc) ||
-      (/(สแกน|scan)/i.test(lc) && /\d{1,3}(?:\.\d{1,3}){3}/.test(raw));
-    if (scanIntent) {
-      const ipM = raw.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
-      const hostM = raw.match(/\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+\b/i);
-      const target = (ipM?.[0] || hostM?.[0] || host).trim();
-      if (!target) { setAiMsg('บอกเป้าหมายด้วย เช่น "สแกนพอร์ต 8.8.8.8" หรือกรอก IP/host ในช่องเป้าหมาย'); return; }
-      const allPorts = /(top\s*1000|1000|ครบ|เต็ม|ลึก|ทั้งหมด|full|deep)/i.test(lc);
-      setHost(target);
-      setAiMsg(`สั่งสแกนพอร์ต ${target} ด้วย nmap (${allPorts ? "top 1000" : "top 100"})...`);
-      await portScan(allPorts, target);
+      /(สแกนพอร์ต|สแกนพอร์ท|สแกน\s*port|scan\s*ports?|nmap|พอร์ตเปิด|open\s*ports?)/i.test(lcs) ||
+      (/(สแกน|scan)/i.test(lcs) && reconTarget !== "");
+    const pinIntent =
+      /(ปักหมุด|ปักจุด|หมุด|ตำแหน่งไอพี|ตำแหน่ง|พิกัดไอพี|geo-?locate|geoip|locate|อยู่ที่ไหน|อยู่ไหน|ที่ไหน|where is|where)/i.test(lcs);
+
+    if (scanIntent || (pinIntent && reconTarget)) {
+      const target = reconTarget || host.trim();
+      if (!target) { setAiMsg('บอกเป้าหมายด้วย เช่น "สแกนพอร์ต 8.8.8.8" หรือ "ปักหมุด 8.8.8.8"'); return; }
+
+      // Custom ports: "พอร์ต 80,443", "ports 1-1000", or a bare "22,80,443" token.
+      // The (?![\d.]) lookahead stops the keyword form from eating an IP octet.
+      const kw = raw.match(/(?:พอร์ต|พอร์ท|ports?|port|-p)\s*(\d{1,5}(?:[,-]\d{1,5})*)(?![\d.])/i);
+      const bare = raw.match(/\b\d{1,5}(?:[,-]\d{1,5})+\b/);
+      const portsArg = (kw?.[1] || bare?.[0] || "").trim() || undefined;
+      const allPorts = !portsArg && /(top\s*1000|1000|ครบ|เต็ม|ลึก|ทั้งหมด|full|deep)/i.test(lc);
+
+      if (!scanIntent && pinIntent) {
+        setAiMsg(`สั่งปักหมุดตำแหน่ง ${target}...`);
+        await geoLocateIp(target);
+        return;
+      }
+
+      const parts = [portsArg ? `พอร์ต ${portsArg}` : allPorts ? "top 1000" : "top 100"];
+      if (pinIntent) parts.push("ปักหมุดตำแหน่ง");
+      setAiMsg(`สั่งสแกน ${target} ด้วย nmap (${parts.join(" + ")})...`);
+      if (pinIntent) await geoLocateIp(target);
+      await portScan(allPorts, target, portsArg);
       return;
     }
 
@@ -811,7 +836,7 @@ export function StrategicMap() {
       setAiMsg(`มาร์ค ${found.length} จุด: ${found.map((f) => f.label).join(", ")}` + (missed.length ? ` (ข้าม: ${missed.join(", ")})` : ""));
     }
     setAiBusy(false);
-  }, [aiCmd, clearMarks, clearMeasure, addMark, saveAnnot, portScan, host]);
+  }, [aiCmd, clearMarks, clearMeasure, addMark, saveAnnot, portScan, geoLocateIp, host]);
 
   const prompt = pt
     ? `สแกนพอร์ตและบริการของ ${host || "(target)"} (พิกัด ${fmt(pt.lat)}, ${fmt(pt.lon)}) แล้วรายงานพอร์ตที่เปิด`
@@ -849,7 +874,7 @@ export function StrategicMap() {
           value={aiCmd}
           onChange={(e) => setAiCmd(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !aiBusy) { e.preventDefault(); runAiCommand(); } }}
-          placeholder='สั่งเป็นภาษาไทย เช่น "ลากเส้นจากกรุงเทพไปเชียงใหม่" · "มาร์คภูเก็ต โตเกียว ปารีส" · "สแกนพอร์ต 8.8.8.8" · "ล้าง"'
+          placeholder='สั่งเป็นภาษาไทย เช่น "ลากเส้นกรุงเทพไปเชียงใหม่" · "สแกนพอร์ต 80,443 ของ 8.8.8.8" · "สแกน 1.1.1.1 แล้วปักหมุด" · "ล้าง"'
           autoComplete="off"
           spellCheck={false}
           disabled={aiBusy}
@@ -978,7 +1003,7 @@ export function StrategicMap() {
 
         {/* OSINT: geolocate the IP/host (DNS + geo-IP DB) and pin it. No scan. */}
         <div className="smap-geo">
-          <button type="button" className="btn btn-sm btn-ghost" onClick={geoLocateIp} disabled={geoBusy || !host.trim()}>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => geoLocateIp()} disabled={geoBusy || !host.trim()}>
             <Icon name="locate" /> {geoBusy ? "กำลังหา..." : "ปักหมุดตำแหน่ง IP/host นี้"}
           </button>
           {geoMsg && <span className="smap-geo-msg">{geoMsg}</span>}
