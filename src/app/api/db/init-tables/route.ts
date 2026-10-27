@@ -16,6 +16,10 @@ const MIGRATIONS: { name: string; sql: string }[] = [
     sql: `ALTER TABLE experiment_runs MODIFY COLUMN status
       ENUM('queued','running','succeeded','failed','needs_input','cancelled') NOT NULL DEFAULT 'queued'`,
   },
+  {
+    name: "saved_ips += region",
+    sql: `ALTER TABLE saved_ips ADD COLUMN region VARCHAR(160) NULL AFTER city`,
+  },
 ];
 
 const TABLES: { name: string; sql: string }[] = [
@@ -64,6 +68,7 @@ const TABLES: { name: string; sql: string }[] = [
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       ip VARCHAR(45) NOT NULL,
       city VARCHAR(160) NULL,
+      region VARCHAR(160) NULL,
       country VARCHAR(8) NULL,
       lat DOUBLE NULL,
       lon DOUBLE NULL,

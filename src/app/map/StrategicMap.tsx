@@ -708,8 +708,9 @@ export function StrategicMap() {
     ipgeoLayer.current.clearLayers();
     r.points.forEach((p, i) => {
       const ip = p.samples[0] || "?";
+      const where = [p.city, p.region, p.cc].filter(Boolean).join(", ") || "?";
       const detail =
-        `<b>${ip}</b><br>${p.city || "?"}, ${p.cc} · ${p.count} ช่วง IP` +
+        `<b>${ip}</b><br>${where} · ${p.count} ช่วง IP` +
         (p.samples.length > 1 ? `<br>${p.samples.slice(0, 6).join(", ")}` : "");
       const mk = leaflet
         .circleMarker([p.lat, p.lon], { radius: Math.min(11, 3 + Math.log10(p.count + 1) * 3), className: "lf-ipdot" })
@@ -1075,7 +1076,7 @@ export function StrategicMap() {
           {saveMsg && <p className="smap-iplist-msg">{saveMsg}</p>}
           <div className="smap-iplist-body">
             {ipList.map((r, i) => (
-              <span key={`${r.ip}-${i}`} className="smap-ipitem" title={`${r.city}, ${r.cc}`}><b>{r.ip}</b></span>
+              <span key={`${r.ip}-${i}`} className="smap-ipitem" title={[r.city, r.region, r.cc].filter(Boolean).join(", ")}><b>{r.ip}</b></span>
             ))}
           </div>
         </div>

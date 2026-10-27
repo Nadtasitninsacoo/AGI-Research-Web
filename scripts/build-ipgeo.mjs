@@ -33,7 +33,9 @@ const ip2int = (ip) => {
   return n >>> 0;
 };
 
-const ROW = /^([^,]+),([^,]+),[^,]*,([^,]*),[^,]*,("[^"]*"|[^,]*),(-?[\d.]+),(-?[\d.]+)$/;
+// start,end,continent,country,stateprov,city,lat,lon  (stateprov/city may be quoted)
+const ROW = /^([^,]+),([^,]+),[^,]*,([^,]*),("[^"]*"|[^,]*),("[^"]*"|[^,]*),(-?[\d.]+),(-?[\d.]+)$/;
+const clean = (s) => s.replace(/^"|"$/g, "").replace(/,/g, " ").trim();
 let total = 0, kept = 0;
 const rl = createInterface({ input: createReadStream(SRC).pipe(createGunzip()), crlfDelay: Infinity });
 for await (const line of rl) {
@@ -43,11 +45,13 @@ for await (const line of rl) {
   const si = ip2int(m[1]);
   const ei = ip2int(m[2]);
   if (si === null || ei === null) continue; // IPv4 only
-  const lat = Number(m[5]), lon = Number(m[6]);
+  const lat = Number(m[6]), lon = Number(m[7]);
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) continue;
   const cc = m[3];
-  const city = m[4].replace(/^"|"$/g, "").replace(/,/g, " ").trim();
-  bandStream(Math.floor(lat)).write(`${si},${ei},${lat.toFixed(3)},${lon.toFixed(3)},${cc},${city}\n`);
+  const region = clean(m[4]); // province / state
+  const city = clean(m[5]);   // city / district
+  // fields: startInt,endInt,lat,lon,cc,region,city
+  bandStream(Math.floor(lat)).write(`${si},${ei},${lat.toFixed(3)},${lon.toFixed(3)},${cc},${region},${city}\n`);
   kept++;
 }
 await Promise.all([...streams.values()].map((s) => new Promise((r) => s.end(r))));

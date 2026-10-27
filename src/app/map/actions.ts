@@ -487,8 +487,8 @@ export async function internetdbAction(input: string): Promise<InternetDb> {
   }
 }
 
-export type IpGeoPoint = { lat: number; lon: number; city: string; cc: string; count: number; samples: string[] };
-export type IpGeoRange = { ip: string; city: string; cc: string; lat: number; lon: number };
+export type IpGeoPoint = { lat: number; lon: number; city: string; region: string; cc: string; count: number; samples: string[] };
+export type IpGeoRange = { ip: string; city: string; region: string; cc: string; lat: number; lon: number };
 export type IpGeoResult =
   | { ok: false; message: string }
   | { ok: true; totalRanges: number; shownPoints: number; capped: boolean; points: IpGeoPoint[]; ranges: IpGeoRange[] };
@@ -530,23 +530,25 @@ export async function ipRangesInBoundsAction(b: {
       if (!existsSync(file)) continue;
       const rl = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
       for await (const line of rl) {
-        // startInt,endInt,lat,lon,cc,city
+        // startInt,endInt,lat,lon,cc,region,city
         const c1 = line.indexOf(","), c2 = line.indexOf(",", c1 + 1);
-        const c3 = line.indexOf(",", c2 + 1), c4 = line.indexOf(",", c3 + 1), c5 = line.indexOf(",", c4 + 1);
-        if (c5 < 0) continue;
+        const c3 = line.indexOf(",", c2 + 1), c4 = line.indexOf(",", c3 + 1);
+        const c5 = line.indexOf(",", c4 + 1), c6 = line.indexOf(",", c5 + 1);
+        if (c6 < 0) continue;
         const lat = Number(line.slice(c2 + 1, c3));
         const lon = Number(line.slice(c3 + 1, c4));
         if (lat < south || lat > north || lon < west || lon > east) continue;
         totalRanges++;
-        const city = line.slice(c5 + 1);
         const cc = line.slice(c4 + 1, c5);
+        const region = line.slice(c5 + 1, c6);
+        const city = line.slice(c6 + 1);
         const ip = int2ip(Number(line.slice(0, c1)));
-        if (ranges.length < IPGEO_LIST_CAP) ranges.push({ ip, city, cc, lat, lon });
+        if (ranges.length < IPGEO_LIST_CAP) ranges.push({ ip, city, region, cc, lat, lon });
         const key = `${lat},${lon}`;
         let g = groups.get(key);
         if (!g) {
           if (groups.size >= CAP) { capped = true; continue; }
-          g = { lat, lon, city, cc, count: 0, samples: [] };
+          g = { lat, lon, city, region, cc, count: 0, samples: [] };
           groups.set(key, g);
         }
         g.count++;
@@ -578,9 +580,9 @@ export async function saveIpsAction(items: IpGeoRange[], note?: string): Promise
   try {
     // The table is created by the admin "Initialize tables" button (the app DB
     // user has no CREATE privilege). We only INSERT here.
-    const values = rows.map((r) => [r.ip, r.city || null, r.cc || null, Number.isFinite(r.lat) ? r.lat : null, Number.isFinite(r.lon) ? r.lon : null, "db-ip", label]);
+    const values = rows.map((r) => [r.ip, r.city || null, r.region || null, r.cc || null, Number.isFinite(r.lat) ? r.lat : null, Number.isFinite(r.lon) ? r.lon : null, "db-ip", label]);
     const [res] = await db.query<ResultSetHeader>(
-      "INSERT IGNORE INTO saved_ips (ip, city, country, lat, lon, source, note) VALUES ?",
+      "INSERT IGNORE INTO saved_ips (ip, city, region, country, lat, lon, source, note) VALUES ?",
       [values],
     );
     const saved = res.affectedRows ?? 0;
