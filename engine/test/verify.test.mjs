@@ -9,6 +9,7 @@ import {
   injectHandoff,
   isGuardrailBlocked,
   triageUnverified,
+  validatePlan,
   verifyHandoff,
   verifySubtask,
 } from "../src/verify.mjs";
@@ -19,6 +20,29 @@ test("verifySubtask: real work verifies, errors/empties/failures do not", () => 
   assert.equal(verifySubtask({ status: "succeeded", summary: "" }).verified, false);
   assert.equal(verifySubtask({ status: "succeeded", summary: "ERROR: empty command." }).verified, false);
   assert.equal(verifySubtask({ status: "succeeded", summary: "Stopped after 3 consecutive tool failures" }).verified, false);
+});
+
+test("verifySubtask: evidence overrides a confident summary (Problem D)", () => {
+  // Ran commands but all failed -> not verified, however good the summary sounds.
+  assert.equal(
+    verifySubtask({ status: "succeeded", summary: "All checks passed, target is secure.", evidence: { commandsRun: 3, commandsOk: 0 } }).verified,
+    false,
+  );
+  // Ran commands and some succeeded -> verified.
+  assert.equal(verifySubtask({ status: "succeeded", summary: "Scanned ports", evidence: { commandsRun: 3, commandsOk: 2 } }).verified, true);
+  // Text-only agent (no commands) judged on summary alone.
+  assert.equal(verifySubtask({ status: "succeeded", summary: "Analysis of the handed-off data", evidence: { commandsRun: 0, commandsOk: 0 } }).verified, true);
+});
+
+test("validatePlan drops exact-duplicate subtasks, keeps distinct ones (Problem C)", () => {
+  const { plan, dropped } = validatePlan([
+    { agent: "RECON-1", task: "scan ports on app.local" },
+    { agent: "RECON-1", task: "scan ports on app.local" }, // exact dup -> dropped
+    { agent: "RECON-1", task: "enumerate subdomains" }, // same agent, different task -> kept
+    { agent: "ORACLE-7", task: "" }, // empty task -> dropped
+  ]);
+  assert.deepEqual(plan.map((s) => `${s.agent}:${s.task}`), ["RECON-1:scan ports on app.local", "RECON-1:enumerate subdomains"]);
+  assert.equal(dropped.length, 2);
 });
 
 test("confirmFinding: evidence + a successful command confirms; claims do not", () => {

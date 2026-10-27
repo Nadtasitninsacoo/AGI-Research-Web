@@ -15,7 +15,7 @@ import { runAgent } from "./agentLoop.mjs";
 import { log } from "./logger.mjs";
 import { query } from "./db.mjs";
 import { config } from "./config.mjs";
-import { buildHandoff, confirmFindings, decideSuccess, injectHandoff, triageUnverified, verifyHandoff, verifySubtask } from "./verify.mjs";
+import { buildHandoff, confirmFindings, decideSuccess, injectHandoff, triageUnverified, validatePlan, verifyHandoff, verifySubtask } from "./verify.mjs";
 
 const MAX_SUBTASKS = 5;
 // Extra re-planning rounds after the first pass, for subtasks that fail for
@@ -110,6 +110,14 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
   }
 
   plan = plan.filter((s) => s && roster.has(s.agent) && typeof s.task === "string" && s.task.trim()).slice(0, MAX_SUBTASKS);
+  // Drop exact-duplicate subtasks so the team never does identical work twice.
+  {
+    const pv = validatePlan(plan);
+    if (pv.dropped.length) {
+      await log({ agentId, runId, level: "warn", message: `PLAN check: dropped ${pv.dropped.length} duplicate subtask(s): ${pv.dropped.map((s) => s?.agent).join(", ")}` });
+    }
+    plan = pv.plan;
+  }
   if (!plan.length) {
     const fb = roster.has("ORACLE-7") ? "ORACLE-7" : available[0];
     plan = [{ agent: fb, task: objective }];
@@ -155,7 +163,7 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
       outputTokens += res.metrics?.outputTokens ?? 0;
       const evidence = res.metrics?.evidence ?? res.evidence ?? {};
       const findings = confirmFindings(res.findings ?? [], evidence);
-      const verdict = verifySubtask({ status: res.status, summary: res.summary });
+      const verdict = verifySubtask({ status: res.status, summary: res.summary, evidence });
       const confirmedCount = findings.filter((f) => f.confirmed).length;
       await log({
         agentId, runId, level: verdict.verified ? "info" : "warn",
@@ -207,6 +215,7 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
       await log({ agentId, runId, level: "error", message: `Re-planning call failed: ${err?.message ?? err}` });
     }
     rplan = rplan.filter((s) => s && roster.has(s.agent) && typeof s.task === "string" && s.task.trim()).slice(0, MAX_SUBTASKS);
+    rplan = validatePlan(rplan).plan;
     if (!rplan.length) {
       await log({ agentId, runId, level: "warn", message: `Round ${round}: no new approach produced; stopping adaptation.` });
       break;

@@ -17,16 +17,52 @@ const text = (v) => (typeof v === "string" ? v.trim() : "");
 
 /**
  * Did a subtask really do work and produce a usable result?
+ * Evidence overrides the narrative: if the agent ran commands but none succeeded
+ * (commandsRun > 0, commandsOk === 0), it is NOT verified however confident its
+ * summary reads. Text-only agents (no commands) are judged on the summary alone.
  * @returns {{ verified: boolean, reason: string }}
  */
 export function verifySubtask(result) {
   if (!result || result.status !== "succeeded") {
     return { verified: false, reason: `status=${result?.status ?? "unknown"}` };
   }
+  const ev = result.evidence ?? {};
+  const ran = Number(ev.commandsRun ?? 0);
+  const ok = Number(ev.commandsOk ?? 0);
+  if (ran > 0 && ok === 0) {
+    return { verified: false, reason: `ran ${ran} command(s) but none succeeded — no evidence of real work` };
+  }
   const summary = text(result.summary);
   if (!summary) return { verified: false, reason: "empty result" };
   if (FAIL_SENTINEL.test(summary)) return { verified: false, reason: "result is an error/refusal, not a finding" };
-  return { verified: true, reason: "succeeded with a substantive result" };
+  const backed = ran > 0 ? ` (${ok}/${ran} commands succeeded)` : "";
+  return { verified: true, reason: `succeeded with a substantive result${backed}` };
+}
+
+/**
+ * Validate a plan before delegating: drop exact-duplicate subtasks (same agent +
+ * same task) so the team does not do identical work twice. Different tasks for the
+ * same agent are kept — that is legitimate, not a duplicate.
+ * @returns {{ plan: any[], dropped: any[] }}
+ */
+export function validatePlan(plan) {
+  const seen = new Set();
+  const kept = [];
+  const dropped = [];
+  for (const s of Array.isArray(plan) ? plan : []) {
+    if (!s || !s.agent || !text(s.task)) {
+      dropped.push(s);
+      continue;
+    }
+    const key = `${s.agent}::${text(s.task).toLowerCase().replace(/\s+/g, " ")}`;
+    if (seen.has(key)) {
+      dropped.push(s);
+      continue;
+    }
+    seen.add(key);
+    kept.push(s);
+  }
+  return { plan: kept, dropped };
 }
 
 /**

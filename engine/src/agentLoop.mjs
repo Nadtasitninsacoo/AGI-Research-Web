@@ -26,6 +26,7 @@ import { config } from "./config.mjs";
 import { log } from "./logger.mjs";
 import { execute } from "./db.mjs";
 import { requestAndWait } from "./approvals.mjs";
+import { normalizeCommand } from "./normalize.mjs";
 import { getPayloads, PAYLOAD_COUNT, CATEGORIES } from "../payloads/library.mjs";
 
 // Tool definitions advertised to the model (OpenAI-style, understood by Ollama).
@@ -297,10 +298,17 @@ const TOOLS = [
 
 /** Execute one run_command tool call through the full guardrail chain. */
 async function execRunCommand({ args, scope, agentConfig, runParams, agentId, runId }) {
-  const command = String(args.command ?? "").trim();
   const shell = args.shell;
+  const raw = String(args.command ?? "").trim();
+  // Normalize before any check runs, so scope/policy see the real command and the
+  // executor runs a well-formed one (strips Markdown links, fixes the PowerShell
+  // curl/wget alias). See normalize.mjs.
+  const command = normalizeCommand(raw, shell);
   const purpose = args.purpose ? ` — ${args.purpose}` : "";
   if (!command) return "ERROR: empty command.";
+  if (command !== raw) {
+    await log({ agentId, runId, level: "debug", message: `NORMALIZED: ${raw}  ->  ${command}` });
+  }
 
   // 1) Scope / rules of engagement.
   const sc = checkScope(command, scope);
