@@ -604,8 +604,8 @@ export function StrategicMap() {
 
   // ACTIVE port scan of the target host with nmap. This DOES connect to the host
   // (unlike the OSINT geolocate) — for authorized engagements only.
-  const portScan = useCallback(async (allPorts: boolean) => {
-    const q = host.trim();
+  const portScan = useCallback(async (allPorts: boolean, targetArg?: string) => {
+    const q = (targetArg ?? host).trim();
     if (!q || scanBusy) return;
     setScanBusy(true);
     setScanMsg(`กำลังสแกน ${q} ด้วย nmap...`);
@@ -712,6 +712,23 @@ export function StrategicMap() {
       return;
     }
 
+    // Port-scan intent: "สแกนพอร์ต 8.8.8.8", "scan ports scanme.nmap.org",
+    // "nmap 10.10.10.5 ครบ". Pull the target from the command, else the field.
+    const scanIntent =
+      /(สแกนพอร์ต|สแกนพอร์ท|สแกน\s*port|scan\s*ports?|nmap|พอร์ตเปิด|open\s*ports?)/i.test(lc) ||
+      (/(สแกน|scan)/i.test(lc) && /\d{1,3}(?:\.\d{1,3}){3}/.test(raw));
+    if (scanIntent) {
+      const ipM = raw.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
+      const hostM = raw.match(/\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+\b/i);
+      const target = (ipM?.[0] || hostM?.[0] || host).trim();
+      if (!target) { setAiMsg('บอกเป้าหมายด้วย เช่น "สแกนพอร์ต 8.8.8.8" หรือกรอก IP/host ในช่องเป้าหมาย'); return; }
+      const allPorts = /(top\s*1000|1000|ครบ|เต็ม|ลึก|ทั้งหมด|full|deep)/i.test(lc);
+      setHost(target);
+      setAiMsg(`สั่งสแกนพอร์ต ${target} ด้วย nmap (${allPorts ? "top 1000" : "top 100"})...`);
+      await portScan(allPorts, target);
+      return;
+    }
+
     const wantsMeasure = /(ลากเส้น|เส้นทาง|ระยะทาง|วัดระยะ|ไกลแค่ไหน|ไกลกี่|กี่กิโล|กี่กม|distance|measure|route|how far)/i.test(lc);
     const wantsMark = /(มาร์ค|มาร์ก|ปักหมุด|ปักจุด|หมุด|mark|pin)/i.test(lc);
 
@@ -794,7 +811,7 @@ export function StrategicMap() {
       setAiMsg(`มาร์ค ${found.length} จุด: ${found.map((f) => f.label).join(", ")}` + (missed.length ? ` (ข้าม: ${missed.join(", ")})` : ""));
     }
     setAiBusy(false);
-  }, [aiCmd, clearMarks, clearMeasure, addMark, saveAnnot]);
+  }, [aiCmd, clearMarks, clearMeasure, addMark, saveAnnot, portScan, host]);
 
   const prompt = pt
     ? `สแกนพอร์ตและบริการของ ${host || "(target)"} (พิกัด ${fmt(pt.lat)}, ${fmt(pt.lon)}) แล้วรายงานพอร์ตที่เปิด`
@@ -832,7 +849,7 @@ export function StrategicMap() {
           value={aiCmd}
           onChange={(e) => setAiCmd(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !aiBusy) { e.preventDefault(); runAiCommand(); } }}
-          placeholder='สั่งเป็นภาษาไทย เช่น "ลากเส้นจากกรุงเทพไปเชียงใหม่" · "มาร์คภูเก็ต โตเกียว ปารีส" · "ระยะจากขอนแก่นถึงอุบล" · "ล้าง"'
+          placeholder='สั่งเป็นภาษาไทย เช่น "ลากเส้นจากกรุงเทพไปเชียงใหม่" · "มาร์คภูเก็ต โตเกียว ปารีส" · "สแกนพอร์ต 8.8.8.8" · "ล้าง"'
           autoComplete="off"
           spellCheck={false}
           disabled={aiBusy}
