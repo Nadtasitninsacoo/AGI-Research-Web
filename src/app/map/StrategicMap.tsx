@@ -817,8 +817,14 @@ export function StrategicMap() {
     const lcs = (reconTarget ? raw.split(reconTarget).join(" ") : raw).toLowerCase();
 
     // KEYLESS area → IP ranges for the CURRENT map view (DB-IP offline index):
-    // "ไอพีในกรอบนี้", "ip พื้นที่นี้", "ไอพีตรงนี้", "แสดง ip ในแผนที่".
-    if (/(ไอพี|\bip\b)/i.test(lc) && /(ในกรอบ|กรอบนี้|พื้นที่นี้|แถวนี้|ตรงนี้|ในแผนที่|บริเวณนี้|แถบนี้|รอบนี้|ในจอ)/i.test(lc)) {
+    // "ไอพีในกรอบนี้", "ค้นหาเลข IP เมืองนี้", "ip ตรงนี้", "แสดง ip ในแผนที่".
+    // Fires when an IP word is paired with a "this area / here" deictic and there
+    // is no explicit IP/host target (those go to exposure/scan instead).
+    if (
+      !reconTarget &&
+      /(ไอพี|\bip\b|เลข\s*ip)/i.test(lc) &&
+      /(กรอบ|เมืองนี้|เมืองนี่|พื้นที่นี้|เขตนี้|ย่านนี้|โซนนี้|แถวนี้|แถบนี้|ตรงนี้|บริเวณนี้|รอบนี้|ในจอ|ในแผนที่|ที่นี่|นี่|นี้)/i.test(lc)
+    ) {
       setAiBusy(true);
       setAiMsg("กำลังดึง IP ในกรอบแผนที่ (DB-IP · ฟรี)...");
       const msg = await ipsInBounds();
