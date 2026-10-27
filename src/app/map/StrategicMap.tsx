@@ -121,7 +121,7 @@ export function StrategicMap() {
       const m = leaflet.map(elRef.current, {
         worldCopyJump: true,   // seamless wrap when panning past the date line
         minZoom: 2,
-        maxZoom: 19,           // street / building level
+        maxZoom: 22,           // deeper than imagery's native level; Leaflet upscales past maxNativeZoom
         zoomControl: false,
         attributionControl: true,
         maxBounds: undefined,  // no clamp -> explore the whole world
@@ -134,23 +134,26 @@ export function StrategicMap() {
       // (the view can never go fully black).
       darkTiles.current = leaflet.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         subdomains: "abc",
-        maxZoom: 19,
+        maxZoom: 22,
+        maxNativeZoom: 19,   // OSM serves up to z19; upscale the rest
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       });
 
       // SATELLITE overlay: Esri World Imagery (free, no key) — real aerial photos
       // for zooming to rooftops/houses. Kept in a SEPARATE pane above the base so
       // the dark CSS filter (scoped to the default tile pane) never inverts it,
-      // and so OSM shows beneath any gaps. maxNativeZoom avoids blank z19 tiles.
+      // and so OSM shows beneath any gaps. maxNativeZoom caps real tile requests
+      // at the provider's deepest level (z18); z19-22 are upscaled from it so the
+      // user can keep zooming closer (blurry past native, but no blank tiles).
       m.createPane("sat");
       m.getPane("sat")!.style.zIndex = "250";
       satTiles.current = leaflet.tileLayer(
         "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        { pane: "sat", maxZoom: 19, maxNativeZoom: 18, attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics" },
+        { pane: "sat", maxZoom: 22, maxNativeZoom: 18, attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics" },
       );
       satLabels.current = leaflet.tileLayer(
         "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-        { pane: "sat", maxZoom: 19, maxNativeZoom: 18, attribution: "" },
+        { pane: "sat", maxZoom: 22, maxNativeZoom: 18, attribution: "" },
       );
 
       darkTiles.current.addTo(m); // base is always on
