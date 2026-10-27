@@ -282,3 +282,49 @@
   .hero-status-meta { text-align: left; }
   .dashboard-grid .span-3, .dashboard-grid .span-4 { grid-column: 1 / -1; }
 }
+
+/* ============================================================
+   OSINT OVERVIEW — intel charts on the dashboard
+   ============================================================ */
+.oi-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.oi-stat {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+  padding: 11px 13px; background: var(--grad-card); border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: var(--shadow), var(--bevel-up);
+}
+.oi-stat small { color: var(--dim); font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; }
+.oi-stat b { color: var(--text-strong); font-size: clamp(20px, 1.8vw, 28px); font-weight: 300; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.oi-stat.is-accent { background: radial-gradient(circle at 100% 0%, rgba(248,30,54,0.2), transparent 62%), var(--grad-raised); border-color: rgba(248,30,54,0.3); }
+.oi-stat.is-accent b { color: #fff; }
+.oi-stat.is-danger b { color: #ff6b74; }
+
+/* Vulnerable share — status split with labels (never color-alone) */
+.oi-split { margin-bottom: 16px; }
+.oi-split-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.oi-split-title { color: var(--dim); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; }
+.oi-split-pct { color: #ff6b74; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.oi-split-bar { display: flex; gap: 2px; height: 12px; }
+.oi-seg { height: 100%; border-radius: 3px; }
+.oi-vuln { background: linear-gradient(90deg, #f21b32, #b3121f); }
+.oi-safe { background: linear-gradient(90deg, #42c781, #2a9d63); }
+.oi-split-legend { display: flex; gap: 18px; margin-top: 7px; font-size: 11px; color: var(--muted, #9aa0aa); }
+.oi-split-legend b { color: #e3e6eb; font-variant-numeric: tabular-nums; }
+.oi-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; vertical-align: 0; margin-right: 4px; }
+.oi-dvuln { background: #f21b32; }
+.oi-dsafe { background: #42c781; }
+
+/* Magnitude bar charts — single hue */
+.oi-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.oi-chart { margin: 0; min-width: 0; }
+.oi-chart-title { margin-bottom: 9px; color: var(--dim); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
+.oi-bars { display: flex; flex-direction: column; gap: 6px; }
+.oi-barrow { display: grid; grid-template-columns: 112px 1fr 54px; align-items: center; gap: 10px; }
+.oi-barlabel { overflow: hidden; color: #d7dbe2; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.oi-bartrack { height: 10px; background: rgba(255,255,255,0.045); border-radius: 5px; overflow: hidden; }
+.oi-barfill { display: block; height: 100%; background: linear-gradient(90deg, rgba(248,30,54,0.95), rgba(248,30,54,0.5)); border-radius: 5px; }
+.oi-barval { color: var(--muted, #9aa0aa); font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
+
+@media (max-width: 1000px) {
+  .oi-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .oi-charts { grid-template-columns: 1fr; }
+}

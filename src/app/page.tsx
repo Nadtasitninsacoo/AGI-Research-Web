@@ -4,6 +4,7 @@ import { Icon, type IconName } from "@/components/Icon";
 import { HeroCosmos } from "@/components/hud/HeroCosmos";
 import { Navbar } from "@/components/hud/Navbar";
 import { Nexus } from "@/components/hud/Nexus";
+import { OsintOverview } from "@/components/hud/OsintOverview";
 import { Sidebar } from "@/components/hud/Sidebar";
 import { getDashboardData, type DashboardData } from "@/lib/queries";
 
@@ -220,6 +221,16 @@ async function DashboardFrame() {
               </article>
             ))}
           </section>
+
+          <div className="section-divider">
+            <span>OSINT INTEL</span>
+            <i />
+            <span className="section-divider-meta">VAULT / 00</span>
+          </div>
+
+          <Suspense fallback={null}>
+            <OsintOverview />
+          </Suspense>
 
           <div className="section-divider">
             <span>LIVE INTELLIGENCE</span>
