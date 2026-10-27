@@ -52,13 +52,14 @@ export function PortsTable({ rows }: { rows: SavedPort[] }) {
           <thead>
             <tr>
               <th className="ipi-check"><input type="checkbox" checked={allOn} onChange={toggleAll} aria-label="เลือกทั้งหน้า" /></th>
-              <th>IP</th><th>พอร์ต</th><th>บริการ</th><th>CVE</th><th>Hostname</th><th>บันทึกเมื่อ</th><th></th>
+              <th>สถานะ</th><th>IP</th><th>พอร์ต</th><th>บริการ</th><th>CVE</th><th>Hostname</th><th>บันทึกเมื่อ</th><th></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className={sel.has(r.id) ? "is-sel" : ""}>
+              <tr key={r.id} className={`${sel.has(r.id) ? "is-sel" : ""} ${r.cves > 0 ? "rc-vuln" : ""}`}>
                 <td className="ipi-check"><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggle(r.id)} aria-label={`เลือก ${r.ip}:${r.port}`} /></td>
+                <td><span className="rc-badge" style={{ color: r.cves > 0 ? "#f84646" : "#5fd38a" }}>● {r.cves > 0 ? "เจอช่องโหว่" : "ไม่เจอ"}</span></td>
                 <td className="ipi-ip">{r.ip}</td>
                 <td className="rc-port">{r.port}</td>
                 <td>{r.service || "—"}</td>
