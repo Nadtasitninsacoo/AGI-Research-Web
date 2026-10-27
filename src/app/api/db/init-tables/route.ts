@@ -67,6 +67,23 @@ const TABLES: { name: string; sql: string }[] = [
     ) ENGINE=InnoDB`,
   },
   {
+    name: "saved_ports",
+    sql: `CREATE TABLE IF NOT EXISTS saved_ports (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      ip VARCHAR(45) NOT NULL,
+      port INT UNSIGNED NOT NULL,
+      service VARCHAR(60) NULL,
+      cves INT UNSIGNED NOT NULL DEFAULT 0,
+      hostname VARCHAR(255) NULL,
+      source VARCHAR(40) NOT NULL DEFAULT 'internetdb',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uniq_ip_port (ip, port),
+      KEY idx_port (port),
+      KEY idx_service (service)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     name: "saved_ips",
     sql: `CREATE TABLE IF NOT EXISTS saved_ips (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -119,7 +136,7 @@ export async function POST(request: Request) {
       }
     }
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
-      `SELECT table_name AS t FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('settings','command_approvals','lessons','saved_ips')`,
+      `SELECT table_name AS t FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('settings','command_approvals','lessons','saved_ips','saved_ports')`,
     );
     return NextResponse.json({ ok: true, created: TABLES.map((t) => t.name), present: rows.map((r) => r.t), migrated });
   } catch (err) {

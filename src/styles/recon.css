@@ -23,7 +23,16 @@
 .rc-pull > *:not(summary) { margin: 0 12px; }
 .rc-pull > *:last-child { margin-bottom: 12px; }
 
-.rc-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
+.rc-srctabs { display: flex; gap: 6px; margin-top: 8px; }
+.rc-srctabs button {
+  padding: 6px 11px; font-size: 11px; color: #c8ccd3; cursor: pointer;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); border-radius: 7px;
+}
+.rc-srctabs button.is-active { color: #fff; border-color: rgba(45, 226, 230, 0.5); background: rgba(45, 226, 230, 0.1); }
+.rc-cvebox { justify-content: flex-end; }
+.rc-svctop { color: #8a92a0; font-family: var(--font-geist-mono), monospace; font-size: 10px; }
+
+.rc-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .rc-sel span { font-size: 8px; }
 .rc-stats { margin-top: 9px; font-size: 11px; color: var(--muted, #9aa0aa); }
 .rc-stats b { color: #e3e6eb; font-variant-numeric: tabular-nums; }
@@ -57,8 +66,23 @@
 .rc-sumcard small { color: var(--dim); font-size: 9px; letter-spacing: 0.08em; }
 .rc-sumdot { width: 8px; height: 8px; border-radius: 50%; }
 
+/* Results header actions + save */
+.rc-head-act { display: inline-flex; align-items: center; gap: 12px; }
+
 /* Table toolbar */
 .rc-tbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.rc-tbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rc-viewtoggle { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.rc-viewtoggle button { padding: 5px 11px; font-size: 10px; color: #c8ccd3; background: transparent; border: 0; cursor: pointer; }
+.rc-viewtoggle button.is-active { color: #fff; background: rgba(242, 27, 50, 0.16); }
+
+/* Per-IP port chips */
+.rc-portchips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.rc-pchip {
+  font-family: var(--font-geist-mono), monospace; font-size: 10px; color: #cfe9ff;
+  padding: 1px 6px; background: rgba(45, 226, 230, 0.08);
+  border: 1px solid rgba(45, 226, 230, 0.24); border-radius: 4px; white-space: nowrap;
+}
 .rc-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .rc-tabs button {
   display: inline-flex; align-items: center; gap: 5px;

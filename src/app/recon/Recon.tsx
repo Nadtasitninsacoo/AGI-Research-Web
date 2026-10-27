@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { parseTargets } from "@/lib/targets";
 import {
-  reconExpose, reconFacets, reconPull, reconStats,
-  type ExposureRow, type Filter, type ReconStats,
+  pullIpsFromPorts, reconExpose, reconFacets, reconPull, reconStats, saveScanPorts, savedPortsStats,
+  type ExposureRow, type Filter, type PortFilter, type PortsStats, type ReconStats,
 } from "./actions";
 
 const SVC: Record<number, string> = {
@@ -47,6 +47,14 @@ export function Recon() {
   const [results, setResults] = useState<ExposureRow[] | null>(null);
   const [cat, setCat] = useState<Cat | "all">("all");
   const [q, setQ] = useState("");
+  const [view, setView] = useState<"port" | "ip">("port");
+
+  // pull source: IPs from saved_ips, or IPs that have saved ports
+  const [source, setSource] = useState<"ips" | "ports">("ips");
+  const [pf, setPf] = useState<PortFilter>({});
+  const [portStats, setPortStats] = useState<PortsStats | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
 
   useEffect(() => { reconFacets().then(setFacets).catch(() => {}); }, []);
   useEffect(() => {
@@ -54,6 +62,39 @@ export function Recon() {
     reconStats(filter).then((r) => { if (live) setStats(r.ok ? (r.stats ?? null) : null); }).catch(() => {});
     return () => { live = false; };
   }, [filter]);
+  useEffect(() => {
+    if (source !== "ports") return;
+    let live = true;
+    savedPortsStats(pf).then((r) => { if (live) setPortStats(r.ok ? (r.stats ?? null) : null); }).catch(() => {});
+    return () => { live = false; };
+  }, [source, pf]);
+
+  const appendIps = (ips: string[]) => setRaw((prev) => {
+    const have = new Set(parseTargets(prev));
+    const add = ips.filter((ip) => !have.has(ip));
+    return (prev.trim() ? prev.trimEnd() + "\n" : "") + add.join("\n");
+  });
+
+  const pullPorts = async () => {
+    setPulling(true);
+    setPullMsg("กำลังดึง IP ที่มีพอร์ตตามเงื่อนไข...");
+    const r = await pullIpsFromPorts(pf, allRemaining ? null : Number(count) || 0);
+    setPulling(false);
+    if (!r.ok) { setPullMsg(r.message); return; }
+    if (r.pulled === 0) { setPullMsg("ไม่มี IP ที่มีพอร์ตตรงเงื่อนไข"); return; }
+    appendIps(r.ips);
+    setPullMsg(`ดึง ${r.pulled} IP (จากพอร์ตที่บันทึก${pf.service ? ` · ${pf.service}` : ""}${pf.port ? ` · :${pf.port}` : ""}${pf.hasCve ? " · มี CVE" : ""})`);
+  };
+
+  const savePorts = async () => {
+    if (!results) return;
+    setSaving(true);
+    setSaveMsg("กำลังบันทึกพอร์ต...");
+    const r = await saveScanPorts(results);
+    setSaving(false);
+    setSaveMsg(r.message);
+    if (r.ok && source === "ports") savedPortsStats(pf).then((s) => setPortStats(s.ok ? (s.stats ?? null) : null));
+  };
 
   const pull = async () => {
     setPulling(true);
@@ -109,38 +150,71 @@ export function Recon() {
       : rows;
   }, [results, cat, q]);
 
+  // Per-IP rows (ports collapsed into chips on one row).
+  const ipRows = useMemo(() => {
+    if (!results) return [];
+    const needle = q.trim().toLowerCase();
+    return results
+      .map((r) => ({ ip: r.ip, host: r.hostnames[0] ?? "", cat: catOf(r), ports: r.ports, cves: r.vulns.length, error: r.error ?? "" }))
+      .filter((r) => cat === "all" || r.cat === cat)
+      .filter((r) => !needle || r.ip.includes(needle) || r.host.toLowerCase().includes(needle) || r.ports.some((p) => String(p).includes(needle) || svc(p).includes(needle)));
+  }, [results, cat, q]);
+
   return (
     <>
       <section className="panel span-7" id="recon">
         <header className="panel-head"><span>01 // เป้าหมาย</span><em>{parsed.length} IP</em></header>
 
         <details className="rc-pull" open>
-          <summary>ดึง IP จากฐานระบบ (เลือกพื้นที่ + จำนวน)</summary>
-          <div className="rc-filters">
-            <Select label="ประเทศ" value={filter.country} opts={facets.countries} onChange={(v) => setFilter((f) => ({ ...f, country: v }))} />
-            <Select label="จังหวัด/รัฐ" value={filter.region} opts={facets.regions} onChange={(v) => setFilter((f) => ({ ...f, region: v }))} />
-            <Select label="เขต/เมือง" value={filter.city} opts={facets.cities} onChange={(v) => setFilter((f) => ({ ...f, city: v }))} />
+          <summary>ดึง IP จากฐานระบบ มาใส่ช่อง</summary>
+          <div className="rc-srctabs">
+            <button type="button" className={source === "ips" ? "is-active" : ""} onClick={() => setSource("ips")}>📍 ตามพื้นที่ (IP ในฐาน)</button>
+            <button type="button" className={source === "ports" ? "is-active" : ""} onClick={() => setSource("ports")}>🔌 ตามพอร์ตที่บันทึก</button>
           </div>
-          {stats && (
-            <div className="rc-stats">
-              ในพื้นที่นี้: <b>{stats.total.toLocaleString()}</b> IP · ยังไม่สแกน <b className="rc-un">{stats.unscanned.toLocaleString()}</b> · สแกนแล้ว <b className="rc-sc">{stats.scanned.toLocaleString()}</b>
-            </div>
+
+          {source === "ips" ? (
+            <>
+              <div className="rc-filters">
+                <Select label="ประเทศ" value={filter.country} opts={facets.countries} onChange={(v) => setFilter((f) => ({ ...f, country: v }))} />
+                <Select label="จังหวัด/รัฐ" value={filter.region} opts={facets.regions} onChange={(v) => setFilter((f) => ({ ...f, region: v }))} />
+                <Select label="เขต/เมือง" value={filter.city} opts={facets.cities} onChange={(v) => setFilter((f) => ({ ...f, city: v }))} />
+              </div>
+              {stats && (
+                <div className="rc-stats">
+                  ในพื้นที่นี้: <b>{stats.total.toLocaleString()}</b> IP · ยังไม่สแกน <b className="rc-un">{stats.unscanned.toLocaleString()}</b> · สแกนแล้ว <b className="rc-sc">{stats.scanned.toLocaleString()}</b>
+                </div>
+              )}
+              <div className="rc-pull-ctl">
+                <select className="rc-mode" value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
+                  <option value="new">ที่ยังไม่เคยสแกน</option>
+                  <option value="rescan">ที่เคยสแกนแล้ว (สแกนซ้ำ)</option>
+                  <option value="all">ทั้งหมด (สแกนแล้ว+ยังไม่สแกน)</option>
+                </select>
+                <label className="rc-count"><input type="number" min={1} value={count} disabled={allRemaining} onChange={(e) => setCount(e.target.value)} /><span>IP</span></label>
+                <label className="rc-all"><input type="checkbox" checked={allRemaining} onChange={(e) => setAllRemaining(e.target.checked)} /> ทั้งหมดที่เหลือ</label>
+                <button type="button" className="btn btn-sm" disabled={pulling} onClick={pull}><Icon name="download" /> {pulling ? "กำลังดึง..." : "ดึงมาใส่ช่อง"}</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rc-filters">
+                <label className="field rc-sel"><span>บริการ (เช่น http, ssh)</span><input value={pf.service ?? ""} onChange={(e) => setPf((f) => ({ ...f, service: e.target.value }))} placeholder="ทั้งหมด" autoComplete="off" /></label>
+                <label className="field rc-sel"><span>พอร์ต (เช่น 443)</span><input type="number" value={pf.port ?? ""} onChange={(e) => setPf((f) => ({ ...f, port: e.target.value }))} placeholder="ทั้งหมด" autoComplete="off" /></label>
+                <label className="field rc-sel rc-cvebox"><span>&nbsp;</span><label className="rc-all"><input type="checkbox" checked={!!pf.hasCve} onChange={(e) => setPf((f) => ({ ...f, hasCve: e.target.checked }))} /> เฉพาะที่มี CVE</label></label>
+              </div>
+              {portStats && (
+                <div className="rc-stats">
+                  ตรงเงื่อนไข: <b>{portStats.total.toLocaleString()}</b> พอร์ต · <b className="rc-sc">{portStats.ips.toLocaleString()}</b> IP
+                  {portStats.services.length > 0 && <span className="rc-svctop"> · {portStats.services.slice(0, 6).map((s) => `${s.service}(${s.n})`).join(" ")}</span>}
+                </div>
+              )}
+              <div className="rc-pull-ctl">
+                <label className="rc-count"><input type="number" min={1} value={count} disabled={allRemaining} onChange={(e) => setCount(e.target.value)} /><span>IP</span></label>
+                <label className="rc-all"><input type="checkbox" checked={allRemaining} onChange={(e) => setAllRemaining(e.target.checked)} /> ทั้งหมด</label>
+                <button type="button" className="btn btn-sm" disabled={pulling} onClick={pullPorts}><Icon name="download" /> {pulling ? "กำลังดึง..." : "ดึง IP มาใส่ช่อง"}</button>
+              </div>
+            </>
           )}
-          <div className="rc-pull-ctl">
-            <select className="rc-mode" value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
-              <option value="new">ที่ยังไม่เคยสแกน</option>
-              <option value="rescan">ที่เคยสแกนแล้ว (สแกนซ้ำ)</option>
-              <option value="all">ทั้งหมด (สแกนแล้ว+ยังไม่สแกน)</option>
-            </select>
-            <label className="rc-count">
-              <input type="number" min={1} value={count} disabled={allRemaining} onChange={(e) => setCount(e.target.value)} />
-              <span>IP</span>
-            </label>
-            <label className="rc-all"><input type="checkbox" checked={allRemaining} onChange={(e) => setAllRemaining(e.target.checked)} /> ทั้งหมดที่เหลือ</label>
-            <button type="button" className="btn btn-sm" disabled={pulling} onClick={pull}>
-              <Icon name="download" /> {pulling ? "กำลังดึง..." : "ดึงมาใส่ช่อง"}
-            </button>
-          </div>
           {pullMsg && <p className="rc-msg">{pullMsg}</p>}
         </details>
 
@@ -177,9 +251,15 @@ export function Recon() {
       {results && (
         <section className="panel span-12" id="recon-table">
           <header className="panel-head">
-            <span>03 // ผลการสแกน — พอร์ตผูกกับ IP{cat !== "all" ? ` · ${CAT_META[cat].label}` : ""}</span>
-            <em>{portRows.length} แถว</em>
+            <span>03 // ผลการสแกน{cat !== "all" ? ` · ${CAT_META[cat].label}` : ""}</span>
+            <span className="rc-head-act">
+              <button type="button" className="btn btn-sm" disabled={saving} onClick={savePorts}>
+                <Icon name="download" /> {saving ? "กำลังบันทึก..." : "บันทึกพอร์ตลงฐาน"}
+              </button>
+              <em>{view === "port" ? `${portRows.length} พอร์ต` : `${ipRows.length} IP`}</em>
+            </span>
           </header>
+          {saveMsg && <p className="rc-msg">{saveMsg}</p>}
           <div className="rc-tbar">
             <div className="rc-tabs">
               <button type="button" className={cat === "all" ? "is-active" : ""} onClick={() => setCat("all")}>ทั้งหมด ({summary.total})</button>
@@ -189,28 +269,54 @@ export function Recon() {
                 </button>
               ))}
             </div>
-            <div className="rc-search"><Icon name="search" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา IP / พอร์ต / บริการ / host" autoComplete="off" /></div>
-          </div>
-          {portRows.length === 0 ? (
-            <p className="muted">ไม่มีแถวตรงเงื่อนไข</p>
-          ) : (
-            <div className="table-scroll">
-              <table className="grid-table rc-table">
-                <thead><tr><th>สถานะ</th><th>IP</th><th>พอร์ต</th><th>บริการ</th><th>Hostname</th><th>CVE</th></tr></thead>
-                <tbody>
-                  {portRows.slice(0, 2000).map((r, i) => (
-                    <tr key={`${r.ip}-${r.port ?? "x"}-${i}`} className={`rc-row rc-${r.cat}`}>
-                      <td><span className="rc-badge" style={{ color: CAT_META[r.cat].dot }}>● {CAT_META[r.cat].label}</span></td>
-                      <td className="rc-ip">{r.ip}</td>
-                      <td className="rc-port">{r.port ?? "—"}</td>
-                      <td>{r.port != null ? (r.service || "—") : <span className="muted">{r.service || "—"}</span>}</td>
-                      <td className="muted">{r.host || "—"}</td>
-                      <td>{r.cves > 0 ? <span className="rc-cve">⚠ {r.cves}</span> : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="rc-tbar-right">
+              <div className="rc-viewtoggle">
+                <button type="button" className={view === "ip" ? "is-active" : ""} onClick={() => setView("ip")}>ต่อ IP</button>
+                <button type="button" className={view === "port" ? "is-active" : ""} onClick={() => setView("port")}>ต่อพอร์ต</button>
+              </div>
+              <div className="rc-search"><Icon name="search" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา IP / พอร์ต / บริการ / host" autoComplete="off" /></div>
             </div>
+          </div>
+
+          {view === "port" ? (
+            portRows.length === 0 ? <p className="muted">ไม่มีแถวตรงเงื่อนไข</p> : (
+              <div className="table-scroll">
+                <table className="grid-table rc-table">
+                  <thead><tr><th>สถานะ</th><th>IP</th><th>พอร์ต</th><th>บริการ</th><th>Hostname</th><th>CVE</th></tr></thead>
+                  <tbody>
+                    {portRows.slice(0, 3000).map((r, i) => (
+                      <tr key={`${r.ip}-${r.port ?? "x"}-${i}`} className={`rc-row rc-${r.cat}`}>
+                        <td><span className="rc-badge" style={{ color: CAT_META[r.cat].dot }}>● {CAT_META[r.cat].label}</span></td>
+                        <td className="rc-ip">{r.ip}</td>
+                        <td className="rc-port">{r.port ?? "—"}</td>
+                        <td>{r.port != null ? (r.service || "—") : <span className="muted">{r.service || "—"}</span>}</td>
+                        <td className="muted">{r.host || "—"}</td>
+                        <td>{r.cves > 0 ? <span className="rc-cve">⚠ {r.cves}</span> : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : (
+            ipRows.length === 0 ? <p className="muted">ไม่มีแถวตรงเงื่อนไข</p> : (
+              <div className="table-scroll">
+                <table className="grid-table rc-table">
+                  <thead><tr><th>สถานะ</th><th>IP</th><th>Hostname</th><th>พอร์ตที่เปิด</th><th>CVE</th></tr></thead>
+                  <tbody>
+                    {ipRows.slice(0, 3000).map((r) => (
+                      <tr key={r.ip} className={`rc-row rc-${r.cat}`}>
+                        <td><span className="rc-badge" style={{ color: CAT_META[r.cat].dot }}>● {CAT_META[r.cat].label}</span></td>
+                        <td className="rc-ip">{r.ip}</td>
+                        <td className="muted">{r.host || "—"}</td>
+                        <td>{r.ports.length ? <span className="rc-portchips">{r.ports.map((p) => <span key={p} className="rc-pchip" title={svc(p) || undefined}>{p}{svc(p) ? ` ${svc(p)}` : ""}</span>)}</span> : <span className="muted">{r.error || "ไม่มีพอร์ตเปิด"}</span>}</td>
+                        <td>{r.cves > 0 ? <span className="rc-cve">⚠ {r.cves}</span> : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
           )}
         </section>
       )}
