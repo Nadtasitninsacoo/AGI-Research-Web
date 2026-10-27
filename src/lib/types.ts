@@ -1,10 +1,10 @@
 export type AgentStatus = "idle" | "running" | "paused" | "error" | "retired";
-export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "needs_input" | "cancelled";
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
-export const RUN_STATUSES: readonly RunStatus[] = ["queued", "running", "succeeded", "failed", "cancelled"];
+export const RUN_STATUSES: readonly RunStatus[] = ["queued", "running", "succeeded", "failed", "needs_input", "cancelled"];
 export const isRunStatus = (v: unknown): v is RunStatus => RUN_STATUSES.some((s) => s === v);
-export const isRunFinal = (s: RunStatus) => s === "succeeded" || s === "failed" || s === "cancelled";
+export const isRunFinal = (s: RunStatus) => s === "succeeded" || s === "failed" || s === "needs_input" || s === "cancelled";
 
 export type JsonObject = Record<string, unknown>;
 

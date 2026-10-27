@@ -3,9 +3,11 @@
 import { useState } from "react";
 
 /**
- * One-time "Initialize tables" control: creates only the `settings` and
- * `command_approvals` tables the auto / approval features need. The admin
- * password is sent once to a narrow server endpoint and never stored.
+ * One-time "Initialize tables" control: creates only the `settings`,
+ * `command_approvals` and `lessons` tables the auto / approval / learning
+ * features need, and applies fixed column migrations (e.g. the needs_input run
+ * status). The admin password is sent once to a narrow server endpoint and
+ * never stored.
  */
 export function DbInitButton() {
   const [open, setOpen] = useState(false);
@@ -23,9 +25,10 @@ export function DbInitButton() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ password }),
       });
-      const d = (await res.json()) as { ok?: boolean; present?: string[]; error?: string };
+      const d = (await res.json()) as { ok?: boolean; present?: string[]; migrated?: string[]; error?: string };
       if (!res.ok || !d.ok) throw new Error(d.error ?? "init failed");
-      setMsg({ ok: true, text: `สร้างตารางแล้ว: ${(d.present ?? []).join(", ")} · รีเฟรชหน้าเพื่อใช้ปุ่ม AUTO ได้เลย` });
+      const mig = (d.migrated ?? []).length ? ` · migrate: ${(d.migrated ?? []).join(", ")}` : "";
+      setMsg({ ok: true, text: `สร้างตารางแล้ว: ${(d.present ?? []).join(", ")}${mig} · รีเฟรชหน้าเพื่อใช้ปุ่ม AUTO ได้เลย` });
       setPassword("");
     } catch (err) {
       setMsg({ ok: false, text: err instanceof Error ? err.message : "init failed" });

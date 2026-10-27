@@ -188,6 +188,14 @@ tr:last-child td {
   animation: cerberus-pulse 2s infinite;
 }
 
+/* Blocked and waiting on a human (guardrail/connectivity) — amber, not red.
+   It is not a failure and not a success: the run paused for authorization. */
+.tag-needs_input {
+  color: #f5c451;
+  background: rgba(245, 196, 81, 0.09);
+  border-color: rgba(245, 196, 81, 0.38);
+}
+
 .tag-queued {
   color: #c0c0c7;
   background: #29292e;

@@ -252,7 +252,7 @@ async function latestOperation(): Promise<Operation | null> {
        FROM experiment_runs r
        JOIN experiments e ON e.id = r.experiment_id
        LEFT JOIN agents a ON a.id = e.agent_id
-       WHERE r.metrics IS NOT NULL AND r.status IN ('succeeded', 'failed')
+       WHERE r.metrics IS NOT NULL AND r.status IN ('succeeded', 'failed', 'needs_input')
        ORDER BY r.id DESC LIMIT 1`,
     );
     const r = rows[0];

@@ -2,10 +2,21 @@ import { NextResponse } from "next/server";
 import mysql from "mysql2/promise";
 
 // Narrow, one-time migration endpoint: creates ONLY the two tables the auto /
-// approval controls need (`settings`, `command_approvals`). It is NOT a shell
+// approval controls need (`settings`, `command_approvals`) plus `lessons`, and
+// applies a small set of fixed, idempotent column migrations. It is NOT a shell
 // runner and not the full db:setup — it does not create the database or user,
 // run arbitrary SQL, or write any file. The MySQL admin password is used for a
 // single connection and never stored or logged.
+
+// Fixed, idempotent schema migrations for existing databases. Re-running them
+// just re-applies the same definition, so they are safe to click more than once.
+const MIGRATIONS: { name: string; sql: string }[] = [
+  {
+    name: "experiment_runs.status += needs_input",
+    sql: `ALTER TABLE experiment_runs MODIFY COLUMN status
+      ENUM('queued','running','succeeded','failed','needs_input','cancelled') NOT NULL DEFAULT 'queued'`,
+  },
+];
 
 const TABLES: { name: string; sql: string }[] = [
   {
@@ -71,10 +82,21 @@ export async function POST(request: Request) {
       password,
     });
     for (const t of TABLES) await conn.query(t.sql);
+    // Apply fixed column migrations; tolerate ones that cannot run yet (e.g. a
+    // fresh DB without experiment_runs) so table creation still reports success.
+    const migrated: string[] = [];
+    for (const m of MIGRATIONS) {
+      try {
+        await conn.query(m.sql);
+        migrated.push(m.name);
+      } catch {
+        /* table may not exist on a bare DB — ignore */
+      }
+    }
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
       `SELECT table_name AS t FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('settings','command_approvals','lessons')`,
     );
-    return NextResponse.json({ ok: true, created: TABLES.map((t) => t.name), present: rows.map((r) => r.t) });
+    return NextResponse.json({ ok: true, created: TABLES.map((t) => t.name), present: rows.map((r) => r.t), migrated });
   } catch (err) {
     const code = (err as { code?: string })?.code;
     const msg = code === "ER_ACCESS_DENIED_ERROR" ? "เข้าสู่ระบบ MySQL ไม่สำเร็จ — ตรวจรหัส admin" : err instanceof Error ? err.message : "init failed";

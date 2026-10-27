@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS experiment_runs (
   experiment_id BIGINT UNSIGNED NOT NULL,
   params        JSON NULL,
   metrics       JSON NULL,
-  status        ENUM('queued','running','succeeded','failed','cancelled') NOT NULL DEFAULT 'queued',
+  status        ENUM('queued','running','succeeded','failed','needs_input','cancelled') NOT NULL DEFAULT 'queued',
   error_message TEXT NULL,
   started_at    TIMESTAMP NULL,
   finished_at   TIMESTAMP NULL,

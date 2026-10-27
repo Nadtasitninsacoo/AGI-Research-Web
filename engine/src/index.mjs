@@ -141,13 +141,17 @@ async function processRun(id) {
       : await runAgent({
           runId: id, agentId, agentName, model, objective, scope, agentConfig, runParams, toolsEnabled,
         });
+    // A run that is blocked and needs a human (guardrail/connectivity) is recorded
+    // as needs_input, not a plain succeeded/failed, so the dashboard shows the truth.
+    const runStatus = result.metrics?.outcome === "needs_input" ? "needs_input" : result.status;
+    const isBad = runStatus === "failed" || runStatus === "needs_input";
     await finalizeRun(id, {
-      status: result.status,
+      status: runStatus,
       metrics: result.metrics,
-      errorMessage: result.status === "failed" ? result.summary.slice(0, 2000) : null,
+      errorMessage: isBad ? result.summary.slice(0, 2000) : null,
     });
     await setAgentStatus(agentId, result.status === "failed" ? "error" : "idle");
-    await log({ agentId, runId: id, level: "info", message: `Run ${result.status}.` });
+    await log({ agentId, runId: id, level: "info", message: `Run ${runStatus}.` });
   } catch (err) {
     const message = err?.message ?? String(err);
     await log({ agentId, runId: id, level: "error", message: `Run crashed: ${message}` });

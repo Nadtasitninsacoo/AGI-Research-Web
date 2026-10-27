@@ -31,7 +31,7 @@ function find(logs: RunLog[], prefix: string): RunLog | undefined {
 export function buildPipeline(logs: RunLog[], status: RunStatus, findings: number): Pipeline {
   const sorted = [...logs].sort(asc);
   const running = status === "running";
-  const final = status === "succeeded" || status === "failed" || status === "cancelled";
+  const final = status === "succeeded" || status === "failed" || status === "needs_input" || status === "cancelled";
 
   const started = find(sorted, "run started");
   const plan = find(sorted, "hydra plan");
@@ -93,8 +93,11 @@ export function buildPipeline(logs: RunLog[], status: RunStatus, findings: numbe
   if (final) {
     push({
       key: "finish",
-      label: status === "succeeded" ? "Finished" : status === "cancelled" ? "Cancelled" : "Failed",
-      state: status === "succeeded" ? "done" : "error",
+      label: status === "succeeded" ? "Finished"
+        : status === "cancelled" ? "Cancelled"
+        : status === "needs_input" ? "Needs input"
+        : "Failed",
+      state: status === "succeeded" ? "done" : status === "needs_input" ? "active" : "error",
     });
   } else {
     push({ key: "finish", label: "Finish", state: "pending" });
