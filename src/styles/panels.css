@@ -59,9 +59,9 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
   min-width: 0;
-  padding: 13px 14px 14px;
+  padding: 9px 13px 10px;
   overflow: hidden;
   background: var(--grad-card);
   border: 1px solid var(--line);
@@ -89,15 +89,15 @@
 
 .kpi b {
   color: var(--text-strong);
-  font-size: clamp(24px, 2.1vw, 33px);
+  font-size: clamp(20px, 1.7vw, 27px);
   font-weight: 300;
-  line-height: 1.15;
+  line-height: 1.1;
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
 }
 
 .kpi span {
-  margin-bottom: 5px;
+  margin-bottom: 2px;
   color: var(--faint);
   font-size: 8px;
   letter-spacing: 0.08em;
