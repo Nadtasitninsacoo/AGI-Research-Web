@@ -86,6 +86,20 @@ export function Recon() {
     setPullMsg(`ดึง ${r.pulled} IP (จากพอร์ตที่บันทึก${pf.service ? ` · ${pf.service}` : ""}${pf.port ? ` · :${pf.port}` : ""}${pf.cve === "with" ? " · มี CVE" : pf.cve === "without" ? " · ไม่มี CVE" : ""})`);
   };
 
+  // One-click: pull only IPs that have a vulnerable (CVE) saved port.
+  const pullVuln = async () => {
+    setSource("ports");
+    setPf({ cve: "with" });
+    setPulling(true);
+    setPullMsg("กำลังดึง IP ที่มีช่องโหว่...");
+    const r = await pullIpsFromPorts({ cve: "with" }, allRemaining ? null : Number(count) || 100);
+    setPulling(false);
+    if (!r.ok) { setPullMsg(r.message); return; }
+    if (r.pulled === 0) { setPullMsg("ยังไม่มี IP ที่มีช่องโหว่ในคลัง (บันทึกพอร์ตจากผลสแกนก่อน)"); return; }
+    appendIps(r.ips);
+    setPullMsg(`ดึง ${r.pulled} IP ที่มีช่องโหว่ (CVE) มาแล้ว — กดสแกนต่อได้เลย`);
+  };
+
   const savePorts = async () => {
     if (!results) return;
     setSaving(true);
@@ -164,6 +178,13 @@ export function Recon() {
     <>
       <section className="panel span-7" id="recon">
         <header className="panel-head"><span>01 // เป้าหมาย</span><em>{parsed.length} IP</em></header>
+
+        <div className="rc-quick">
+          <button type="button" className="btn btn-danger btn-sm" disabled={pulling} onClick={pullVuln}>
+            <Icon name="target" /> {pulling ? "กำลังดึง..." : "ดึง IP ที่มีช่องโหว่ (คลิกเดียว)"}
+          </button>
+          <span className="rc-quick-hint">ดึงเฉพาะ IP ที่มี CVE จากคลังพอร์ต มาใส่ช่องเลย → กดสแกนต่อ</span>
+        </div>
 
         <details className="rc-pull" open>
           <summary>ดึง IP จากฐานระบบ มาใส่ช่อง</summary>
