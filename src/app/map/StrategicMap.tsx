@@ -77,6 +77,18 @@ const HAS_MAPBOX = MAPBOX_TOKEN.length > 0;
 // Order the provider switch cycles through. Licensed Mapbox leads when available.
 const PROVIDERS: SatProvider[] = HAS_MAPBOX ? ["mapbox", "google", "esri"] : ["google", "esri"];
 
+// Operator convenience: remember where the map was and how it was configured, so
+// the console reopens exactly where you left off. Per-browser only (localStorage),
+// fail-safe — any read/write error just falls back to defaults.
+const MAP_PREFS_KEY = "agi.map.prefs.v1";
+type MapPrefs = { layer?: "dark" | "sat"; provider?: SatProvider; labels?: boolean; lat?: number; lng?: number; zoom?: number };
+function loadPrefs(): MapPrefs {
+  try { return JSON.parse(localStorage.getItem(MAP_PREFS_KEY) || "{}") as MapPrefs; } catch { return {}; }
+}
+function patchPrefs(patch: MapPrefs) {
+  try { localStorage.setItem(MAP_PREFS_KEY, JSON.stringify({ ...loadPrefs(), ...patch })); } catch { /* storage blocked */ }
+}
+
 export function StrategicMap() {
   const [state, action, pending] = useActionState(launchCommandAction, null);
 
@@ -129,10 +141,18 @@ export function StrategicMap() {
   // --- Map bootstrap (once). Leaflet is imported dynamically so it never runs on the server. ---
   useEffect(() => {
     let disposed = false;
+    // Read saved prefs synchronously, before the persist effect below can run on
+    // mount with default state and overwrite them.
+    const prefs = loadPrefs();
     (async () => {
       const leaflet = (await import("leaflet")).default;
       if (disposed || !elRef.current) return;
       L.current = leaflet;
+
+      // Reopen where the operator last left the map, else start over Thailand.
+      const startCenter: [number, number] =
+        typeof prefs.lat === "number" && typeof prefs.lng === "number" ? [prefs.lat, prefs.lng] : [13.75, 100.5];
+      const startZoom = typeof prefs.zoom === "number" ? prefs.zoom : 3;
 
       const m = leaflet.map(elRef.current, {
         worldCopyJump: true,   // seamless wrap when panning past the date line
@@ -141,7 +161,7 @@ export function StrategicMap() {
         zoomControl: false,
         attributionControl: true,
         maxBounds: undefined,  // no clamp -> explore the whole world
-      }).setView([13.75, 100.5], 3); // start over Thailand
+      }).setView(startCenter, startZoom);
 
       // BASE map: standard OpenStreetMap tiles (free, no key), always present.
       // A CSS filter (.lf-theme-dark) recolours this base into a dark theme.
@@ -207,9 +227,21 @@ export function StrategicMap() {
       map.current = m;
       setZoom(m.getZoom());
 
+      // Restore the saved imagery configuration (sanitising a provider that is no
+      // longer available, e.g. a remembered "mapbox" after the token was removed).
+      if (typeof prefs.labels === "boolean") setShowLabels(prefs.labels);
+      if (prefs.provider && PROVIDERS.includes(prefs.provider)) setSatProvider(prefs.provider);
+      if (prefs.layer === "sat") setLayer("sat");
+
       leaflet.control.scale({ metric: true, imperial: false, position: "bottomleft" }).addTo(m);
 
-      m.on("zoomend", () => setZoom(m.getZoom()));
+      // Persist the view as the operator pans/zooms, so the console reopens here.
+      const saveView = () => {
+        const c = m.getCenter();
+        patchPrefs({ lat: c.lat, lng: normLon(c.lng), zoom: m.getZoom() });
+      };
+      m.on("zoomend", () => { setZoom(m.getZoom()); saveView(); });
+      m.on("moveend", saveView);
       m.on("click", (e: LType.LeafletMouseEvent) => handleClick(e.latlng));
       // Live cursor coordinates — write straight to the DOM node to avoid a
       // React re-render on every mousemove.
@@ -361,6 +393,9 @@ export function StrategicMap() {
     setMeasureM(0);
     refreshHasData();
   }, [refreshHasData]);
+
+  // Remember the imagery configuration across sessions.
+  useEffect(() => { patchPrefs({ layer, provider: satProvider, labels: showLabels }); }, [layer, satProvider, showLabels]);
 
   // The chosen provider's layer (falling back if one isn't built, e.g. Mapbox
   // without a token).
