@@ -5,7 +5,7 @@ import { useActionState, useCallback, useEffect, useRef, useState } from "react"
 import type * as LType from "leaflet";
 import * as mgrs from "mgrs";
 import { launchCommandAction } from "../command/actions";
-import { phoneAreaAction, geoipAction } from "./actions";
+import { phoneAreaAction, geoipAction, portScanAction, type PortRow } from "./actions";
 import { Icon } from "@/components/Icon";
 
 type Mode = "scan" | "mark" | "measure";
@@ -164,6 +164,9 @@ export function StrategicMap() {
   const [aiMsg, setAiMsg] = useState("");
   const [geoBusy, setGeoBusy] = useState(false);
   const [geoMsg, setGeoMsg] = useState("");
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanMsg, setScanMsg] = useState("");
+  const [ports, setPorts] = useState<PortRow[] | null>(null);
 
   // Leaflet objects live in a ref so React re-renders never recreate the map.
   const elRef = useRef<HTMLDivElement>(null);
@@ -599,6 +602,31 @@ export function StrategicMap() {
     setGeoMsg(`${r.ip} → ${where}${r.isp ? ` · ${r.isp}` : ""}`);
   }, [host, geoBusy]);
 
+  // ACTIVE port scan of the target host with nmap. This DOES connect to the host
+  // (unlike the OSINT geolocate) — for authorized engagements only.
+  const portScan = useCallback(async (allPorts: boolean) => {
+    const q = host.trim();
+    if (!q || scanBusy) return;
+    setScanBusy(true);
+    setScanMsg(`กำลังสแกน ${q} ด้วย nmap...`);
+    setPorts(null);
+    const r = await portScanAction(q, { allPorts });
+    setScanBusy(false);
+    if (!r.ok) { setScanMsg(r.message); setPorts(null); return; }
+    setPorts(r.open);
+    if (!r.up && r.open.length === 0) {
+      setScanMsg(`${r.target}: ไม่ตอบสนอง/ไม่มีพอร์ตเปิด (${r.scanned}, ${r.seconds}s)`);
+    } else if (r.open.length === 0) {
+      setScanMsg(`${r.target}: host ตอบสนองแต่ไม่พบพอร์ตเปิดใน ${r.scanned} (${r.seconds}s)`);
+    } else {
+      setScanMsg(`${r.target}: พบ ${r.open.length} พอร์ตเปิด (${r.scanned}, ${r.seconds}s)`);
+    }
+    // Surface the open-port count on the scan/geo pin if one exists.
+    const label = `${r.target}<br>${r.open.length} พอร์ตเปิด: ${r.open.map((p) => p.port).join(", ") || "—"}`;
+    const mk = geoMarker.current ?? scanMarker.current;
+    mk?.bindTooltip(label, { permanent: false, direction: "top", offset: [0, -10], className: "lf-tip" });
+  }, [host, scanBusy]);
+
   // Fullscreen the map stage (Fullscreen API), re-fitting Leaflet afterwards.
   const toggleFullscreen = useCallback(() => {
     const el = stageRef.current;
@@ -938,6 +966,34 @@ export function StrategicMap() {
           </button>
           {geoMsg && <span className="smap-geo-msg">{geoMsg}</span>}
         </div>
+
+        {/* ACTIVE recon: nmap TCP port + service scan of the target host. */}
+        <div className="smap-geo">
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => portScan(false)} disabled={scanBusy || !host.trim()}>
+            <Icon name="target" /> {scanBusy ? "กำลังสแกน..." : "สแกนพอร์ต (Nmap · top 100)"}
+          </button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => portScan(true)} disabled={scanBusy || !host.trim()}>
+            top 1000
+          </button>
+          {scanMsg && <span className="smap-geo-msg">{scanMsg}</span>}
+        </div>
+
+        {ports && ports.length > 0 && (
+          <div className="smap-ports">
+            <table>
+              <thead><tr><th>พอร์ต</th><th>บริการ</th><th>เวอร์ชัน</th></tr></thead>
+              <tbody>
+                {ports.map((p) => (
+                  <tr key={`${p.proto}-${p.port}`}>
+                    <td className="smap-port">{p.port}/{p.proto}</td>
+                    <td>{p.service || "—"}</td>
+                    <td className="smap-ver">{p.version || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div className="form-foot">
           <button type="submit" className="btn btn-danger" disabled={pending || !pt || !host}>

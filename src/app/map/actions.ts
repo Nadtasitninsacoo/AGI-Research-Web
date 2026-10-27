@@ -2,6 +2,8 @@
 
 import { lookup } from "node:dns/promises";
 import net from "node:net";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { geocoder, carrier } from "libphonenumber-geo-carrier";
 
@@ -123,4 +125,111 @@ export async function geoipAction(input: string): Promise<GeoIP> {
     const code = (err as { code?: string })?.code;
     return { ok: false, message: code === "ENOTFOUND" ? "resolve host ไม่สำเร็จ" : "ค้นหาตำแหน่งล้มเหลว" };
   }
+}
+
+const execFileP = promisify(execFile);
+
+export type PortRow = { port: number; proto: string; state: string; service: string; version: string };
+export type PortScan =
+  | { ok: false; message: string }
+  | {
+      ok: true;
+      target: string; // exactly what we handed nmap
+      up: boolean; // did the host answer?
+      open: PortRow[];
+      scanned: string; // human description of what was scanned (e.g. "top 100 TCP")
+      seconds: number;
+    };
+
+/** A single scannable target: one bare IPv4/IPv6, or one hostname. No CIDR, no
+ *  lists, no ports, no scheme — this is a single-host recon tool, not a sweeper. */
+function cleanTarget(raw: string): { ok: true; target: string } | { ok: false; message: string } {
+  const q = (raw || "").trim();
+  if (!q) return { ok: false, message: "ใส่ IP หรือ host ก่อน" };
+  if (net.isIP(q)) return { ok: true, target: q };
+  // Strip scheme / path / :port that a user may paste, then validate as a hostname.
+  const h = q.replace(/^[a-z]+:\/\//i, "").replace(/\/.*$/, "").replace(/:\d+$/, "");
+  if (h.length > 253 || !/^[a-z0-9]([a-z0-9-]{0,62}\.)+[a-z0-9]([a-z0-9-]{0,62})$/i.test(h)) {
+    return { ok: false, message: "รูปแบบ IP/host ไม่ถูกต้อง (สแกนได้ทีละเป้าหมายเดียว ไม่รับช่วง CIDR/หลายค่า)" };
+  }
+  return { ok: true, target: h };
+}
+
+/** nmap grepable "Ports:" field → rows. Each port is a/b/c/d/e/f/g split by "/". */
+function parseGrepable(out: string): { up: boolean; open: PortRow[] } {
+  let up = false;
+  const open: PortRow[] = [];
+  for (const line of out.split(/\r?\n/)) {
+    const h = line.match(/^Host:\s+\S+.*?\bStatus:\s+(\w+)/);
+    if (h) up ||= h[1].toLowerCase() === "up";
+    const p = line.match(/\bPorts:\s+(.+?)(?:\tIgnored State:|$)/);
+    if (!p) continue;
+    up = true; // a Ports: line only exists for a responsive host
+    for (const spec of p[1].split(", ")) {
+      const f = spec.split("/");
+      const port = Number(f[0]);
+      const state = (f[1] || "").trim();
+      if (!Number.isFinite(port) || state !== "open") continue;
+      open.push({
+        port,
+        proto: (f[2] || "tcp").trim(),
+        state,
+        service: (f[4] || "").trim(),
+        version: (f[6] || "").trim().replace(/\|$/, ""),
+      });
+    }
+  }
+  open.sort((a, b) => a.port - b.port);
+  return { up, open };
+}
+
+/**
+ * ACTIVE RECON: run an unprivileged nmap TCP-connect + light service scan against
+ * ONE operator-supplied host and return the open ports. Unlike geoipAction this
+ * DOES touch the target (it opens TCP connections to it) — it is for an authorized
+ * engagement only. Guardrails: single host (no CIDR/lists), a bounded top-ports
+ * set, no privileged/raw-packet modes (-sT needs no admin), capped timing so it
+ * can't be turned into a flooder, and a hard wall-clock timeout. Arguments are
+ * passed to execFile as an array (never a shell string), so the target can't inject.
+ */
+export async function portScanAction(input: string, opts?: { allPorts?: boolean }): Promise<PortScan> {
+  const c = cleanTarget(input);
+  if (!c.ok) return c;
+  const topPorts = opts?.allPorts ? "1000" : "100";
+  const scanned = opts?.allPorts ? "top 1000 TCP" : "top 100 TCP";
+  const args = [
+    "-sT",                    // TCP connect scan — no raw sockets, no admin needed
+    "-Pn",                    // treat host as up (many hosts drop ping); we report "up" from port replies
+    "-sV", "--version-light", // identify services, but the fast probe set only
+    "--top-ports", topPorts,
+    "-T4",                    // brisk but not the flood-prone -T5
+    "--host-timeout", "90s",
+    "-n",                     // we resolve/validate ourselves; let nmap skip rDNS
+    "-oG", "-",               // grepable report to stdout
+    c.target,
+  ];
+  const started = Date.now();
+  const bins = [process.env.NMAP_PATH, "nmap", "C:/Program Files (x86)/Nmap/nmap.exe"].filter(Boolean) as string[];
+  let lastErr: unknown;
+  for (const bin of bins) {
+    try {
+      const { stdout } = await execFileP(bin, args, { timeout: 120_000, maxBuffer: 4 << 20, windowsHide: true });
+      const { up, open } = parseGrepable(stdout);
+      return { ok: true, target: c.target, up, open, scanned, seconds: Math.round((Date.now() - started) / 1000) };
+    } catch (err) {
+      const code = (err as { code?: string | number })?.code;
+      if (code === "ENOENT") { lastErr = err; continue; } // try the next candidate path
+      if ((err as { killed?: boolean })?.killed) return { ok: false, message: "สแกนนานเกินกำหนด (timeout) — เป้าหมายอาจกรองแพ็กเก็ตอยู่" };
+      // nmap can exit non-zero yet still print a usable grepable report (e.g. host-timeout).
+      const stdout = (err as { stdout?: string })?.stdout;
+      if (typeof stdout === "string" && /\bHost:/.test(stdout)) {
+        const { up, open } = parseGrepable(stdout);
+        return { ok: true, target: c.target, up, open, scanned, seconds: Math.round((Date.now() - started) / 1000) };
+      }
+      lastErr = err;
+    }
+  }
+  const code = (lastErr as { code?: string | number })?.code;
+  if (code === "ENOENT") return { ok: false, message: "ไม่พบ nmap บนเครื่องนี้ — ติดตั้ง Nmap หรือกำหนด NMAP_PATH" };
+  return { ok: false, message: "สแกนล้มเหลว" };
 }

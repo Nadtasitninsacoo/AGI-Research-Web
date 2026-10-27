@@ -538,3 +538,11 @@
 /* IP/host geolocation control (OSINT pin, not a scan) */
 .smap-geo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -4px; }
 .smap-geo-msg { font-size: 12px; color: var(--muted, #9aa0aa); font-variant-numeric: tabular-nums; }
+
+.smap-ports { max-height: 240px; overflow: auto; border: 1px solid var(--line, #26303d); border-radius: 6px; }
+.smap-ports table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.smap-ports th, .smap-ports td { text-align: left; padding: 5px 9px; border-bottom: 1px solid var(--line, #26303d); }
+.smap-ports thead th { position: sticky; top: 0; background: var(--panel, #10151c); color: var(--muted, #9aa0aa); font-weight: 600; z-index: 1; }
+.smap-ports tbody tr:last-child td { border-bottom: 0; }
+.smap-port { font-variant-numeric: tabular-nums; color: #5fd38a; font-weight: 600; white-space: nowrap; }
+.smap-ver { color: var(--muted, #9aa0aa); }
