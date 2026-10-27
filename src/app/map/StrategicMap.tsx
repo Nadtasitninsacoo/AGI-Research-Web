@@ -64,6 +64,11 @@ const bearing = (a: LType.LatLng, b: LType.LatLng) => {
   return (Math.atan2(y, x) * toD + 360) % 360;
 };
 
+// Mapbox token (optional). When present, Mapbox Satellite is the default, sharper
+// imagery with global coverage; Esri stays available as a free fallback / compare.
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() || "";
+const HAS_MAPBOX = MAPBOX_TOKEN.length > 0;
+
 export function StrategicMap() {
   const [state, action, pending] = useActionState(launchCommandAction, null);
 
@@ -79,6 +84,7 @@ export function StrategicMap() {
   const [measureM, setMeasureM] = useState(0);
   const [markCount, setMarkCount] = useState(0);
   const [layer, setLayer] = useState<"dark" | "sat">("dark");
+  const [satProvider, setSatProvider] = useState<"mapbox" | "esri">(HAS_MAPBOX ? "mapbox" : "esri");
   const [showLabels, setShowLabels] = useState(true);
   const [locating, setLocating] = useState(false);
   const [locMsg, setLocMsg] = useState("");
@@ -102,7 +108,8 @@ export function StrategicMap() {
   const meMarker = useRef<LType.Marker | null>(null);
   const meCircle = useRef<LType.Circle | null>(null);
   const darkTiles = useRef<LType.TileLayer | null>(null);
-  const satTiles = useRef<LType.TileLayer | null>(null);
+  const satMapbox = useRef<LType.TileLayer | null>(null);
+  const satEsri = useRef<LType.TileLayer | null>(null);
   const satLabels = useRef<LType.TileLayer | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLSpanElement>(null); // live cursor coords, updated without re-render
@@ -152,32 +159,28 @@ export function StrategicMap() {
       // rather than showing blank/placeholder tiles.
       m.createPane("sat");
       m.getPane("sat")!.style.zIndex = "250";
-      const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim();
-      satTiles.current = mapboxToken
-        ? leaflet.tileLayer(
-            `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${mapboxToken}`,
-            {
-              pane: "sat",
-              maxZoom: 22,
-              maxNativeZoom: 22,   // Mapbox serves real imagery deep almost everywhere
-              tileSize: 512,       // @2x retina tiles are 512px...
-              zoomOffset: -1,      // ...so shift one level to keep them aligned and crisp
-              attribution: "Imagery &copy; Mapbox, Maxar",
-            },
-          )
-        : leaflet.tileLayer(
-            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-            {
-              pane: "sat",
-              maxZoom: 22,
-              maxNativeZoom: 19,
-              detectRetina: true,
-              attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics",
-            },
-          );
+
+      // Mapbox (only when a token is set): real high-res imagery to z22 with full
+      // global coverage. @2x retina 512px tiles kept aligned with zoomOffset -1.
+      if (HAS_MAPBOX) {
+        satMapbox.current = leaflet.tileLayer(
+          `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${MAPBOX_TOKEN}`,
+          { pane: "sat", maxZoom: 22, maxNativeZoom: 22, tileSize: 512, zoomOffset: -1, attribution: "Imagery &copy; Mapbox, Maxar" },
+        );
+      }
+
+      // Esri (free, always available as fallback/compare). maxNativeZoom is capped
+      // at 17 — the level Esri has REAL imagery for everywhere on Earth. Deeper
+      // zoom (z18-22) upscales that real tile instead of requesting levels Esri
+      // lacks, which is what produced the gray "Map data not yet available" tiles.
+      // So the view is blurrier when zoomed far in, but never shows placeholders.
+      satEsri.current = leaflet.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        { pane: "sat", maxZoom: 22, maxNativeZoom: 17, detectRetina: true, attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics" },
+      );
       satLabels.current = leaflet.tileLayer(
         "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-        { pane: "sat", maxZoom: 22, maxNativeZoom: 19, detectRetina: true, attribution: "" },
+        { pane: "sat", maxZoom: 22, maxNativeZoom: 17, detectRetina: true, attribution: "" },
       );
 
       darkTiles.current.addTo(m); // base is always on
@@ -342,20 +345,27 @@ export function StrategicMap() {
     refreshHasData();
   }, [refreshHasData]);
 
-  // The OSM base stays on always; this just shows/hides the satellite overlay
-  // (and its label layer) on top of it.
+  // The OSM base stays on always; this shows/hides the active satellite overlay
+  // (and its label layer) on top of it, and swaps providers when satProvider
+  // changes (removing the inactive one so they never stack).
   useEffect(() => {
-    const m = map.current, s = satTiles.current, sl = satLabels.current;
-    if (!m || !s || !sl) return;
+    const m = map.current, sl = satLabels.current;
+    if (!m) return;
+    const active = satProvider === "mapbox" && satMapbox.current ? satMapbox.current : satEsri.current;
+    const inactive = satProvider === "mapbox" ? satEsri.current : satMapbox.current;
     if (layer === "sat") {
-      if (!m.hasLayer(s)) s.addTo(m);
-      if (showLabels && !m.hasLayer(sl)) sl.addTo(m);
-      if (!showLabels && m.hasLayer(sl)) m.removeLayer(sl);
+      if (inactive && m.hasLayer(inactive)) m.removeLayer(inactive);
+      if (active && !m.hasLayer(active)) active.addTo(m);
+      if (sl) {
+        if (showLabels && !m.hasLayer(sl)) sl.addTo(m);
+        if (!showLabels && m.hasLayer(sl)) m.removeLayer(sl);
+      }
     } else {
-      if (m.hasLayer(s)) m.removeLayer(s);
-      if (m.hasLayer(sl)) m.removeLayer(sl);
+      if (satMapbox.current && m.hasLayer(satMapbox.current)) m.removeLayer(satMapbox.current);
+      if (satEsri.current && m.hasLayer(satEsri.current)) m.removeLayer(satEsri.current);
+      if (sl && m.hasLayer(sl)) m.removeLayer(sl);
     }
-  }, [layer, showLabels]);
+  }, [layer, showLabels, satProvider]);
 
   // "Find my location" — browser GPS/geolocation, then zoom in close (house level).
   const locate = useCallback(() => {
@@ -368,7 +378,8 @@ export function StrategicMap() {
       setLocating(false);
       // Turn on satellite imagery immediately (don't wait for the React effect),
       // so "see my house" works right away. OSM base stays beneath as fallback.
-      if (satTiles.current && !m.hasLayer(satTiles.current)) satTiles.current.addTo(m);
+      const activeSat = satProvider === "mapbox" && satMapbox.current ? satMapbox.current : satEsri.current;
+      if (activeSat && !m.hasLayer(activeSat)) activeSat.addTo(m);
       if (showLabels && satLabels.current && !m.hasLayer(satLabels.current)) satLabels.current.addTo(m);
       setLayer("sat");
       setAccuracy(e.accuracy);
@@ -383,7 +394,7 @@ export function StrategicMap() {
       setLocating(false);
       setLocMsg(/denied|permission/i.test(e.message) ? "ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง" : "หาตำแหน่งไม่สำเร็จ");
     });
-  }, [showLabels]);
+  }, [showLabels, satProvider]);
 
   // Fullscreen the map stage (Fullscreen API), re-fitting Leaflet afterwards.
   const toggleFullscreen = useCallback(() => {
@@ -625,6 +636,16 @@ export function StrategicMap() {
           <button type="button" className="btn btn-sm btn-ghost" onClick={() => setLayer((l) => (l === "dark" ? "sat" : "dark"))}>
             {layer === "dark" ? <><Icon name="globe" /> ดาวเทียม</> : <><Icon name="moon" /> มืด</>}
           </button>
+          {layer === "sat" && HAS_MAPBOX && (
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={() => setSatProvider((p) => (p === "mapbox" ? "esri" : "mapbox"))}
+              title="สลับแหล่งภาพดาวเทียม"
+            >
+              <Icon name="globe" /> {satProvider === "mapbox" ? "Mapbox" : "Esri"}
+            </button>
+          )}
           {layer === "sat" && (
             <button type="button" className={`btn btn-sm ${showLabels ? "" : "btn-ghost"}`} onClick={() => setShowLabels((s) => !s)}>
               <Icon name="tag" /> ชื่อถนน {showLabels ? "เปิด" : "ปิด"}
