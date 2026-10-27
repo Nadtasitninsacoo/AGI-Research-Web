@@ -139,25 +139,42 @@ export function StrategicMap() {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       });
 
-      // SATELLITE overlay: Esri World Imagery (free, no key) — real aerial photos
-      // for zooming to rooftops/houses. Kept in a SEPARATE pane above the base so
-      // the dark CSS filter (scoped to the default tile pane) never inverts it,
-      // and so OSM shows beneath any gaps. maxNativeZoom caps real tile requests
-      // at the provider's deepest level (z19); z20-22 are upscaled from it so the
-      // user can keep zooming closer (blurry past native, but no blank tiles).
-      // detectRetina pulls double-resolution tiles on high-DPI screens for clarity.
+      // SATELLITE overlay in a SEPARATE pane above the base so the dark CSS filter
+      // (scoped to the default tile pane) never inverts it, and so OSM shows
+      // beneath any gaps.
+      //
+      // Provider: Mapbox Satellite when NEXT_PUBLIC_MAPBOX_TOKEN is set — far
+      // better global high-res coverage (sharp to z22, including rural areas where
+      // Esri shows "Map data not yet available"). Without a token it falls back to
+      // Esri World Imagery (free, no key), which is sharp in cities but thin in the
+      // countryside. @2x tiles (Mapbox) / detectRetina (Esri) keep imagery crisp on
+      // high-DPI screens; maxNativeZoom caps real requests so deeper zoom upscales
+      // rather than showing blank/placeholder tiles.
       m.createPane("sat");
       m.getPane("sat")!.style.zIndex = "250";
-      satTiles.current = leaflet.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        {
-          pane: "sat",
-          maxZoom: 22,
-          maxNativeZoom: 19,     // Esri serves real z19 imagery almost everywhere — one level sharper than before
-          detectRetina: true,    // on high-DPI screens, fetch double-resolution tiles so imagery looks crisp
-          attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics",
-        },
-      );
+      const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim();
+      satTiles.current = mapboxToken
+        ? leaflet.tileLayer(
+            `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${mapboxToken}`,
+            {
+              pane: "sat",
+              maxZoom: 22,
+              maxNativeZoom: 22,   // Mapbox serves real imagery deep almost everywhere
+              tileSize: 512,       // @2x retina tiles are 512px...
+              zoomOffset: -1,      // ...so shift one level to keep them aligned and crisp
+              attribution: "Imagery &copy; Mapbox, Maxar",
+            },
+          )
+        : leaflet.tileLayer(
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            {
+              pane: "sat",
+              maxZoom: 22,
+              maxNativeZoom: 19,
+              detectRetina: true,
+              attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics",
+            },
+          );
       satLabels.current = leaflet.tileLayer(
         "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
         { pane: "sat", maxZoom: 22, maxNativeZoom: 19, detectRetina: true, attribution: "" },
