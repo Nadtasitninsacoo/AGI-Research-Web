@@ -64,10 +64,18 @@ const bearing = (a: LType.LatLng, b: LType.LatLng) => {
   return (Math.atan2(y, x) * toD + 360) % 360;
 };
 
-// Mapbox token (optional). When present, Mapbox Satellite is the default, sharper
-// imagery with global coverage; Esri stays available as a free fallback / compare.
+// Satellite imagery providers:
+//   - "google": Google aerial tiles — sharpest, deepest coverage (alley level) in
+//     Thailand, no key. NOTE: this is an unofficial tile endpoint and using it is
+//     against Google's Terms of Service; it is enabled here at the operator's
+//     explicit request for an internal tool. Swap to Mapbox for a licensed source.
+//   - "mapbox": licensed, sharp to z22 global — used as default when a token is set.
+//   - "esri": free, no key, but thin detail (placeholder tiles past ~z17).
+type SatProvider = "google" | "mapbox" | "esri";
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() || "";
 const HAS_MAPBOX = MAPBOX_TOKEN.length > 0;
+// Order the provider switch cycles through. Licensed Mapbox leads when available.
+const PROVIDERS: SatProvider[] = HAS_MAPBOX ? ["mapbox", "google", "esri"] : ["google", "esri"];
 
 export function StrategicMap() {
   const [state, action, pending] = useActionState(launchCommandAction, null);
@@ -84,7 +92,7 @@ export function StrategicMap() {
   const [measureM, setMeasureM] = useState(0);
   const [markCount, setMarkCount] = useState(0);
   const [layer, setLayer] = useState<"dark" | "sat">("dark");
-  const [satProvider, setSatProvider] = useState<"mapbox" | "esri">(HAS_MAPBOX ? "mapbox" : "esri");
+  const [satProvider, setSatProvider] = useState<SatProvider>(PROVIDERS[0]);
   const [showLabels, setShowLabels] = useState(true);
   const [locating, setLocating] = useState(false);
   const [locMsg, setLocMsg] = useState("");
@@ -108,6 +116,7 @@ export function StrategicMap() {
   const meMarker = useRef<LType.Marker | null>(null);
   const meCircle = useRef<LType.Circle | null>(null);
   const darkTiles = useRef<LType.TileLayer | null>(null);
+  const satGoogle = useRef<LType.TileLayer | null>(null);
   const satMapbox = useRef<LType.TileLayer | null>(null);
   const satEsri = useRef<LType.TileLayer | null>(null);
   const satLabels = useRef<LType.TileLayer | null>(null);
@@ -159,6 +168,14 @@ export function StrategicMap() {
       // rather than showing blank/placeholder tiles.
       m.createPane("sat");
       m.getPane("sat")!.style.zIndex = "250";
+
+      // Google aerial (default, no key): sharpest alley-level detail in Thailand.
+      // Unofficial endpoint — see the SatProvider note above. Subdomains mt0-3
+      // spread load; lyrs=s is imagery only (labels come from the toggle layer).
+      satGoogle.current = leaflet.tileLayer(
+        "https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        { pane: "sat", subdomains: ["0", "1", "2", "3"], maxZoom: 22, maxNativeZoom: 20, attribution: "Imagery &copy; Google" },
+      );
 
       // Mapbox (only when a token is set): real high-res imagery to z22 with full
       // global coverage. @2x retina 512px tiles kept aligned with zoomOffset -1.
@@ -345,27 +362,33 @@ export function StrategicMap() {
     refreshHasData();
   }, [refreshHasData]);
 
+  // The chosen provider's layer (falling back if one isn't built, e.g. Mapbox
+  // without a token).
+  const activeSat = useCallback(() => {
+    const byName = { google: satGoogle.current, mapbox: satMapbox.current, esri: satEsri.current };
+    return byName[satProvider] ?? satGoogle.current ?? satEsri.current;
+  }, [satProvider]);
+
   // The OSM base stays on always; this shows/hides the active satellite overlay
   // (and its label layer) on top of it, and swaps providers when satProvider
-  // changes (removing the inactive one so they never stack).
+  // changes (removing every inactive one so they never stack).
   useEffect(() => {
     const m = map.current, sl = satLabels.current;
     if (!m) return;
-    const active = satProvider === "mapbox" && satMapbox.current ? satMapbox.current : satEsri.current;
-    const inactive = satProvider === "mapbox" ? satEsri.current : satMapbox.current;
+    const all = [satGoogle.current, satMapbox.current, satEsri.current];
+    const active = activeSat();
     if (layer === "sat") {
-      if (inactive && m.hasLayer(inactive)) m.removeLayer(inactive);
+      for (const t of all) if (t && t !== active && m.hasLayer(t)) m.removeLayer(t);
       if (active && !m.hasLayer(active)) active.addTo(m);
       if (sl) {
         if (showLabels && !m.hasLayer(sl)) sl.addTo(m);
         if (!showLabels && m.hasLayer(sl)) m.removeLayer(sl);
       }
     } else {
-      if (satMapbox.current && m.hasLayer(satMapbox.current)) m.removeLayer(satMapbox.current);
-      if (satEsri.current && m.hasLayer(satEsri.current)) m.removeLayer(satEsri.current);
+      for (const t of all) if (t && m.hasLayer(t)) m.removeLayer(t);
       if (sl && m.hasLayer(sl)) m.removeLayer(sl);
     }
-  }, [layer, showLabels, satProvider]);
+  }, [layer, showLabels, activeSat]);
 
   // "Find my location" — browser GPS/geolocation, then zoom in close (house level).
   const locate = useCallback(() => {
@@ -378,8 +401,8 @@ export function StrategicMap() {
       setLocating(false);
       // Turn on satellite imagery immediately (don't wait for the React effect),
       // so "see my house" works right away. OSM base stays beneath as fallback.
-      const activeSat = satProvider === "mapbox" && satMapbox.current ? satMapbox.current : satEsri.current;
-      if (activeSat && !m.hasLayer(activeSat)) activeSat.addTo(m);
+      const sat = activeSat();
+      if (sat && !m.hasLayer(sat)) sat.addTo(m);
       if (showLabels && satLabels.current && !m.hasLayer(satLabels.current)) satLabels.current.addTo(m);
       setLayer("sat");
       setAccuracy(e.accuracy);
@@ -394,7 +417,7 @@ export function StrategicMap() {
       setLocating(false);
       setLocMsg(/denied|permission/i.test(e.message) ? "ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง" : "หาตำแหน่งไม่สำเร็จ");
     });
-  }, [showLabels, satProvider]);
+  }, [showLabels, activeSat]);
 
   // Fullscreen the map stage (Fullscreen API), re-fitting Leaflet afterwards.
   const toggleFullscreen = useCallback(() => {
@@ -636,14 +659,14 @@ export function StrategicMap() {
           <button type="button" className="btn btn-sm btn-ghost" onClick={() => setLayer((l) => (l === "dark" ? "sat" : "dark"))}>
             {layer === "dark" ? <><Icon name="globe" /> ดาวเทียม</> : <><Icon name="moon" /> มืด</>}
           </button>
-          {layer === "sat" && HAS_MAPBOX && (
+          {layer === "sat" && PROVIDERS.length > 1 && (
             <button
               type="button"
               className="btn btn-sm btn-ghost"
-              onClick={() => setSatProvider((p) => (p === "mapbox" ? "esri" : "mapbox"))}
-              title="สลับแหล่งภาพดาวเทียม"
+              onClick={() => setSatProvider((p) => PROVIDERS[(PROVIDERS.indexOf(p) + 1) % PROVIDERS.length])}
+              title="สลับแหล่งภาพดาวเทียม (คมสุด: Google)"
             >
-              <Icon name="globe" /> {satProvider === "mapbox" ? "Mapbox" : "Esri"}
+              <Icon name="globe" /> {satProvider === "google" ? "Google" : satProvider === "mapbox" ? "Mapbox" : "Esri"}
             </button>
           )}
           {layer === "sat" && (
