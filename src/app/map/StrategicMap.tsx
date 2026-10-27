@@ -754,6 +754,14 @@ export function StrategicMap() {
       return;
     }
 
+    // Scan/port words but no IP/host in the command or the field: the user is
+    // trying to "scan a place". Explain instead of silently geocoding the phrase
+    // (which fails). A city is not a scan target — a port scan needs a host.
+    if (/(สแกน|scan|nmap)/i.test(lcs) && /(พอร์ต|port)/i.test(lcs) && !reconTarget && !host.trim()) {
+      setAiMsg('สแกนพอร์ตต้องระบุเป้าหมายเป็น IP หรือ host เช่น "สแกนพอร์ต 8.8.8.8" — ชื่อเมือง/สถานที่สแกนไม่ได้ (เมืองไม่ใช่โฮสต์ ไม่มีพอร์ตให้สแกน)');
+      return;
+    }
+
     const wantsMeasure = /(ลากเส้น|เส้นทาง|ระยะทาง|วัดระยะ|ไกลแค่ไหน|ไกลกี่|กี่กิโล|กี่กม|distance|measure|route|how far)/i.test(lc);
     const wantsMark = /(มาร์ค|มาร์ก|ปักหมุด|ปักจุด|หมุด|mark|pin)/i.test(lc);
 
