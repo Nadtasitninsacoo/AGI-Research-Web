@@ -263,3 +263,125 @@ export async function portScanAction(
   if (code === "ENOENT") return { ok: false, message: "ไม่พบ nmap บนเครื่องนี้ — ติดตั้ง Nmap หรือกำหนด NMAP_PATH" };
   return { ok: false, message: "สแกนล้มเหลว" };
 }
+
+export type ShodanHost = {
+  ip: string;
+  ports: number[];
+  org: string;
+  isp: string;
+  product: string;
+  city: string;
+  country: string;
+  lat: number;
+  lon: number;
+  hostnames: string[];
+};
+export type ShodanResult =
+  | { ok: false; message: string }
+  | {
+      ok: true;
+      place: string;
+      query: string;
+      center?: { lat: number; lon: number };
+      total: number;
+      shown: number;
+      hosts: ShodanHost[];
+    };
+
+type ShodanMatch = {
+  ip_str?: string;
+  port?: number;
+  org?: string;
+  isp?: string;
+  product?: string;
+  hostnames?: string[];
+  location?: { latitude?: number; longitude?: number; city?: string; country_code?: string };
+};
+
+/**
+ * OSINT host discovery by AREA via Shodan's PRE-INDEXED database. This performs
+ * NO active scan — it only reads records Shodan already collected and plots the
+ * hosts it has geolocated to the given place. A place name is geocoded (English,
+ * via Nominatim) into a `city:"…" country:"…"` Shodan query; a raw Shodan filter
+ * (city:/country:/org:/net:/port:…) is passed through untouched. Read-only, fixed
+ * upstreams (no SSRF surface), and gated on an operator-supplied API key.
+ */
+export async function shodanSearchAction(placeInput: string): Promise<ShodanResult> {
+  const key = process.env.SHODAN_API_KEY?.trim();
+  if (!key) return { ok: false, message: "ยังไม่ได้ตั้ง SHODAN_API_KEY ใน .env.local" };
+  const place = (placeInput || "").trim();
+  if (!place) return { ok: false, message: 'บอกเมือง/พื้นที่ด้วย เช่น "shodan มอสโก"' };
+
+  let query: string;
+  let center: { lat: number; lon: number } | undefined;
+  try {
+    if (/\b(city|country|org|net|port|product|geo|asn|hostname):/i.test(place)) {
+      query = place; // already a Shodan filter expression
+    } else {
+      const geoUrl =
+        "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=en&addressdetails=1&q=" +
+        encodeURIComponent(place);
+      const geoRes = await fetch(geoUrl, {
+        headers: { "User-Agent": "AGI-Research-Map/1.0" },
+        signal: AbortSignal.timeout(8000),
+      });
+      const arr = (geoRes.ok ? await geoRes.json() : []) as Array<{
+        lat?: string; lon?: string;
+        address?: { city?: string; town?: string; state?: string; county?: string; country_code?: string };
+      }>;
+      const g = Array.isArray(arr) ? arr[0] : undefined;
+      if (!g) return { ok: false, message: `หาพื้นที่ "${place}" ไม่เจอ` };
+      center = { lat: Number(g.lat), lon: Number(g.lon) };
+      const a = g.address ?? {};
+      const city = a.city || a.town || a.state || a.county || "";
+      const cc = (a.country_code || "").toUpperCase();
+      const parts: string[] = [];
+      if (city) parts.push(`city:"${city}"`);
+      if (cc) parts.push(`country:"${cc}"`);
+      if (!parts.length) return { ok: false, message: "สร้างคำค้น Shodan จากพื้นที่นี้ไม่ได้" };
+      query = parts.join(" ");
+    }
+
+    const url =
+      "https://api.shodan.io/shodan/host/search?key=" + encodeURIComponent(key) +
+      "&query=" + encodeURIComponent(query);
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (res.status === 401) return { ok: false, message: "Shodan API key ไม่ถูกต้อง" };
+    if (res.status === 403) return { ok: false, message: "แผน Shodan นี้ค้นหาไม่ได้ (ต้องมีสิทธิ์ search)" };
+    if (!res.ok) return { ok: false, message: `Shodan ตอบกลับผิดพลาด (${res.status})` };
+    const data = (await res.json()) as { total?: number; matches?: ShodanMatch[] };
+    const matches = Array.isArray(data.matches) ? data.matches : [];
+
+    // Collapse the per-service matches into one record per IP.
+    const byIp = new Map<string, ShodanHost>();
+    for (const m of matches) {
+      const ip = m.ip_str;
+      if (!ip) continue;
+      const loc = m.location ?? {};
+      let h = byIp.get(ip);
+      if (!h) {
+        h = {
+          ip,
+          ports: [],
+          org: m.org || "",
+          isp: m.isp || "",
+          product: m.product || "",
+          city: loc.city || "",
+          country: loc.country_code || "",
+          lat: Number(loc.latitude),
+          lon: Number(loc.longitude),
+          hostnames: Array.isArray(m.hostnames) ? m.hostnames : [],
+        };
+        byIp.set(ip, h);
+      }
+      if (typeof m.port === "number" && !h.ports.includes(m.port)) h.ports.push(m.port);
+      if (!h.product && m.product) h.product = m.product;
+    }
+    const hosts = [...byIp.values()].slice(0, 300);
+    for (const h of hosts) h.ports.sort((x, y) => x - y);
+    return { ok: true, place, query, center, total: Number(data.total ?? matches.length), shown: hosts.length, hosts };
+  } catch (err) {
+    const code = (err as { code?: string; name?: string })?.name;
+    return { ok: false, message: code === "TimeoutError" ? "Shodan ตอบช้าเกินกำหนด (timeout)" : "ค้น Shodan ล้มเหลว" };
+  }
+}

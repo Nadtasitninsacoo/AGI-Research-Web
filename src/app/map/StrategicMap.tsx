@@ -5,7 +5,7 @@ import { useActionState, useCallback, useEffect, useRef, useState } from "react"
 import type * as LType from "leaflet";
 import * as mgrs from "mgrs";
 import { launchCommandAction } from "../command/actions";
-import { phoneAreaAction, geoipAction, portScanAction, type PortRow } from "./actions";
+import { phoneAreaAction, geoipAction, portScanAction, shodanSearchAction, type PortRow } from "./actions";
 import { Icon } from "@/components/Icon";
 
 type Mode = "scan" | "mark" | "measure";
@@ -181,6 +181,7 @@ export function StrategicMap() {
   const meMarker = useRef<LType.Marker | null>(null);
   const meCircle = useRef<LType.Circle | null>(null);
   const geoMarker = useRef<LType.Marker | null>(null); // pinned IP/host geolocation
+  const shodanLayer = useRef<LType.LayerGroup | null>(null); // Shodan OSINT host pins
   const darkTiles = useRef<LType.TileLayer | null>(null);
   const satGoogle = useRef<LType.TileLayer | null>(null);
   const satMapbox = useRef<LType.TileLayer | null>(null);
@@ -629,6 +630,40 @@ export function StrategicMap() {
     mk?.bindTooltip(label, { permanent: false, direction: "top", offset: [0, -10], className: "lf-tip" });
   }, [host, scanBusy]);
 
+  // OSINT: pull hosts Shodan has already indexed in an AREA and pin them.
+  // Read-only — this does NOT scan; it reads Shodan's database. Returns a status
+  // string for the AI bar to show.
+  const shodanArea = useCallback(async (place: string): Promise<string> => {
+    const leaflet = L.current, m = map.current;
+    if (!leaflet || !m) return "แผนที่ยังไม่พร้อม";
+    const r = await shodanSearchAction(place);
+    if (!r.ok) return r.message;
+    if (!shodanLayer.current) shodanLayer.current = leaflet.layerGroup().addTo(m);
+    shodanLayer.current.clearLayers();
+    let plotted = 0;
+    let bounds: LType.LatLngBounds | null = null;
+    for (const h of r.hosts) {
+      if (!Number.isFinite(h.lat) || !Number.isFinite(h.lon)) continue;
+      const ll = leaflet.latLng(h.lat, h.lon);
+      const ports = h.ports.slice(0, 12).join(", ") + (h.ports.length > 12 ? "…" : "");
+      const who = [h.org || h.isp, h.product].filter(Boolean).join(" · ");
+      const tip =
+        `<b>${h.ip}</b>${h.hostnames[0] ? ` (${h.hostnames[0]})` : ""}` +
+        `<br>พอร์ต: ${ports || "—"}${who ? `<br>${who}` : ""}` +
+        `${h.city ? `<br>${h.city}, ${h.country}` : ""}`;
+      leaflet
+        .marker(ll, { icon: pinIcon(leaflet, "search") })
+        .bindTooltip(tip, { direction: "top", offset: [0, -10], className: "lf-tip" })
+        .addTo(shodanLayer.current);
+      bounds = bounds ? bounds.extend(ll) : leaflet.latLngBounds(ll, ll);
+      plotted += 1;
+    }
+    if (bounds) m.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
+    else if (r.center) m.setView([r.center.lat, r.center.lon], 11);
+    if (plotted === 0) return `Shodan: ${r.place} — ไม่พบ host ที่ระบุพิกัดได้ (ทั้งหมด ${r.total})`;
+    return `Shodan: ${r.place} — ปักหมุด ${plotted} host (พบทั้งหมด ${r.total}) · query: ${r.query}`;
+  }, []);
+
   // Fullscreen the map stage (Fullscreen API), re-fitting Leaflet afterwards.
   const toggleFullscreen = useCallback(() => {
     const el = stageRef.current;
@@ -710,6 +745,7 @@ export function StrategicMap() {
       clearMarks();
       clearMeasure();
       if (searchMarker.current) { m.removeLayer(searchMarker.current); searchMarker.current = null; }
+      shodanLayer.current?.clearLayers();
       setAiMsg("ล้างแผนที่แล้ว");
       return;
     }
@@ -723,6 +759,25 @@ export function StrategicMap() {
     // Test keywords with the target removed, so a hostname that happens to
     // contain "nmap"/"scan" (e.g. scanme.nmap.org) can't fake a scan intent.
     const lcs = (reconTarget ? raw.split(reconTarget).join(" ") : raw).toLowerCase();
+
+    // OSINT area lookup via Shodan: "shodan มอสโก", "หา host ในโตเกียว",
+    // "ไอพีในลอนดอน". Only for AREAS (no IP/host in the command) — read-only.
+    const shodanIntent =
+      /(shodan|โชดาน|osint|หาโฮสต์|หา\s*host|โฮสต์ใน|host\s*ใน|ไอพีใน|ip\s*ใน|เครื่องใน|host ในพื้นที่)/i.test(lcs);
+    if (shodanIntent && !reconTarget) {
+      const place = raw
+        .replace(/(shodan|โชดาน|osint|หาโฮสต์|หา\s*host|โฮสต์|hosts?|ไอพี|\bip\b|เครื่อง|ในพื้นที่|บริเวณ|พื้นที่|ในเมือง|ที่เมือง|เมือง|ใน|ที่|\bin\b|\bat\b)/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!place) { setAiMsg('บอกพื้นที่ด้วย เช่น "shodan มอสโก" หรือ "หา host ในโตเกียว"'); return; }
+      setAiBusy(true);
+      setAiMsg(`กำลังค้น Shodan ในพื้นที่ ${place}...`);
+      const msg = await shodanArea(place);
+      setAiMsg(msg);
+      setAiBusy(false);
+      return;
+    }
+
     const scanIntent =
       /(สแกนพอร์ต|สแกนพอร์ท|สแกนหาพอร์ต|สแกน\s*port|scan\s*ports?|port\s*scan|nmap|พอร์ตเปิด|open\s*ports?|เช็[คก]\s*พอร์ต|ตรวจ\s*พอร์ต|หา\s*พอร์ต|หา\s*port)/i.test(lcs) ||
       // generic: a "scan" verb plus either a real target or the word "port"
@@ -845,7 +900,7 @@ export function StrategicMap() {
       setAiMsg(`มาร์ค ${found.length} จุด: ${found.map((f) => f.label).join(", ")}` + (missed.length ? ` (ข้าม: ${missed.join(", ")})` : ""));
     }
     setAiBusy(false);
-  }, [aiCmd, clearMarks, clearMeasure, addMark, saveAnnot, portScan, geoLocateIp, host]);
+  }, [aiCmd, clearMarks, clearMeasure, addMark, saveAnnot, portScan, geoLocateIp, shodanArea, host]);
 
   const prompt = pt
     ? `สแกนพอร์ตและบริการของ ${host || "(target)"} (พิกัด ${fmt(pt.lat)}, ${fmt(pt.lon)}) แล้วรายงานพอร์ตที่เปิด`
@@ -883,7 +938,7 @@ export function StrategicMap() {
           value={aiCmd}
           onChange={(e) => setAiCmd(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !aiBusy) { e.preventDefault(); runAiCommand(); } }}
-          placeholder='สั่งเป็นภาษาไทย เช่น "ลากเส้นกรุงเทพไปเชียงใหม่" · "สแกนพอร์ต 80,443 ของ 8.8.8.8" · "สแกน 1.1.1.1 แล้วปักหมุด" · "ล้าง"'
+          placeholder='สั่งไทยได้ เช่น "สแกนพอร์ต 80,443 ของ 8.8.8.8" · "หา host ในมอสโก" (Shodan) · "ลากเส้นกรุงเทพไปเชียงใหม่" · "ล้าง"'
           autoComplete="off"
           spellCheck={false}
           disabled={aiBusy}
