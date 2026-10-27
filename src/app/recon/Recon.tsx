@@ -96,8 +96,9 @@ export function Recon() {
     setPulling(false);
     if (!r.ok) { setPullMsg(r.message); return; }
     if (r.pulled === 0) { setPullMsg("ยังไม่มี IP ที่มีช่องโหว่ในคลัง (บันทึกพอร์ตจากผลสแกนก่อน)"); return; }
-    appendIps(r.ips);
-    setPullMsg(`ดึง ${r.pulled} IP ที่มีช่องโหว่ (CVE) มาแล้ว — กดสแกนต่อได้เลย`);
+    setRaw(r.ips.join("\n")); // replace (clean vulnerable-only set, not mixed with previous)
+    setResults(null);         // clear stale results
+    setPullMsg(`ดึง ${r.pulled} IP ที่มีช่องโหว่ (แทนที่รายการเดิม) — กดสแกนได้เลย`);
   };
 
   const savePorts = async () => {
