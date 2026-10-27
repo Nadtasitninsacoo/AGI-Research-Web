@@ -672,3 +672,94 @@ textarea:disabled {
   font-size: 11px;
   font-family: var(--font-mono), monospace;
 }
+
+/* ---- Auto-approve switch (operator control on the Command page) ---- */
+.auto-approve {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.auto-approve .switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+}
+.auto-approve .switch:disabled { cursor: not-allowed; opacity: 0.6; }
+.switch-track {
+  display: inline-flex;
+  align-items: center;
+  width: 38px;
+  height: 20px;
+  padding: 2px;
+  background: #2a2a31;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.switch-thumb {
+  width: 14px;
+  height: 14px;
+  background: #9a9ba6;
+  border-radius: 50%;
+  transition: transform 150ms ease, background 150ms ease;
+}
+.switch.is-on .switch-track {
+  background: rgba(214, 22, 44, 0.3);
+  border-color: var(--line-hot);
+}
+.switch.is-on .switch-thumb { transform: translateX(18px); background: var(--red-hot); }
+.switch-label {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+}
+.switch.is-on .switch-label { color: var(--red-hot); }
+.auto-approve small { color: var(--dim); font-size: 10px; }
+
+/* ---- Command-approval queue (operator approve/deny on the Command page) ---- */
+.approvals {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.approvals-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+.approvals-head em { color: var(--red-hot); font-style: normal; }
+.approvals-empty { font-size: 11px; }
+.approvals-list { display: flex; flex-direction: column; gap: 8px; list-style: none; }
+.approvals-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(214, 22, 44, 0.05);
+  border: 1px solid var(--line-hot);
+  border-radius: var(--radius);
+}
+.approvals-info { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.approvals-info code {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--text-strong);
+  word-break: break-all;
+}
+.approvals-info small { color: var(--dim); font-size: 10px; }
+.approvals-actions { display: flex; gap: 8px; flex: none; }

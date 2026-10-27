@@ -45,6 +45,15 @@ test("policy: destructive / DoS / opaque exec are denied", () => {
   assert.equal(gate("masscan 10.0.0.0/8"), "blocked:scope"); // broad + out of scope
 });
 
+test("policy: auto-approve switch (runParams) allows intrusive but never forbidden", () => {
+  const intrusive = "sqlmap -u http://app.client.example/x --dump --batch";
+  assert.equal(decide(intrusive, {}, {}).tier, "intrusive");
+  assert.equal(decide(intrusive, {}, {}).decision, "needs_approval"); // default: approval required
+  assert.equal(decide(intrusive, {}, { autoApproveIntrusive: true }).decision, "allow"); // switch on
+  // forbidden stays denied even with the switch on.
+  assert.equal(decide("rm -rf /", {}, { autoApproveIntrusive: true }).decision, "deny");
+});
+
 test("policy: intrusive needs approval, recon/active allowed in scope", () => {
   assert.equal(gate("sqlmap -u http://app.client.example/?id=1 --dump"), "needs_approval");
   assert.equal(gate("nuclei -u https://app.lab.local/"), "allow");

@@ -112,3 +112,30 @@ CREATE TABLE IF NOT EXISTS agent_logs (
   CONSTRAINT fk_logs_agent FOREIGN KEY (agent_id) REFERENCES agents (id) ON DELETE CASCADE,
   CONSTRAINT fk_logs_run   FOREIGN KEY (run_id)   REFERENCES experiment_runs (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
+-- Operator-controlled runtime settings (key/value), editable from the web.
+-- `auto_approve_intrusive` = "1" lets the engine run intrusive-tier commands
+-- without a per-action approval token. `forbidden`-tier is never affected.
+CREATE TABLE IF NOT EXISTS settings (
+  name       VARCHAR(100) NOT NULL,
+  value      VARCHAR(255) NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (name)
+) ENGINE=InnoDB;
+
+-- Per-command approval queue. When auto-approve is off and the engine hits an
+-- intrusive-tier command, it records a pending row here and waits for an
+-- operator to approve/deny from the web. forbidden-tier never reaches this.
+CREATE TABLE IF NOT EXISTS command_approvals (
+  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  run_id      BIGINT UNSIGNED NULL,
+  agent_id    BIGINT UNSIGNED NULL,
+  command     TEXT NOT NULL,
+  reason      TEXT NULL,
+  tier        VARCHAR(20) NOT NULL DEFAULT 'intrusive',
+  status      ENUM('pending','approved','denied','timeout') NOT NULL DEFAULT 'pending',
+  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  resolved_at TIMESTAMP NULL,
+  PRIMARY KEY (id),
+  KEY idx_approvals_status (status, created_at)
+) ENGINE=InnoDB;

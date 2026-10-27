@@ -4,6 +4,8 @@ import type { RowDataPacket } from "mysql2";
 import { db } from "@/lib/db";
 import { Notice, PageFrame, PageHero, Shell } from "@/components/hud/Shell";
 import { EngineControl } from "@/components/hud/EngineControl";
+import { AutoApproveToggle } from "@/components/hud/AutoApproveToggle";
+import { ApprovalsQueue } from "@/components/hud/ApprovalsQueue";
 import { CommandConsole, type AgentOpt } from "./CommandConsole";
 import { JobsTable, type JobRow } from "./JobsTable";
 
@@ -64,6 +66,8 @@ async function CommandContent() {
         <header className="panel-head"><span>00 // ENGINE WORKER</span><em>ตัวประมวลผลงาน</em></header>
         <EngineControl />
         <p className="muted hint">ตัวนี้คือ worker ที่หยิบงานในคิวไปให้โมเดลทำ · ต้องเปิดค้างไว้ · ใช้ปุ่มนี้ หรือ terminal อย่างใดอย่างหนึ่ง อย่าเปิดซ้อนกัน</p>
+        <AutoApproveToggle />
+        <ApprovalsQueue />
       </section>
 
       <section className="panel span-7" id="command">

@@ -53,5 +53,9 @@ export const config = {
     // When true, "intrusive" commands run without a stored approval token.
     // Leave false for real engagements: the agent must plan, not exploit blind.
     autoApproveIntrusive: /^(1|true|yes)$/i.test(process.env.ENGINE_AUTO_APPROVE_INTRUSIVE ?? ""),
+    // How long an intrusive command waits for a web approval before being denied.
+    approvalTimeoutMs: int(process.env.ENGINE_APPROVAL_TIMEOUT_MS, 300_000),
+    // How often the engine polls for the operator's approve/deny decision.
+    approvalPollMs: int(process.env.ENGINE_APPROVAL_POLL_MS, 2_500),
   },
 };

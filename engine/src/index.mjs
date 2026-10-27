@@ -67,6 +67,16 @@ async function finalizeRun(id, { status, metrics, errorMessage }) {
   );
 }
 
+/** Read the operator's live auto-approve switch. Missing table/row = off (safe default). */
+async function readAutoApprove() {
+  try {
+    const rows = await query(`SELECT value FROM settings WHERE name = 'auto_approve_intrusive' LIMIT 1`);
+    return /^(1|true|yes)$/i.test(String(rows?.[0]?.value ?? ""));
+  } catch {
+    return false;
+  }
+}
+
 /** Flip an agent's status light (agents.status) so the registry shows who is
  *  working. 'error' on a failed run, else back to 'idle'. Never throws. */
 async function setAgentStatus(agentId, status) {
@@ -107,6 +117,11 @@ async function processRun(id) {
   const objective =
     runParams.prompt ?? runParams.objective ?? runParams.params?.prompt ?? "(no prompt provided)";
   const scope = parseScope(agentConfig, runParams);
+
+  // Live operator switch: web toggle in `settings`. Covers intrusive tier only;
+  // forbidden-tier actions are denied regardless. Read per run so a flip applies
+  // without restarting the worker.
+  runParams.autoApproveIntrusive = await readAutoApprove();
 
   await log({
     agentId, runId: id, level: "info",

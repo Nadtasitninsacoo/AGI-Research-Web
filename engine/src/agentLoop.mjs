@@ -25,6 +25,7 @@ import { runCommand, SHELL_NAMES, defaultShell } from "./shell.mjs";
 import { config } from "./config.mjs";
 import { log } from "./logger.mjs";
 import { execute } from "./db.mjs";
+import { requestAndWait } from "./approvals.mjs";
 import { getPayloads, PAYLOAD_COUNT, CATEGORIES } from "../payloads/library.mjs";
 
 // Tool definitions advertised to the model (OpenAI-style, understood by Ollama).
@@ -316,7 +317,16 @@ async function execRunCommand({ args, scope, agentConfig, runParams, agentId, ru
   }
   if (d.decision === "needs_approval") {
     await log({ agentId, runId, level: "warn", message: `NEEDS APPROVAL [${d.tier}]: ${command}`, context: { reason: d.reason } });
-    return `NOT RUN — approval required. ${d.reason}`;
+    const verdict = await requestAndWait({
+      runId, agentId, command, reason: d.reason, tier: d.tier,
+      timeoutMs: config.worker.approvalTimeoutMs, pollMs: config.worker.approvalPollMs,
+    });
+    if (verdict.decision !== "approved") {
+      await log({ agentId, runId, level: "warn", message: `APPROVAL ${verdict.decision.toUpperCase()} [${d.tier}]: ${command}` });
+      return `NOT RUN — approval ${verdict.decision}. ${d.reason}`;
+    }
+    await log({ agentId, runId, level: "info", message: `APPROVED by operator [${d.tier}]: ${command}` });
+    // Approved: fall through to the target check and execution below.
   }
 
   // 2b) Fail closed: an active/intrusive network action must name at least one
@@ -408,6 +418,15 @@ export async function runAgent({ runId, agentId, agentName, model, objective, sc
   let summary = "";
   let status = "failed";
   let noProgress = 0;
+  // Evidence signals: how many real tool commands ran and how many produced a
+  // usable (non-refused, non-error) result. The orchestrator uses these to tell
+  // a confirmed finding from an unbacked claim.
+  let commandsRun = 0;
+  let commandsOk = 0;
+  // Guardrail blocks: commands stopped by scope / policy / approval. These are
+  // authorization boundaries, not technical failures, so the orchestrator must
+  // escalate them to a human — never "retry around" them.
+  let blocked = 0;
 
   for (let step = 1; step <= maxSteps; step++) {
     let reply;
@@ -615,7 +634,16 @@ export async function runAgent({ runId, agentId, agentName, model, objective, sc
           result = `ERROR: unknown tool "${name}".`;
       }
       messages.push({ role: "tool", name, content: result });
-      noProgress = isUnproductive(result) ? noProgress + 1 : 0;
+      const unproductive = isUnproductive(result);
+      noProgress = unproductive ? noProgress + 1 : 0;
+      // report_finding records a claim; it is not itself evidence of a command.
+      if (name !== "report_finding") {
+        commandsRun++;
+        if (!unproductive) commandsOk++;
+      }
+      // A scope/policy/approval refusal is an authorization boundary, tracked apart
+      // from ordinary errors so the orchestrator escalates rather than retries it.
+      if (/^(REFUSED|NOT RUN)\b/i.test(String(result).trim())) blocked++;
     }
     if (finished) break;
 
@@ -644,11 +672,12 @@ export async function runAgent({ runId, agentId, agentName, model, objective, sc
     findings,
     confidence: typeof structured?.confidence === "number" ? structured.confidence : null,
     accuracy: typeof structured?.confidence === "number" ? structured.confidence : undefined,
+    evidence: { commandsRun, commandsOk, blocked },
     inputTokens,
     outputTokens,
     latencyMs: Date.now() - started,
   };
-  return { status, summary, findings, metrics };
+  return { status, summary, findings, metrics, evidence: { commandsRun, commandsOk, blocked } };
 }
 
 /** Extract the structured JSON object from a model reply (```json block or raw). */

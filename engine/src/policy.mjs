@@ -106,7 +106,9 @@ export function decide(command, agentConfig, runParams) {
   }
 
   if (tier === "intrusive") {
-    if (config.worker.autoApproveIntrusive) return { decision: "allow", tier };
+    // Auto-approve is the operator's live switch (DB setting via runParams) or the
+    // startup env default. It covers intrusive only — `forbidden` is denied above.
+    if (runParams?.autoApproveIntrusive === true || config.worker.autoApproveIntrusive) return { decision: "allow", tier };
     const approvals = [
       ...(Array.isArray(agentConfig?.approvedActions) ? agentConfig.approvedActions : []),
       ...(Array.isArray(runParams?.approvedActions) ? runParams.approvedActions : []),

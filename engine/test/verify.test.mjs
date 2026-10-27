@@ -1,0 +1,84 @@
+// Verification-layer unit tests. Run: npm test
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  buildHandoff,
+  confirmFinding,
+  confirmFindings,
+  decideSuccess,
+  injectHandoff,
+  isGuardrailBlocked,
+  triageUnverified,
+  verifyHandoff,
+  verifySubtask,
+} from "../src/verify.mjs";
+
+test("verifySubtask: real work verifies, errors/empties/failures do not", () => {
+  assert.equal(verifySubtask({ status: "succeeded", summary: "Found open 22/tcp with banner X" }).verified, true);
+  assert.equal(verifySubtask({ status: "failed", summary: "whatever" }).verified, false);
+  assert.equal(verifySubtask({ status: "succeeded", summary: "" }).verified, false);
+  assert.equal(verifySubtask({ status: "succeeded", summary: "ERROR: empty command." }).verified, false);
+  assert.equal(verifySubtask({ status: "succeeded", summary: "Stopped after 3 consecutive tool failures" }).verified, false);
+});
+
+test("confirmFinding: evidence + a successful command confirms; claims do not", () => {
+  assert.equal(confirmFinding({ evidence: "200 OK, missing CSP header" }, { commandsOk: 2 }).confirmed, true);
+  assert.equal(confirmFinding({ evidence: "" }, { commandsOk: 5 }).confirmed, false); // no evidence
+  assert.equal(confirmFinding({ evidence: "looks vulnerable" }, { commandsOk: 0 }).confirmed, false); // nothing ran
+  // report_finding persisted evidence is trusted (that tool requires evidence by contract).
+  assert.equal(confirmFinding({ evidence: "PoC request/response", source: "report_finding" }, { commandsOk: 0 }).confirmed, true);
+});
+
+test("confirmFindings tags each finding with its judgment", () => {
+  const out = confirmFindings([{ title: "a", evidence: "x" }, { title: "b", evidence: "" }], { commandsOk: 1 });
+  assert.deepEqual(out.map((f) => f.confirmed), [true, false]);
+  assert.ok(out[1].reason.includes("no evidence"));
+});
+
+test("buildHandoff + injectHandoff carry prior results as labelled data", () => {
+  const prior = [{ agent: "RECON-1", task: "scan", summary: "ports 80,443 open" }];
+  const ho = buildHandoff(prior);
+  assert.ok(ho.chars > 0 && ho.sources.includes("RECON-1"));
+  const injected = injectHandoff("analyse services", ho);
+  assert.match(injected, /PRIOR TEAM RESULTS/);
+  assert.match(injected, /ports 80,443 open/);
+});
+
+test("verifyHandoff: RECON-1 output reaches ORACLE-7, or it is caught if dropped", () => {
+  const prior = [{ agent: "RECON-1", task: "scan", summary: "ports 80,443 open" }];
+  const ho = buildHandoff(prior);
+  const injected = injectHandoff("analyse", ho);
+  assert.equal(verifyHandoff(ho, injected).ok, true); // carried
+  assert.equal(verifyHandoff(ho, "analyse").ok, false); // dropped -> detected
+  assert.equal(verifyHandoff(buildHandoff([]), "analyse").ok, false); // nothing to hand off
+});
+
+test("buildHandoff skips empty prior summaries", () => {
+  const ho = buildHandoff([{ agent: "X", task: "t", summary: "" }, { agent: "Y", task: "t2", summary: "data" }]);
+  assert.deepEqual(ho.sources, ["Y"]);
+});
+
+test("decideSuccess requires at least one verified subtask", () => {
+  assert.equal(decideSuccess([{ verified: true }, { verified: false }]).status, "succeeded");
+  assert.equal(decideSuccess([{ verified: false }, { verified: false }]).status, "failed");
+  assert.equal(decideSuccess([]).status, "failed");
+  assert.equal(decideSuccess([{ verified: true }]).verifiedCount, 1);
+});
+
+test("isGuardrailBlocked: blocked with no successful command is a guardrail stop", () => {
+  assert.equal(isGuardrailBlocked({ blocked: 3, commandsOk: 0 }), true);
+  assert.equal(isGuardrailBlocked({ blocked: 2, commandsOk: 1 }), false); // made some progress -> technical
+  assert.equal(isGuardrailBlocked({ blocked: 0, commandsOk: 0 }), false); // nothing blocked
+});
+
+test("triageUnverified: guardrail stops escalate, technical dead-ends retry, verified skipped", () => {
+  const results = [
+    { agent: "A", verified: true, evidence: { commandsOk: 2 } },
+    { agent: "B", verified: false, evidence: { blocked: 2, commandsOk: 0 } }, // guardrail -> escalate
+    { agent: "C", verified: false, evidence: { blocked: 0, commandsOk: 0 } }, // technical -> retry
+    { agent: "D", verified: false, evidence: { blocked: 1, commandsOk: 3 } }, // partial progress -> retry
+  ];
+  const { retry, escalate } = triageUnverified(results);
+  assert.deepEqual(escalate.map((r) => r.agent), ["B"]);
+  assert.deepEqual(retry.map((r) => r.agent), ["C", "D"]);
+});
