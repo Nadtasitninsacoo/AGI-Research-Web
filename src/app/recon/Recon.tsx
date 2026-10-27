@@ -177,7 +177,7 @@ export function Recon() {
 
   return (
     <>
-      <section className="panel span-7" id="recon">
+      <section className="panel span-12" id="recon">
         <header className="panel-head"><span>01 // เป้าหมาย</span><em>{parsed.length} IP</em></header>
 
         <div className="rc-quick">
@@ -257,27 +257,10 @@ export function Recon() {
         <p className="hint">อ่านพอร์ต/บริการ/CVE จากฐาน Shodan InternetDB แบบ <b>ไม่ยิงเป้าหมาย</b> (OSINT) — ไม่ใช่ active scan</p>
       </section>
 
-      <section className="panel span-5" id="recon-sum">
-        <header className="panel-head"><span>02 // สรุปผล</span><em>{summary.total} HOSTS</em></header>
-        {!results ? (
-          <p className="muted">ยังไม่มีผล — ดึง/ใส่ IP แล้วกดสแกน</p>
-        ) : (
-          <div className="rc-summary">
-            {(["vuln", "open", "none", "error"] as Cat[]).map((c) => (
-              <button key={c} type="button" className={`rc-sumcard ${cat === c ? "is-active" : ""}`} onClick={() => setCat(cat === c ? "all" : c)}>
-                <span className="rc-sumdot" style={{ background: CAT_META[c].dot }} />
-                <b>{summary[c].toLocaleString()}</b>
-                <small>{CAT_META[c].label}</small>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
       {results && (
         <section className="panel span-12" id="recon-table">
           <header className="panel-head">
-            <span>03 // ผลการสแกน{cat !== "all" ? ` · ${CAT_META[cat].label}` : ""}</span>
+            <span>02 // ผลการสแกน{cat !== "all" ? ` · ${CAT_META[cat].label}` : ""}</span>
             <span className="rc-head-act">
               <button type="button" className="btn btn-sm" disabled={saving} onClick={savePorts}>
                 <Icon name="download" /> {saving ? "กำลังบันทึก..." : "บันทึกพอร์ตลงฐาน"}
