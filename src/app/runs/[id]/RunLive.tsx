@@ -1,49 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, use, useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { StatusTag } from "@/components/hud/StatusTag";
 import { Radar } from "@/components/hud/Radar";
 import { FlowPanel } from "@/components/hud/FlowPanel";
 import { ToastStack, type ToastItem } from "@/components/hud/Toast";
 import { buildPipeline } from "@/lib/pipeline";
 import { fmtDate, fmtDuration } from "@/lib/format";
-import { isRunFinal, type FormState, type JsonObject, type RunSnapshot } from "@/lib/types";
+import { isRunFinal, type FormState, type RunSnapshot } from "@/lib/types";
 import { cancelRunAction } from "../actions";
 
 const POLL_MS = 4000;
 
-type Info = { experimentName: string | null; agentName: string | null; params: JsonObject | null };
-
-const show = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v, null, 2));
-
-/** Streamed cosmetic cells — they wait on the run-list lookup without blocking
- *  the live panels, which render from the snapshot immediately. */
-function ExperimentName({ promise, fallbackId }: { promise: Promise<Info>; fallbackId: number }) {
-  return <>{use(promise).experimentName ?? `#${fallbackId}`}</>;
-}
-function AgentName({ promise }: { promise: Promise<Info> }) {
-  return <>{use(promise).agentName ?? "—"}</>;
-}
-function ParamsBlock({ promise }: { promise: Promise<Info> }) {
-  const params = use(promise).params;
-  const prompt = params && typeof params.prompt === "string" ? params.prompt : null;
-  const otherParams = params ? Object.entries(params).filter(([k]) => k !== "prompt") : [];
-  return (
-    <>
-      <h3 className="sub">PROMPT</h3>
-      {prompt !== null ? <pre className="block">{prompt}</pre> : <p className="muted">no prompt recorded</p>}
-      {otherParams.length > 0 && (
-        <>
-          <h3 className="sub">OTHER PARAMS</h3>
-          <pre className="block">{show(Object.fromEntries(otherParams))}</pre>
-        </>
-      )}
-    </>
-  );
-}
-
-export function RunLive({ initial, infoPromise }: { initial: RunSnapshot; infoPromise: Promise<Info> }) {
+/**
+ * Cosmetic cells (experiment/agent name, prompt, params) are passed in as
+ * already-rendered slots. They are async server components streamed via
+ * Suspense from the page, so the live panels below render from the snapshot
+ * immediately and these fill in a moment later without blocking first paint.
+ */
+export function RunLive({
+  initial,
+  experimentCell,
+  agentCell,
+  paramsCell,
+}: {
+  initial: RunSnapshot;
+  experimentCell: ReactNode;
+  agentCell: ReactNode;
+  paramsCell: ReactNode;
+}) {
   const [snap, setSnap] = useState(initial);
   const [stale, setStale] = useState(false);
   const { run, logs, logsTotal, evaluations } = snap;
@@ -155,9 +141,9 @@ export function RunLive({ initial, infoPromise }: { initial: RunSnapshot; infoPr
         )}
         <dl className="kv">
           <dt>EXPERIMENT</dt>
-          <dd><Suspense fallback={<span className="muted">…</span>}><ExperimentName promise={infoPromise} fallbackId={run.experimentId} /></Suspense></dd>
+          <dd>{experimentCell}</dd>
           <dt>AGENT</dt>
-          <dd><Suspense fallback={<span className="muted">…</span>}><AgentName promise={infoPromise} /></Suspense></dd>
+          <dd>{agentCell}</dd>
           <dt>CREATED</dt>
           <dd>{fmtDate(run.createdAt)}</dd>
           <dt>STARTED</dt>
@@ -182,9 +168,7 @@ export function RunLive({ initial, infoPromise }: { initial: RunSnapshot; infoPr
 
       <section className="panel span-7">
         <header className="panel-head"><span>02 // INPUT / OUTPUT</span><em>PARAMS · METRICS</em></header>
-        <Suspense fallback={<p className="muted">loading params…</p>}>
-          <ParamsBlock promise={infoPromise} />
-        </Suspense>
+        {paramsCell}
         {run.errorMessage && (
           <>
             <h3 className="sub">ERROR</h3>

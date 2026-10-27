@@ -1,11 +1,42 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { findRunRow, getRunSnapshot } from "@/lib/runs";
+import type { JsonObject } from "@/lib/types";
 import { Notice, PageFrame, Shell } from "@/components/hud/Shell";
 import { RunLive } from "./RunLive";
 
 export const metadata = { title: "Run // AGI Research" };
+
+type Info = { experimentName: string | null; agentName: string | null; params: JsonObject | null };
+const show = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v, null, 2));
+
+// Async server components for the cosmetic cells. Each awaits the SAME lookup
+// promise (resolved once) and is streamed into RunLive via its own Suspense.
+async function ExperimentCell({ p, fallbackId }: { p: Promise<Info>; fallbackId: number }) {
+  return <>{(await p).experimentName ?? `#${fallbackId}`}</>;
+}
+async function AgentCell({ p }: { p: Promise<Info> }) {
+  return <>{(await p).agentName ?? "—"}</>;
+}
+async function ParamsCell({ p }: { p: Promise<Info> }) {
+  const params = (await p).params;
+  const prompt = params && typeof params.prompt === "string" ? params.prompt : null;
+  const otherParams = params ? Object.entries(params).filter(([k]) => k !== "prompt") : [];
+  return (
+    <>
+      <h3 className="sub">PROMPT</h3>
+      {prompt !== null ? <pre className="block">{prompt}</pre> : <p className="muted">no prompt recorded</p>}
+      {otherParams.length > 0 && (
+        <>
+          <h3 className="sub">OTHER PARAMS</h3>
+          <pre className="block">{show(Object.fromEntries(otherParams))}</pre>
+        </>
+      )}
+    </>
+  );
+}
 
 export default function RunPage({ params }: PageProps<"/runs/[id]">) {
   return (
@@ -37,8 +68,8 @@ async function RunContent({ params }: { params: PageProps<"/runs/[id]">["params"
   }
 
   // Cosmetic names + prompt. We do NOT await this: the live panels render from
-  // the snapshot immediately, and these stream in via Suspense inside RunLive.
-  const infoPromise = findRunRow(id, snap.data.run.experimentId).then((row) => ({
+  // the snapshot immediately, and these stream in via Suspense.
+  const infoPromise: Promise<Info> = findRunRow(id, snap.data.run.experimentId).then((row) => ({
     experimentName: row?.experimentName ?? null,
     agentName: row?.agentName ?? null,
     params: row?.params ?? null,
@@ -46,7 +77,24 @@ async function RunContent({ params }: { params: PageProps<"/runs/[id]">["params"
 
   return (
     <PageFrame title={`RUN #${id}`} online>
-      <RunLive initial={snap.data} infoPromise={infoPromise} />
+      <RunLive
+        initial={snap.data}
+        experimentCell={
+          <Suspense fallback={<span className="muted">…</span>}>
+            <ExperimentCell p={infoPromise} fallbackId={snap.data.run.experimentId} />
+          </Suspense>
+        }
+        agentCell={
+          <Suspense fallback={<span className="muted">…</span>}>
+            <AgentCell p={infoPromise} />
+          </Suspense>
+        }
+        paramsCell={
+          <Suspense fallback={<p className="muted">loading params…</p>}>
+            <ParamsCell p={infoPromise} />
+          </Suspense>
+        }
+      />
     </PageFrame>
   );
 }
