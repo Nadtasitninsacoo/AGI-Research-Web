@@ -4,6 +4,7 @@ import { NavLinks, NavStatic, type NavItem } from "./NavLinks";
 
 const NAVIGATE: NavItem[] = [
   { label: "Overview", icon: "overview", href: "/", match: "/" },
+  { label: "Nexus", icon: "nexus", href: "/nexus", match: "/nexus" },
   { label: "Command", icon: "command", href: "/command", match: "/command" },
   { label: "Map", icon: "map", href: "/map", match: "/map" },
   { label: "Agents", icon: "agents", href: "/agents", match: "/agents" },

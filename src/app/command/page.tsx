@@ -6,6 +6,8 @@ import { Notice, PageFrame, PageHero, Shell } from "@/components/hud/Shell";
 import { EngineControl } from "@/components/hud/EngineControl";
 import { AutoApproveToggle } from "@/components/hud/AutoApproveToggle";
 import { ApprovalsQueue } from "@/components/hud/ApprovalsQueue";
+import { WebFetchTool } from "@/components/hud/WebFetchTool";
+import { DbInitButton } from "@/components/hud/DbInitButton";
 import { CommandConsole, type AgentOpt } from "./CommandConsole";
 import { JobsTable, type JobRow } from "./JobsTable";
 
@@ -67,6 +69,7 @@ async function CommandContent() {
         <EngineControl />
         <p className="muted hint">ตัวนี้คือ worker ที่หยิบงานในคิวไปให้โมเดลทำ · ต้องเปิดค้างไว้ · ใช้ปุ่มนี้ หรือ terminal อย่างใดอย่างหนึ่ง อย่าเปิดซ้อนกัน</p>
         <AutoApproveToggle />
+        <DbInitButton />
         <ApprovalsQueue />
       </section>
 
@@ -92,8 +95,14 @@ async function CommandContent() {
         <p className="hint">ต้องการเลือกเป้าจากแผนที่? ไปที่หน้า <Link href="/map" className="link">MAP</Link></p>
       </section>
 
+      <section className="panel span-12" id="fetch">
+        <header className="panel-head"><span>03 // WEB FETCH GATEWAY</span><em>ดึงข้อมูลจากเน็ตผ่าน dashboard</em></header>
+        <p className="muted hint">ปุ่มอิสระ: ให้เครื่องที่รันหน้าเว็บ (มีเน็ต) ไปดึงข้อมูลจากอินเทอร์เน็ตมาให้ แม้เครื่อง engine จะไม่มีเน็ต · แล้วคัดลอกไปใส่ในคำสั่ง HYDRA ได้</p>
+        <WebFetchTool />
+      </section>
+
       <section className="panel span-12" id="jobs">
-        <header className="panel-head"><span>03 // งานที่สั่งล่าสุด</span><em>{jobs.length} JOBS</em></header>
+        <header className="panel-head"><span>04 // งานที่สั่งล่าสุด</span><em>{jobs.length} JOBS</em></header>
         <JobsTable jobs={jobs} />
       </section>
     </PageFrame>
