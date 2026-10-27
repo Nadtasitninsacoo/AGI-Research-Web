@@ -103,6 +103,27 @@ function mgrsStr(lat: number, lon: number): string {
   } catch { return "—"; }
 }
 
+/** Parse a typed MGRS grid ref (spaces optional) to lat/lon. Null if not MGRS. */
+function parseMGRS(q: string): { lat: number; lon: number } | null {
+  const s = q.toUpperCase().replace(/\s+/g, "");
+  // zone(1-2) + band(C-X, no I/O) + 100km square(2 letters, no I/O) + even digits(2-10)
+  if (!/^\d{1,2}[C-HJ-NP-X][A-HJ-NP-Z]{2}\d{2,10}$/.test(s)) return null;
+  if (s.replace(/^\d{1,2}[C-HJ-NP-X][A-HJ-NP-Z]{2}/, "").length % 2 !== 0) return null;
+  try {
+    const [lon, lat] = mgrs.toPoint(s);
+    return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+  } catch { return null; }
+}
+
+/** Parse raw decimal "lat, lon" (or space-separated) to coordinates. Null otherwise. */
+function parseLatLon(q: string): { lat: number; lon: number } | null {
+  const m = q.trim().match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = Number(m[1]), lon = Number(m[2]);
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  return { lat, lon };
+}
+
 // Persisted map annotations (marks + measurement path), per-browser, fail-safe.
 const ANNOT_KEY = "agi.map.annot.v1";
 type Annot = { marks: [number, number][]; measure: [number, number][] };
@@ -406,6 +427,18 @@ export function StrategicMap() {
     const t = setTimeout(async () => {
       setSearching(true);
       try {
+        // Military grid (MGRS) — jump straight to the point, no network.
+        const mg = parseMGRS(q);
+        if (mg) {
+          setHits([{ label: `MGRS ${mgrsStr(mg.lat, mg.lon)}`, lat: mg.lat, lon: mg.lon, sub: `${fmt(mg.lat)}, ${fmt(mg.lon)}` }]);
+          return;
+        }
+        // Raw decimal "lat, lon".
+        const cc = parseLatLon(q);
+        if (cc) {
+          setHits([{ label: `${fmt(cc.lat)}, ${fmt(cc.lon)}`, lat: cc.lat, lon: cc.lon, sub: `MGRS ${mgrsStr(cc.lat, cc.lon)}` }]);
+          return;
+        }
         // Phone number? Resolve its numbering-plan area instead of a place search.
         if (isPhoneLike(q)) {
           const hit = await lookupPhone(q);
@@ -457,7 +490,8 @@ export function StrategicMap() {
       const [s, n, w, e] = h.bbox.map(Number);
       m.fitBounds([[s, w], [n, e]], { maxZoom: 15 });
     } else {
-      m.setView(latlng, 13);
+      // A precise point (MGRS / lat-lon / exact place) — zoom in close.
+      m.setView(latlng, 16);
     }
     setHits([]);
     setQuery(name);
@@ -746,7 +780,7 @@ export function StrategicMap() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="ค้นหาสถานที่ทั่วโลก (ไทย/English) — เช่น กรุงเทพ, Tokyo Tower, 13.75 100.5, เบอร์โทร"
+          placeholder="ค้นหา: สถานที่ (ไทย/EN) · พิกัดทหาร MGRS เช่น 47P PR 65931 20229 · lat,lon 13.75,100.5 · เบอร์โทร"
           autoComplete="off"
           spellCheck={false}
         />
