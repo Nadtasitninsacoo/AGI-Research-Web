@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
+import { Icon, type IconName } from "@/components/Icon";
 import { Navbar } from "@/components/hud/Navbar";
 import { Nexus } from "@/components/hud/Nexus";
 import { Sidebar } from "@/components/hud/Sidebar";
@@ -86,22 +87,26 @@ async function DashboardFrame() {
   const successRate = pct(t.runsSucceeded, finished);
   const maxRuns = Math.max(1, ...agents.map((agent) => agent.runs));
 
-  const kpis = [
+  const kpis: {
+    label: string; value: string; sub: string; fill: number; index: string; accent: string; icon: IconName;
+  }[] = [
     {
-      label: "TOTAL AGENTS",
+      label: "AGENTS",
       value: number(t.agents),
       sub: `${t.agentsRunning} ACTIVE`,
       fill: pct(t.agentsRunning, t.agents),
       index: "01",
       accent: "red",
+      icon: "bot",
     },
     {
       label: "PROJECTS",
       value: number(t.projects),
-      sub: "REGISTERED",
+      sub: "TRACKED",
       fill: Math.min(100, t.projects * 8),
       index: "02",
       accent: "neutral",
+      icon: "tag",
     },
     {
       label: "EXPERIMENTS",
@@ -110,14 +115,16 @@ async function DashboardFrame() {
       fill: Math.min(100, t.experiments * 3),
       index: "03",
       accent: "neutral",
+      icon: "target",
     },
     {
-      label: "TOTAL RUNS",
+      label: "RUNS",
       value: number(t.runs),
-      sub: `${t.runsRunning} LIVE / ${t.runsQueued} QUEUED`,
+      sub: `${t.runsRunning} LIVE · ${t.runsQueued} QUEUED`,
       fill: pct(t.runsRunning + t.runsQueued, t.runs),
       index: "04",
       accent: "red",
+      icon: "send",
     },
     {
       label: "SUCCESS RATE",
@@ -126,6 +133,7 @@ async function DashboardFrame() {
       fill: successRate,
       index: "05",
       accent: "success",
+      icon: "check",
     },
   ];
 
@@ -148,39 +156,28 @@ async function DashboardFrame() {
         />
 
         <main className="content mission-control">
-          <header className="hero mission-hero">
+          <header className="hero mission-hero hero-banner">
+            <span className="hero-planet" aria-hidden="true" />
             <div className="hero-copy">
               <div className="eyebrow">
                 <span className="eyebrow-mark" />
-                AGI RESEARCH
-                <span className="eyebrow-separator">/</span>
-                COMMAND CENTER
+                AGI RESEARCH PLATFORM
               </div>
 
-              <h1>
-                Mission <em>Control</em>
-              </h1>
+              <h1>Dashboard</h1>
 
               <p className="hero-description">
-                Autonomous intelligence monitoring and execution overview.
+                Monitor your agents, experiments and research progress in real-time.
               </p>
-            </div>
 
-            <div className="hero-status">
               <span className={`system-indicator ${online ? "is-online" : "is-offline"}`}>
                 <i />
                 {online ? "SYSTEM OPERATIONAL" : "DATABASE OFFLINE"}
               </span>
+            </div>
 
-              <div className="hero-status-meta">
-                <span>ACTIVE PROCESSES</span>
-                <b>{number(t.runsRunning)}</b>
-              </div>
-
-              <div className="hero-status-meta">
-                <span>SUCCESS RATE</span>
-                <b>{successRate}%</b>
-              </div>
+            <div className="hero-tagline" aria-hidden="true">
+              BUILDING<br />INTELLIGENT<br />TOMORROW
             </div>
           </header>
 
@@ -191,8 +188,11 @@ async function DashboardFrame() {
                 key={kpi.label}
               >
                 <div className="kpi-topline">
+                  <span className="kpi-icon" aria-hidden="true">
+                    <Icon name={kpi.icon} />
+                  </span>
                   <small>{kpi.label}</small>
-                  <span>{kpi.index}</span>
+                  <span className="kpi-index">{kpi.index}</span>
                 </div>
 
                 <b className="kpi-value">{kpi.value}</b>

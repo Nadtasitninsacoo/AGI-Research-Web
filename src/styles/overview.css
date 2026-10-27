@@ -5,6 +5,60 @@
 .mission-hero { align-items: flex-end; }
 .hero-copy { min-width: 0; }
 
+/* ---- Cinematic hero banner: deep space with a red planet limb ---- */
+.hero-banner {
+  position: relative;
+  grid-column: 1 / -1;
+  align-items: flex-end;
+  justify-content: space-between;
+  min-height: 156px;
+  padding: 22px 26px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 140% at 100% -40%, rgba(214, 22, 44, 0.16), transparent 52%),
+    linear-gradient(100deg, rgba(10, 11, 16, 0.92) 30%, rgba(26, 8, 12, 0.7) 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), var(--bevel-up);
+}
+
+/* The planet: a glowing crimson limb bleeding in from the top-right. */
+.hero-planet {
+  position: absolute;
+  top: -58%;
+  right: -6%;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 64%, rgba(248, 70, 70, 0.5), transparent 46%),
+    radial-gradient(circle at 50% 50%, #140306 58%, rgba(214, 22, 44, 0.55) 70%, transparent 72%);
+  box-shadow: 0 0 120px 20px rgba(214, 22, 44, 0.28);
+  pointer-events: none;
+}
+
+.hero-banner .hero-copy { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; }
+.hero-banner h1 { margin: 0; }
+.hero-banner .system-indicator { align-self: flex-start; margin-top: 2px; }
+
+.hero-tagline {
+  position: relative;
+  z-index: 1;
+  color: var(--red-hot);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.3em;
+  text-align: right;
+  text-shadow: 0 0 18px rgba(248, 30, 54, 0.4);
+}
+
+@media (max-width: 760px) {
+  .hero-tagline { display: none; }
+  .hero-planet { width: 300px; height: 300px; opacity: 0.7; }
+}
+
 .eyebrow {
   display: flex;
   align-items: center;
@@ -52,9 +106,26 @@
 .system-indicator.is-offline { color: var(--red-hot); border-color: var(--line-hot); }
 .system-indicator.is-offline i { background: var(--red-hot); box-shadow: 0 0 0 3px var(--red-glow); }
 
-.kpi-topline { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.kpi .kpi-topline span { margin: 0; color: var(--faint); font-variant-numeric: tabular-nums; }
+.kpi-topline { display: flex; align-items: center; gap: 9px; }
+.kpi-topline small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpi .kpi-topline .kpi-index { margin-left: auto; color: var(--faint); font-variant-numeric: tabular-nums; }
 .kpi-bottom span { margin-bottom: 5px; }
+
+/* Icon chip on each KPI card, matching the reference's card header. */
+.kpi-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  font-size: 14px;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.kpi.accent-red .kpi-icon { color: var(--red-hot); border-color: var(--line-hot); background: rgba(214, 22, 44, 0.1); }
+.kpi.accent-success .kpi-icon { color: var(--ok); border-color: rgba(66, 199, 129, 0.3); background: rgba(66, 199, 129, 0.08); }
 
 .section-divider {
   display: flex;

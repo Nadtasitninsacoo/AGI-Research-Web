@@ -5,7 +5,7 @@
 .nexus {
   position: relative;
   width: 100%;
-  max-width: 400px;
+  max-width: 440px;
   aspect-ratio: 1;
   margin: 0 auto;
 }
@@ -17,37 +17,39 @@
   overflow: visible;
 }
 
+/* Deep-space globe backdrop with a crimson core bloom. */
 #nexus {
-  background: radial-gradient(
-    circle at 50% 45%,
-    #222226 0%,
-    #19191d 55%,
-    #151518 100%
-  );
+  background:
+    radial-gradient(circle at 50% 46%, rgba(214, 22, 44, 0.16), transparent 42%),
+    radial-gradient(circle at 50% 44%, #141318 0%, #0b0b0f 55%, #060609 100%);
+}
+
+.globe-lines ellipse {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.05);
+  stroke-width: 0.6;
+}
+
+.mesh line {
+  stroke: rgba(214, 22, 44, 0.22);
+  stroke-width: 0.6;
+  stroke-dasharray: 3 5;
 }
 
 .sweep {
   position: absolute;
-  inset: 7%;
+  inset: 4%;
   background: conic-gradient(
     from 0deg,
-    transparent 0 290deg,
-    rgba(242, 27, 50, 0.035) 340deg,
-    rgba(242, 27, 50, 0.2) 360deg
+    transparent 0 270deg,
+    rgba(248, 30, 54, 0.05) 330deg,
+    rgba(248, 30, 54, 0.34) 360deg
   );
   border-radius: 50%;
-  -webkit-mask: radial-gradient(
-    circle,
-    transparent 0 12%,
-    #000 13%
-  );
-  mask: radial-gradient(
-    circle,
-    transparent 0 12%,
-    #000 13%
-  );
-  opacity: 0.7;
-  animation: cerberus-spin 12s linear infinite;
+  -webkit-mask: radial-gradient(circle, transparent 0 12%, #000 13%);
+  mask: radial-gradient(circle, transparent 0 12%, #000 13%);
+  opacity: 0.85;
+  animation: cerberus-spin 8s linear infinite;
 }
 
 .ring {
@@ -65,8 +67,8 @@
 
 .ring-ticks {
   fill: none;
-  stroke: rgba(242, 27, 50, 0.55);
-  stroke-width: 5;
+  stroke: rgba(248, 30, 54, 0.7);
+  stroke-width: 6;
   stroke-dasharray: 0.8 11.2;
 }
 
@@ -85,95 +87,93 @@
   animation: cerberus-spin 80s linear infinite reverse;
 }
 
-.core-ring {
-  fill: #0d0d0f;
+.core-disk {
+  fill: #0a0507;
+  stroke: var(--red-hot);
+  stroke-width: 1.6;
+}
+
+.core-pulse {
+  fill: none;
   stroke: var(--red-hot);
   stroke-width: 1.2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cerberus-ping 3s ease-out infinite;
+}
+
+.core-pulse-2 {
+  animation-delay: 1.5s;
 }
 
 .core-num {
   fill: #fff;
   font-family: var(--font-geist-sans), sans-serif;
-  font-size: 17px;
+  font-size: 26px;
   font-weight: 300;
+  letter-spacing: -0.02em;
   text-anchor: middle;
 }
 
 .core-cap {
-  fill: #a2a2ab;
+  fill: #d08088;
   font-family: var(--font-geist-mono), monospace;
-  font-size: 5px;
-  letter-spacing: 1.6px;
+  font-size: 6px;
+  letter-spacing: 3px;
   text-anchor: middle;
 }
 
 .spoke {
-  stroke: rgba(255, 255, 255, 0.16);
+  stroke: rgba(255, 255, 255, 0.1);
   stroke-width: 0.6;
 }
 
 .node-halo {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.15);
-  stroke-width: 0.6;
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 0.8;
 }
 
 .node-name {
-  fill: #eeeeF1;
+  fill: #f3f3f6;
   font-family: var(--font-geist-mono), monospace;
-  font-size: 9px;
-  font-weight: 400;
+  font-size: 9.5px;
+  font-weight: 500;
   letter-spacing: 1.4px;
   paint-order: stroke;
-  stroke: #19191d;
-  stroke-width: 3px;
+  stroke: #09090d;
+  stroke-width: 3.2px;
 }
 
 .node-sub {
-  fill: #9999a2;
+  fill: #b9939a;
   font-family: var(--font-geist-mono), monospace;
   font-size: 6.5px;
   letter-spacing: 1px;
   paint-order: stroke;
-  stroke: #19191d;
+  stroke: #09090d;
   stroke-width: 3px;
 }
 
-.n-live .node {
-  fill: var(--red-hot);
-}
+/* Running = hot crimson glow; error = pulsing red ring; paused = amber; idle = steel. */
+.n-live .node { fill: var(--red-hot); }
+.n-live .node-halo { stroke: var(--red-hot); }
+line.spoke.n-live { stroke: rgba(248, 30, 54, 0.55); stroke-width: 0.9; }
 
-.n-live .node-halo {
-  stroke: var(--red-hot);
-}
+.n-bad .node { fill: #ff5661; }
+.n-bad .node-halo { stroke: #ff5661; stroke-dasharray: 3 2; }
+line.spoke.n-bad { stroke: rgba(255, 86, 97, 0.4); }
 
-.n-live .spoke {
-  stroke: rgba(242, 27, 50, 0.5);
-}
+.n-pause .node { fill: var(--warn); }
+.n-pause .node-halo { stroke: rgba(235, 171, 64, 0.5); }
 
-.n-bad .node {
-  fill: none;
-  stroke: var(--red-hot);
-  stroke-width: 1;
-}
-
-.n-bad .node-halo {
-  stroke: var(--red-hot);
-  stroke-dasharray: 2 2;
-}
-
-.n-pause .node {
-  fill: var(--warn);
-}
-
-.n-idle .node {
-  fill: #777780;
-}
+.n-idle .node { fill: #9a9ba6; }
+.n-idle .node-halo { stroke: rgba(255, 255, 255, 0.14); }
 
 .ping {
   fill: none;
   stroke: var(--red-hot);
-  stroke-width: 0.8;
+  stroke-width: 1;
   transform-box: fill-box;
   transform-origin: center;
   animation: cerberus-ping 2.2s ease-out infinite;
