@@ -20,6 +20,10 @@ const MIGRATIONS: { name: string; sql: string }[] = [
     name: "saved_ips += region",
     sql: `ALTER TABLE saved_ips ADD COLUMN region VARCHAR(160) NULL AFTER city`,
   },
+  {
+    name: "saved_ips += scanned_at",
+    sql: `ALTER TABLE saved_ips ADD COLUMN scanned_at TIMESTAMP NULL DEFAULT NULL`,
+  },
 ];
 
 const TABLES: { name: string; sql: string }[] = [

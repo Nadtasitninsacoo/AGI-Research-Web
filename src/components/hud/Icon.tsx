@@ -12,6 +12,7 @@ const PATHS = {
   settings: "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2",
   glyph: "M12 2l9 5v10l-9 5-9-5V7zM12 7l5 3v4l-5 3-5-3v-4zM12 2v5M21 7l-4 3M3 7l4 3M12 22v-5",
   globe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3.5 2.5 3.5 15.5 0 18M12 3c-3.5 2.5-3.5 15.5 0 18",
+  scan: "M12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14M12 2v3M12 19v3M2 12h3M19 12h3M12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3",
 } as const;
 
 export type IconName = keyof typeof PATHS;

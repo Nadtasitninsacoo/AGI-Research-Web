@@ -1,0 +1,235 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { Icon } from "@/components/Icon";
+import { parseTargets } from "@/lib/targets";
+import {
+  reconExpose, reconFacets, reconPull, reconStats,
+  type ExposureRow, type Filter, type ReconStats,
+} from "./actions";
+
+const SVC: Record<number, string> = {
+  21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp", 53: "dns", 67: "dhcp", 69: "tftp", 80: "http",
+  110: "pop3", 111: "rpcbind", 123: "ntp", 135: "msrpc", 137: "netbios", 139: "netbios", 143: "imap",
+  161: "snmp", 179: "bgp", 389: "ldap", 443: "https", 445: "smb", 465: "smtps", 500: "ipsec",
+  514: "syslog", 515: "printer", 587: "submission", 631: "ipp", 636: "ldaps", 873: "rsync",
+  993: "imaps", 995: "pop3s", 1080: "socks", 1194: "openvpn", 1433: "mssql", 1521: "oracle",
+  1723: "pptp", 2049: "nfs", 2082: "cpanel", 2083: "cpanel", 2222: "ssh-alt", 3000: "http-dev",
+  3306: "mysql", 3389: "rdp", 5432: "postgres", 5900: "vnc", 5901: "vnc", 6379: "redis",
+  8000: "http-alt", 8080: "http-proxy", 8443: "https-alt", 8888: "http-alt", 9000: "http-alt",
+  9200: "elasticsearch", 11211: "memcached", 27017: "mongodb",
+};
+const svc = (p: number) => SVC[p] ?? "";
+
+type Cat = "vuln" | "open" | "none" | "error";
+const catOf = (r: ExposureRow): Cat => (!r.ok ? "error" : r.vulns.length > 0 ? "vuln" : r.ports.length > 0 ? "open" : "none");
+const CAT_META: Record<Cat, { label: string; dot: string }> = {
+  vuln: { label: "เจอช่องโหว่", dot: "#f84646" },
+  open: { label: "เปิดพอร์ต", dot: "#5fd38a" },
+  none: { label: "ไม่มีข้อมูล", dot: "#8a92a0" },
+  error: { label: "ผิดพลาด", dot: "#f5c451" },
+};
+
+export function Recon() {
+  const [raw, setRaw] = useState("");
+  const parsed = useMemo(() => parseTargets(raw), [raw]);
+
+  const [facets, setFacets] = useState<{ countries: string[]; regions: string[]; cities: string[] }>({ countries: [], regions: [], cities: [] });
+  const [filter, setFilter] = useState<Filter>({});
+  const [stats, setStats] = useState<ReconStats | null>(null);
+  const [count, setCount] = useState("50");
+  const [allRemaining, setAllRemaining] = useState(false);
+  const [mode, setMode] = useState<"new" | "rescan" | "all">("new");
+  const [pullMsg, setPullMsg] = useState("");
+  const [pulling, setPulling] = useState(false);
+
+  const [scanning, setScanning] = useState(false);
+  const [results, setResults] = useState<ExposureRow[] | null>(null);
+  const [cat, setCat] = useState<Cat | "all">("all");
+  const [q, setQ] = useState("");
+
+  useEffect(() => { reconFacets().then(setFacets).catch(() => {}); }, []);
+  useEffect(() => {
+    let live = true;
+    reconStats(filter).then((r) => { if (live) setStats(r.ok ? (r.stats ?? null) : null); }).catch(() => {});
+    return () => { live = false; };
+  }, [filter]);
+
+  const pull = async () => {
+    setPulling(true);
+    setPullMsg("กำลังดึงจากฐานระบบ...");
+    const r = await reconPull(filter, allRemaining ? null : Number(count) || 0, mode);
+    setPulling(false);
+    if (!r.ok) { setPullMsg(r.message); return; }
+    setStats(r.stats);
+    if (r.pulled === 0) { setPullMsg("ไม่มี IP ตรงเงื่อนไขให้ดึง"); return; }
+    // append, de-dupe via parser on submit; keep newline-joined
+    setRaw((prev) => {
+      const have = new Set(parseTargets(prev));
+      const add = r.ips.filter((ip) => !have.has(ip));
+      return (prev.trim() ? prev.trimEnd() + "\n" : "") + add.join("\n");
+    });
+    setPullMsg(`ดึงมา ${r.pulled} IP (${modeLabel(mode)}) · เหลือยังไม่สแกน ${r.stats.unscanned.toLocaleString()} · สแกนแล้ว ${r.stats.scanned.toLocaleString()}`);
+  };
+
+  const scan = async () => {
+    if (!parsed.length) return;
+    setScanning(true);
+    setResults(null);
+    const r = await reconExpose(parsed);
+    setScanning(false);
+    if (!r.ok) { setPullMsg(r.message ?? "สแกนล้มเหลว"); return; }
+    setResults(r.rows);
+    setCat("all");
+  };
+
+  const summary = useMemo(() => {
+    const s = { total: results?.length ?? 0, vuln: 0, open: 0, none: 0, error: 0 };
+    for (const r of results ?? []) s[catOf(r)]++;
+    return s;
+  }, [results]);
+
+  // Flatten to port-level rows (each port bound to its IP), filtered by category + search.
+  const portRows = useMemo(() => {
+    if (!results) return [];
+    const needle = q.trim().toLowerCase();
+    const rows: { ip: string; port: number | null; service: string; host: string; cves: number; cat: Cat }[] = [];
+    for (const r of results) {
+      const c = catOf(r);
+      if (cat !== "all" && c !== cat) continue;
+      const host = r.hostnames[0] ?? "";
+      if (r.ports.length) {
+        for (const p of r.ports) rows.push({ ip: r.ip, port: p, service: svc(p), host, cves: r.vulns.length, cat: c });
+      } else {
+        rows.push({ ip: r.ip, port: null, service: r.error ?? "", host, cves: 0, cat: c });
+      }
+    }
+    return needle
+      ? rows.filter((x) => x.ip.includes(needle) || x.service.toLowerCase().includes(needle) || x.host.toLowerCase().includes(needle) || String(x.port ?? "").includes(needle))
+      : rows;
+  }, [results, cat, q]);
+
+  return (
+    <>
+      <section className="panel span-7" id="recon">
+        <header className="panel-head"><span>01 // เป้าหมาย</span><em>{parsed.length} IP</em></header>
+
+        <details className="rc-pull" open>
+          <summary>ดึง IP จากฐานระบบ (เลือกพื้นที่ + จำนวน)</summary>
+          <div className="rc-filters">
+            <Select label="ประเทศ" value={filter.country} opts={facets.countries} onChange={(v) => setFilter((f) => ({ ...f, country: v }))} />
+            <Select label="จังหวัด/รัฐ" value={filter.region} opts={facets.regions} onChange={(v) => setFilter((f) => ({ ...f, region: v }))} />
+            <Select label="เขต/เมือง" value={filter.city} opts={facets.cities} onChange={(v) => setFilter((f) => ({ ...f, city: v }))} />
+          </div>
+          {stats && (
+            <div className="rc-stats">
+              ในพื้นที่นี้: <b>{stats.total.toLocaleString()}</b> IP · ยังไม่สแกน <b className="rc-un">{stats.unscanned.toLocaleString()}</b> · สแกนแล้ว <b className="rc-sc">{stats.scanned.toLocaleString()}</b>
+            </div>
+          )}
+          <div className="rc-pull-ctl">
+            <select className="rc-mode" value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
+              <option value="new">ที่ยังไม่เคยสแกน</option>
+              <option value="rescan">ที่เคยสแกนแล้ว (สแกนซ้ำ)</option>
+              <option value="all">ทั้งหมด (สแกนแล้ว+ยังไม่สแกน)</option>
+            </select>
+            <label className="rc-count">
+              <input type="number" min={1} value={count} disabled={allRemaining} onChange={(e) => setCount(e.target.value)} />
+              <span>IP</span>
+            </label>
+            <label className="rc-all"><input type="checkbox" checked={allRemaining} onChange={(e) => setAllRemaining(e.target.checked)} /> ทั้งหมดที่เหลือ</label>
+            <button type="button" className="btn btn-sm" disabled={pulling} onClick={pull}>
+              <Icon name="download" /> {pulling ? "กำลังดึง..." : "ดึงมาใส่ช่อง"}
+            </button>
+          </div>
+          {pullMsg && <p className="rc-msg">{pullMsg}</p>}
+        </details>
+
+        <label className="field rc-field">
+          <span>รายการ IP ที่จะสแกน (วางเองก็ได้ · คั่นด้วยอะไรก็ได้)</span>
+          <textarea className="mono cc-targets" rows={5} value={raw} onChange={(e) => setRaw(e.target.value)} placeholder={"8.8.8.8 1.1.1.1\n9.9.9.9"} autoComplete="off" />
+        </label>
+        <div className="rc-scanbar">
+          <button type="button" className="btn btn-danger" disabled={scanning || !parsed.length} onClick={scan}>
+            {scanning ? `กำลังสแกน ${parsed.length} IP...` : `สแกน ${parsed.length} IP (InternetDB · อ่านอย่างเดียว)`}
+          </button>
+          {raw && <button type="button" className="lf-mini" onClick={() => { setRaw(""); setResults(null); }}><Icon name="trash" /> ล้าง</button>}
+        </div>
+        <p className="hint">อ่านพอร์ต/บริการ/CVE จากฐาน Shodan InternetDB แบบ <b>ไม่ยิงเป้าหมาย</b> (OSINT) — ไม่ใช่ active scan</p>
+      </section>
+
+      <section className="panel span-5" id="recon-sum">
+        <header className="panel-head"><span>02 // สรุปผล</span><em>{summary.total} HOSTS</em></header>
+        {!results ? (
+          <p className="muted">ยังไม่มีผล — ดึง/ใส่ IP แล้วกดสแกน</p>
+        ) : (
+          <div className="rc-summary">
+            {(["vuln", "open", "none", "error"] as Cat[]).map((c) => (
+              <button key={c} type="button" className={`rc-sumcard ${cat === c ? "is-active" : ""}`} onClick={() => setCat(cat === c ? "all" : c)}>
+                <span className="rc-sumdot" style={{ background: CAT_META[c].dot }} />
+                <b>{summary[c].toLocaleString()}</b>
+                <small>{CAT_META[c].label}</small>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {results && (
+        <section className="panel span-12" id="recon-table">
+          <header className="panel-head">
+            <span>03 // ผลการสแกน — พอร์ตผูกกับ IP{cat !== "all" ? ` · ${CAT_META[cat].label}` : ""}</span>
+            <em>{portRows.length} แถว</em>
+          </header>
+          <div className="rc-tbar">
+            <div className="rc-tabs">
+              <button type="button" className={cat === "all" ? "is-active" : ""} onClick={() => setCat("all")}>ทั้งหมด ({summary.total})</button>
+              {(["vuln", "open", "none", "error"] as Cat[]).map((c) => (
+                <button key={c} type="button" className={cat === c ? "is-active" : ""} onClick={() => setCat(c)}>
+                  <span className="rc-dot" style={{ background: CAT_META[c].dot }} /> {CAT_META[c].label} ({summary[c]})
+                </button>
+              ))}
+            </div>
+            <div className="rc-search"><Icon name="search" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา IP / พอร์ต / บริการ / host" autoComplete="off" /></div>
+          </div>
+          {portRows.length === 0 ? (
+            <p className="muted">ไม่มีแถวตรงเงื่อนไข</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="grid-table rc-table">
+                <thead><tr><th>สถานะ</th><th>IP</th><th>พอร์ต</th><th>บริการ</th><th>Hostname</th><th>CVE</th></tr></thead>
+                <tbody>
+                  {portRows.slice(0, 2000).map((r, i) => (
+                    <tr key={`${r.ip}-${r.port ?? "x"}-${i}`} className={`rc-row rc-${r.cat}`}>
+                      <td><span className="rc-badge" style={{ color: CAT_META[r.cat].dot }}>● {CAT_META[r.cat].label}</span></td>
+                      <td className="rc-ip">{r.ip}</td>
+                      <td className="rc-port">{r.port ?? "—"}</td>
+                      <td>{r.port != null ? (r.service || "—") : <span className="muted">{r.service || "—"}</span>}</td>
+                      <td className="muted">{r.host || "—"}</td>
+                      <td>{r.cves > 0 ? <span className="rc-cve">⚠ {r.cves}</span> : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+    </>
+  );
+}
+
+function Select({ label, value, opts, onChange }: { label: string; value?: string; opts: string[]; onChange: (v: string) => void }) {
+  return (
+    <label className="field rc-sel">
+      <span>{label}</span>
+      <select value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
+        <option value="">ทั้งหมด</option>
+        {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function modeLabel(m: "new" | "rescan" | "all") {
+  return m === "new" ? "ยังไม่เคยสแกน" : m === "rescan" ? "สแกนซ้ำ" : "ทั้งหมด";
+}

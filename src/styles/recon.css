@@ -1,0 +1,88 @@
+/* ============================================================
+   RECON — batch OSINT exposure
+   ============================================================ */
+
+.rc-pull {
+  margin-bottom: 14px;
+  background: rgba(45, 226, 230, 0.03);
+  border: 1px solid rgba(45, 226, 230, 0.16);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.rc-pull > summary {
+  padding: 10px 12px;
+  color: #cfe9ff;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  list-style: none;
+}
+.rc-pull > summary::-webkit-details-marker { display: none; }
+.rc-pull > summary::before { content: "▸ "; color: #2de2e6; }
+.rc-pull[open] > summary::before { content: "▾ "; }
+.rc-pull > *:not(summary) { margin: 0 12px; }
+.rc-pull > *:last-child { margin-bottom: 12px; }
+
+.rc-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
+.rc-sel span { font-size: 8px; }
+.rc-stats { margin-top: 9px; font-size: 11px; color: var(--muted, #9aa0aa); }
+.rc-stats b { color: #e3e6eb; font-variant-numeric: tabular-nums; }
+.rc-stats .rc-un { color: #f5c451; }
+.rc-stats .rc-sc { color: #5fd38a; }
+
+.rc-pull-ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.rc-mode { width: auto; min-width: 190px; height: 32px; font-size: 11px; }
+.rc-count { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted, #9aa0aa); }
+.rc-count input { width: 78px; height: 32px; }
+.rc-all { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted, #9aa0aa); cursor: pointer; }
+.rc-all input { width: 15px; height: 15px; accent-color: var(--red-hot); }
+.rc-msg { margin: 9px 0 0; font-size: 11px; color: #5fd38a; }
+
+.rc-field { margin-top: 2px; }
+.rc-scanbar { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+
+/* Summary cards */
+.rc-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.rc-sumcard {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 11px 13px; text-align: left; cursor: pointer;
+  background: var(--grad-card); border: 1px solid var(--line); border-radius: 9px;
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+.rc-sumcard:hover { transform: translateY(-2px); border-color: var(--line-strong); }
+.rc-sumcard.is-active { border-color: rgba(248, 30, 54, 0.5); }
+.rc-sumcard b { font-size: 22px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; color: #fff; }
+.rc-sumcard small { color: var(--dim); font-size: 9px; letter-spacing: 0.08em; }
+.rc-sumdot { width: 8px; height: 8px; border-radius: 50%; }
+
+/* Table toolbar */
+.rc-tbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.rc-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.rc-tabs button {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; font-size: 10px; letter-spacing: 0.04em;
+  color: #c8ccd3; background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+}
+.rc-tabs button.is-active { color: #fff; border-color: var(--line-hot); background: rgba(242, 27, 50, 0.12); }
+.rc-dot { width: 7px; height: 7px; border-radius: 50%; }
+.rc-search { position: relative; display: flex; align-items: center; flex: 1 1 240px; min-width: 0; }
+.rc-search svg { position: absolute; left: 10px; width: 14px; height: 14px; color: #6b7686; }
+.rc-search input {
+  width: 100%; height: 34px; padding: 0 12px 0 32px; font-size: 12px; color: var(--text);
+  background: linear-gradient(180deg, rgba(20, 24, 33, 0.9), rgba(10, 13, 19, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 9px; outline: none;
+}
+
+/* Results table */
+.rc-table td { vertical-align: middle; }
+.rc-ip { font-family: var(--font-geist-mono), monospace; font-weight: 600; color: #ff9aa2; }
+.rc-port { font-family: var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; color: #cfe9ff; }
+.rc-badge { font-size: 10px; white-space: nowrap; }
+.rc-cve { color: #f84646; font-weight: 600; }
+.rc-row.rc-vuln td { background: rgba(248, 30, 54, 0.05); }
+
+@media (max-width: 1000px) {
+  .rc-filters { grid-template-columns: 1fr; }
+  .rc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
