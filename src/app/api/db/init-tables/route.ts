@@ -58,6 +58,22 @@ const TABLES: { name: string; sql: string }[] = [
       KEY idx_lessons_created (created_at)
     ) ENGINE=InnoDB`,
   },
+  {
+    name: "saved_ips",
+    sql: `CREATE TABLE IF NOT EXISTS saved_ips (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      ip VARCHAR(45) NOT NULL,
+      city VARCHAR(160) NULL,
+      country VARCHAR(8) NULL,
+      lat DOUBLE NULL,
+      lon DOUBLE NULL,
+      source VARCHAR(40) NOT NULL DEFAULT 'db-ip',
+      note VARCHAR(255) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uniq_ip (ip)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
 ];
 
 export async function POST(request: Request) {
@@ -94,7 +110,7 @@ export async function POST(request: Request) {
       }
     }
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
-      `SELECT table_name AS t FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('settings','command_approvals','lessons')`,
+      `SELECT table_name AS t FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('settings','command_approvals','lessons','saved_ips')`,
     );
     return NextResponse.json({ ok: true, created: TABLES.map((t) => t.name), present: rows.map((r) => r.t), migrated });
   } catch (err) {

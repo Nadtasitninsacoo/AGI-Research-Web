@@ -7,6 +7,8 @@ import { promisify } from "node:util";
 import { createReadStream, existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
+import type { ResultSetHeader } from "mysql2";
+import { db } from "@/lib/db";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { geocoder, carrier } from "libphonenumber-geo-carrier";
 
@@ -574,34 +576,25 @@ export async function saveIpsAction(items: IpGeoRange[], note?: string): Promise
   if (!rows.length) return { ok: false, message: "ไม่มี IP ที่ถูกต้องให้บันทึก" };
   const label = (note || "").slice(0, 200) || null;
   try {
-    const { db } = await import("@/lib/db");
-    await db.query(
-      `CREATE TABLE IF NOT EXISTS saved_ips (
-        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-        ip VARCHAR(45) NOT NULL,
-        city VARCHAR(160) NULL,
-        country VARCHAR(8) NULL,
-        lat DOUBLE NULL,
-        lon DOUBLE NULL,
-        source VARCHAR(40) NOT NULL DEFAULT 'db-ip',
-        note VARCHAR(255) NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
-        UNIQUE KEY uniq_ip (ip)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-    );
-    const values = rows.map((r) => [r.ip, r.city || null, r.cc || null, Number(r.lat) || null, Number(r.lon) || null, "db-ip", label]);
-    const [res] = await db.query(
+    // The table is created by the admin "Initialize tables" button (the app DB
+    // user has no CREATE privilege). We only INSERT here.
+    const values = rows.map((r) => [r.ip, r.city || null, r.cc || null, Number.isFinite(r.lat) ? r.lat : null, Number.isFinite(r.lon) ? r.lon : null, "db-ip", label]);
+    const [res] = await db.query<ResultSetHeader>(
       "INSERT IGNORE INTO saved_ips (ip, city, country, lat, lon, source, note) VALUES ?",
       [values],
     );
-    const saved = (res as { affectedRows?: number }).affectedRows ?? 0;
+    const saved = res.affectedRows ?? 0;
     return { ok: true, saved, duplicate: rows.length - saved, total: rows.length };
   } catch (err) {
     const code = (err as { code?: string })?.code;
+    const msg = (err as { sqlMessage?: string; message?: string })?.sqlMessage || (err as Error)?.message || "unknown";
+    console.error("[saveIpsAction]", code, msg);
+    if (code === "ER_NO_SUCH_TABLE" || code === "ER_TABLEACCESS_DENIED_ERROR") {
+      return { ok: false, message: 'ยังไม่มีตาราง saved_ips — กดปุ่ม "Initialize tables (สร้างตารางจากเว็บ)" (ใส่รหัส MySQL admin) ก่อน แล้วลองบันทึกอีกครั้ง' };
+    }
     if (code === "ECONNREFUSED" || code === "ER_ACCESS_DENIED_ERROR" || code === "ER_BAD_DB_ERROR") {
       return { ok: false, message: "เชื่อมต่อฐานข้อมูลไม่ได้ — ตรวจค่า DATABASE_* ใน .env.local" };
     }
-    return { ok: false, message: "บันทึกลงฐานข้อมูลล้มเหลว" };
+    return { ok: false, message: `บันทึกล้มเหลว: ${code || msg}` };
   }
 }
