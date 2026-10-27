@@ -594,6 +594,9 @@ export async function saveIpsAction(items: IpGeoRange[], note?: string): Promise
     if (code === "ER_NO_SUCH_TABLE" || code === "ER_TABLEACCESS_DENIED_ERROR") {
       return { ok: false, message: 'ยังไม่มีตาราง saved_ips — กดปุ่ม "Initialize tables (สร้างตารางจากเว็บ)" (ใส่รหัส MySQL admin) ก่อน แล้วลองบันทึกอีกครั้ง' };
     }
+    if (code === "ER_BAD_FIELD_ERROR") {
+      return { ok: false, message: 'ตาราง saved_ips เวอร์ชันเก่า (ไม่มีคอลัมน์ region) — กด "Initialize tables" อีกครั้งเพื่ออัปเกรด แล้วลองใหม่' };
+    }
     if (code === "ECONNREFUSED" || code === "ER_ACCESS_DENIED_ERROR" || code === "ER_BAD_DB_ERROR") {
       return { ok: false, message: "เชื่อมต่อฐานข้อมูลไม่ได้ — ตรวจค่า DATABASE_* ใน .env.local" };
     }

@@ -1,0 +1,135 @@
+/* ============================================================
+   IP INTEL — saved_ips vault
+   ============================================================ */
+
+.ipi-stats {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) 1.4fr;
+  gap: 10px;
+}
+.ipi-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px 13px;
+  background: var(--grad-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), var(--bevel-up);
+}
+.ipi-stat small { color: var(--dim); font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; }
+.ipi-stat b {
+  color: var(--text-strong);
+  font-size: clamp(18px, 1.6vw, 24px);
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ipi-stat.is-accent {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(248, 30, 54, 0.2), transparent 62%),
+    var(--grad-raised);
+  border-color: rgba(248, 30, 54, 0.3);
+}
+.ipi-stat.is-accent b { color: #fff; }
+.ipi-stat.is-wide b { font-size: 14px; font-family: var(--font-geist-mono), monospace; letter-spacing: 0.02em; }
+
+@media (max-width: 1000px) {
+  .ipi-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ipi-stat.is-wide { grid-column: 1 / -1; }
+}
+
+/* Toolbar: search + export + clear */
+.ipi-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ipi-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.ipi-search svg { position: absolute; left: 11px; width: 14px; height: 14px; color: #6b7686; pointer-events: none; }
+.ipi-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px 0 32px;
+  color: var(--text);
+  font-size: 12.5px;
+  background: linear-gradient(180deg, rgba(20, 24, 33, 0.9), rgba(10, 13, 19, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 9px;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.ipi-search input:focus { border-color: rgba(248, 30, 54, 0.5); box-shadow: 0 0 0 3px rgba(248, 30, 54, 0.12); }
+.ipi-toolbar-act { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ipi-confirm { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; color: #f5c451; }
+
+/* Table */
+.ipi-table td { vertical-align: middle; }
+.ipi-ip { font-family: var(--font-geist-mono), monospace; font-weight: 600; color: #ff9aa2; font-variant-numeric: tabular-nums; }
+.ipi-cc {
+  display: inline-block;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #cfe9ff;
+  background: rgba(45, 226, 230, 0.1);
+  border: 1px solid rgba(45, 226, 230, 0.28);
+  border-radius: 4px;
+}
+.ipi-when { font-family: var(--font-geist-mono), monospace; font-size: 10px; white-space: nowrap; }
+.ipi-rowact { text-align: right; white-space: nowrap; }
+
+/* Breakdown bars */
+.ipi-bd { margin-bottom: 14px; }
+.ipi-bd:last-child { margin-bottom: 0; }
+.ipi-bd-title { margin-bottom: 7px; color: var(--dim); font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; }
+.ipi-bd-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  margin-bottom: 3px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  text-decoration: none;
+}
+.ipi-bd-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, rgba(248, 30, 54, 0.26), rgba(248, 30, 54, 0.05));
+  pointer-events: none;
+}
+.ipi-bd-label {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #e3e6eb;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ipi-bd-n { position: relative; color: var(--muted, #9aa0aa); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ipi-bd-row.is-link { cursor: pointer; transition: border-color 150ms ease; }
+.ipi-bd-row.is-link:hover { border-color: var(--line-hot); }
+.ipi-bd-row.is-link .ipi-bd-label { color: #fff; }
+.ipi-bd-row.is-active { border-color: rgba(248, 30, 54, 0.6); }

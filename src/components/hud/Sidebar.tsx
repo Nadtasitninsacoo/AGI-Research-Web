@@ -7,6 +7,7 @@ const NAVIGATE: NavItem[] = [
   { label: "Nexus", icon: "nexus", href: "/nexus", match: "/nexus" },
   { label: "Command", icon: "command", href: "/command", match: "/command" },
   { label: "Map", icon: "map", href: "/map", match: "/map" },
+  { label: "IP Intel", icon: "globe", href: "/ip-intel", match: "/ip-intel" },
   { label: "Agents", icon: "agents", href: "/agents", match: "/agents" },
   { label: "Experiments", icon: "experiments", href: "/experiments", match: "/experiments" },
   { label: "Runs", icon: "runs", href: "/runs", match: "/runs" },
