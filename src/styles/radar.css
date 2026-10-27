@@ -12,51 +12,73 @@
 
 .radar-svg {
   width: 100%;
-  max-width: 240px;
+  max-width: 260px;
   height: auto;
-  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45));
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.5));
 }
 
 .radar-ring {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.1);
+  stroke: rgba(255, 255, 255, 0.09);
   stroke-width: 1;
 }
+.radar-ring-outer { stroke: rgba(248, 30, 54, 0.3); }
+
+.radar-tick { stroke: rgba(248, 30, 54, 0.35); stroke-width: 1; }
+.radar-tick-major { stroke: rgba(248, 30, 54, 0.7); stroke-width: 1.4; }
 
 .radar-cross {
-  stroke: rgba(255, 255, 255, 0.07);
+  stroke: rgba(255, 255, 255, 0.06);
   stroke-width: 1;
 }
+.radar-diag { stroke: rgba(255, 255, 255, 0.035); }
 
 .radar-core {
-  fill: var(--red-hot);
+  fill: #ff5661;
+}
+.radar-core-ring {
+  fill: none;
+  stroke: var(--red-hot);
+  stroke-width: 1.2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: radar-core-pulse 2.4s ease-out infinite;
 }
 
 .radar-beam {
-  stroke: var(--red-hot);
-  stroke-width: 1.5;
+  stroke: #ff7b84;
+  stroke-width: 1.8;
 }
+.radar-sweep-trail { fill: rgba(248, 30, 54, 0.12); }
 
 .radar-sweep-g {
   transform-box: view-box;
   transform-origin: 100px 100px;
-  animation: radar-spin 3s linear infinite;
+  animation: radar-spin 2.6s linear infinite;
 }
 
 .radar-idle .radar-sweep-g {
   animation-duration: 7s;
-  opacity: 0.55;
+  opacity: 0.5;
 }
+.radar-idle .radar-core-ring { animation: none; opacity: 0.4; }
 
 .radar-blip {
   fill: var(--red-hot);
   opacity: 0;
+  filter: drop-shadow(0 0 3px var(--red-glow));
   animation: radar-blip 4s ease-out infinite;
 }
 
 .radar-idle .radar-blip {
   animation: none;
   opacity: 0.22;
+}
+
+@keyframes radar-core-pulse {
+  0% { transform: scale(0.7); opacity: 0.9; }
+  70% { opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
 }
 
 @keyframes radar-spin {
