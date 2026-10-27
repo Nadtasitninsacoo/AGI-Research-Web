@@ -9,11 +9,10 @@ const NAVIGATE: NavItem[] = [
   { label: "Map", icon: "map", href: "/map", match: "/map" },
   { label: "IP Intel", icon: "globe", href: "/ip-intel", match: "/ip-intel" },
   { label: "Recon", icon: "scan", href: "/recon", match: "/recon" },
+  { label: "Ports", icon: "ports", href: "/ports", match: "/ports" },
   { label: "Agents", icon: "agents", href: "/agents", match: "/agents" },
   { label: "Experiments", icon: "experiments", href: "/experiments", match: "/experiments" },
   { label: "Runs", icon: "runs", href: "/runs", match: "/runs" },
-  { label: "Benchmarks", icon: "bench", href: "/#benchmarks" },
-  { label: "Logs", icon: "logs", href: "/#logs" },
 ];
 
 const WORKSPACE: NavItem[] = [

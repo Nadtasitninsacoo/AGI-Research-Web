@@ -83,7 +83,7 @@ export function Recon() {
     if (!r.ok) { setPullMsg(r.message); return; }
     if (r.pulled === 0) { setPullMsg("ไม่มี IP ที่มีพอร์ตตรงเงื่อนไข"); return; }
     appendIps(r.ips);
-    setPullMsg(`ดึง ${r.pulled} IP (จากพอร์ตที่บันทึก${pf.service ? ` · ${pf.service}` : ""}${pf.port ? ` · :${pf.port}` : ""}${pf.hasCve ? " · มี CVE" : ""})`);
+    setPullMsg(`ดึง ${r.pulled} IP (จากพอร์ตที่บันทึก${pf.service ? ` · ${pf.service}` : ""}${pf.port ? ` · :${pf.port}` : ""}${pf.cve === "with" ? " · มี CVE" : pf.cve === "without" ? " · ไม่มี CVE" : ""})`);
   };
 
   const savePorts = async () => {
@@ -200,7 +200,11 @@ export function Recon() {
               <div className="rc-filters">
                 <label className="field rc-sel"><span>บริการ (เช่น http, ssh)</span><input value={pf.service ?? ""} onChange={(e) => setPf((f) => ({ ...f, service: e.target.value }))} placeholder="ทั้งหมด" autoComplete="off" /></label>
                 <label className="field rc-sel"><span>พอร์ต (เช่น 443)</span><input type="number" value={pf.port ?? ""} onChange={(e) => setPf((f) => ({ ...f, port: e.target.value }))} placeholder="ทั้งหมด" autoComplete="off" /></label>
-                <label className="field rc-sel rc-cvebox"><span>&nbsp;</span><label className="rc-all"><input type="checkbox" checked={!!pf.hasCve} onChange={(e) => setPf((f) => ({ ...f, hasCve: e.target.checked }))} /> เฉพาะที่มี CVE</label></label>
+                <label className="field rc-sel"><span>ช่องโหว่</span>
+                  <select value={pf.cve ?? ""} onChange={(e) => setPf((f) => ({ ...f, cve: (e.target.value || undefined) as PortFilter["cve"] }))}>
+                    <option value="">ทั้งหมด</option><option value="with">เฉพาะมี CVE</option><option value="without">เฉพาะไม่มี CVE</option>
+                  </select>
+                </label>
               </div>
               {portStats && (
                 <div className="rc-stats">

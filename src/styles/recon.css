@@ -66,6 +66,12 @@
 .rc-sumcard small { color: var(--dim); font-size: 9px; letter-spacing: 0.08em; }
 .rc-sumdot { width: 8px; height: 8px; border-radius: 50%; }
 
+/* Ports-page scan box */
+.ps-box { margin-top: 4px; }
+.ps-ta { min-height: 110px; line-height: 1.7; }
+.ps-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.ps-msg { font-size: 11px; color: #5fd38a; }
+
 /* Results header actions + save */
 .rc-head-act { display: inline-flex; align-items: center; gap: 12px; }
 

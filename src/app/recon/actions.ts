@@ -122,7 +122,7 @@ export async function saveScanPorts(rows: ExposureRow[]): Promise<{ ok: boolean;
   }
 }
 
-export type PortFilter = { service?: string; port?: string; hasCve?: boolean };
+export type PortFilter = { service?: string; port?: string; cve?: "with" | "without" };
 function portWhere(f: PortFilter): { where: string; args: (string | number)[] } {
   const cond: string[] = [];
   const args: (string | number)[] = [];
@@ -130,7 +130,8 @@ function portWhere(f: PortFilter): { where: string; args: (string | number)[] } 
   if (s) { cond.push("service = ?"); args.push(s.toLowerCase()); }
   const p = Number(f.port);
   if (Number.isInteger(p) && p > 0) { cond.push("port = ?"); args.push(p); }
-  if (f.hasCve) cond.push("cves > 0");
+  if (f.cve === "with") cond.push("cves > 0");
+  else if (f.cve === "without") cond.push("cves = 0");
   return { where: cond.length ? `WHERE ${cond.join(" AND ")}` : "", args };
 }
 
