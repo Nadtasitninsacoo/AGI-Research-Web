@@ -50,7 +50,7 @@
   flex-direction: column;
   gap: 22px;
   height: 100vh;
-  padding: 17px 12px;
+  padding: 16px 10px;
   overflow-x: hidden;
   overflow-y: auto;
   color: var(--on-dark);
@@ -105,9 +105,9 @@
 .brand-text b {
   overflow: hidden;
   color: #fff;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 300;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.22em;
   text-overflow: ellipsis;
 }
 
@@ -126,7 +126,7 @@
 }
 
 .nav-title {
-  padding: 0 9px 7px;
+  padding: 0 8px 7px;
   color: #66666e;
   font-size: 8px;
   letter-spacing: 0.22em;
@@ -137,14 +137,14 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 34px;
-  padding: 0 9px;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
   overflow: hidden;
   color: #96969f;
   font-size: 9px;
   font-weight: 400;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-decoration: none;
   text-transform: uppercase;
   background: transparent;
@@ -155,6 +155,8 @@
     background 150ms ease,
     border-color 150ms ease;
 }
+
+.nav-item svg { width: 15px; height: 15px; flex: none; }
 
 .nav-item:hover {
   color: #fff;

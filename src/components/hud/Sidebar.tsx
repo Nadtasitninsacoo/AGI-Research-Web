@@ -34,7 +34,7 @@ export function Sidebar({ online }: { online: boolean }) {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <span className="brand-glyph"><Icon name="glyph" size={26} /></span>
+        <span className="brand-glyph"><Icon name="glyph" size={22} /></span>
         <span className="brand-text">
           <b>AGI</b>
           <small>RESEARCH</small>
