@@ -377,3 +377,37 @@ tr:last-child td {
 
 .row-selected { background: rgba(242, 27, 50, 0.09); }
 .row-selected td { border-color: rgba(242, 27, 50, 0.18); }
+
+/* ============================================================
+   FINDINGS REPORT (run page) — severity-ranked
+   ============================================================ */
+.sev-tally { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.sev-chip {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  padding: 2px 8px; border-radius: 4px; border: 1px solid transparent;
+}
+.sev-critical { color: #ff5d6c; background: rgba(242,27,50,0.14); border-color: rgba(242,27,50,0.4); }
+.sev-high     { color: #ff9a52; background: rgba(255,140,60,0.14); border-color: rgba(255,140,60,0.4); }
+.sev-medium   { color: #f5c451; background: rgba(245,196,81,0.14); border-color: rgba(245,196,81,0.4); }
+.sev-low      { color: #5fb3ff; background: rgba(74,160,255,0.14); border-color: rgba(74,160,255,0.4); }
+.sev-info     { color: #9aa0aa; background: rgba(255,255,255,0.05); border-color: var(--line); }
+
+.findings { display: flex; flex-direction: column; gap: 9px; max-height: 520px; overflow-y: auto; }
+.finding {
+  padding: 10px 12px; background: var(--grad-card);
+  border: 1px solid var(--line); border-left-width: 3px; border-radius: 8px;
+}
+.finding.sev-border-critical { border-left-color: #f21b32; }
+.finding.sev-border-high     { border-left-color: #ff8c3c; }
+.finding.sev-border-medium   { border-left-color: #f5c451; }
+.finding.sev-border-low      { border-left-color: #4aa8ff; }
+.finding.sev-border-info     { border-left-color: #6b7280; }
+.finding-top { display: flex; align-items: center; gap: 9px; }
+.sev-badge { flex: none; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 4px; }
+.finding-title { flex: 1 1 auto; min-width: 0; color: var(--text-strong); font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.finding-score { flex: none; color: var(--muted, #9aa0aa); font-size: 11px; font-variant-numeric: tabular-nums; }
+.finding-row { margin-top: 5px; color: #c6cad2; font-size: 11px; line-height: 1.5; }
+.finding-row b { color: var(--dim); font-weight: 600; margin-right: 5px; }
+.finding-row.finding-fix { color: #8fd3a8; }
+.finding-row .mono { font-family: var(--font-geist-mono), monospace; color: #cfe9ff; }
+.finding-when { margin-top: 6px; color: var(--faint); font-size: 9px; font-family: var(--font-geist-mono), monospace; }

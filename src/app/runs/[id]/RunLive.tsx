@@ -13,6 +13,16 @@ import { cancelRunAction } from "../actions";
 
 const POLL_MS = 4000;
 
+// Finding severity (from the engine's report_finding: critical→info).
+const SEV = ["info", "low", "medium", "high", "critical"] as const;
+const sevRank = (s: string) => Math.max(0, SEV.indexOf((s || "info").toLowerCase() as (typeof SEV)[number]));
+const SEV_LABEL: Record<string, string> = { critical: "วิกฤต", high: "สูง", medium: "กลาง", low: "ต่ำ", info: "ข้อมูล" };
+function detailStr(d: unknown, k: string): string {
+  if (!d || typeof d !== "object") return "";
+  const v = (d as Record<string, unknown>)[k];
+  return v == null ? "" : String(v);
+}
+
 /**
  * Cosmetic cells (experiment/agent name, prompt, params) are passed in as
  * already-rendered slots. They are async server components streamed via
@@ -188,24 +198,44 @@ export function RunLive({
       </section>
 
       <section className="panel span-5">
-        <header className="panel-head"><span>03 // EVALUATIONS</span><em>{evaluations.length}</em></header>
+        <header className="panel-head">
+          <span>03 // FINDINGS (รายงาน)</span>
+          <em>{evaluations.length}</em>
+        </header>
         {evaluations.length === 0 ? (
-          <p className="muted">no evaluations yet</p>
+          <p className="muted">ยังไม่มี findings</p>
         ) : (
-          <div className="table-scroll">
-            <table className="grid-table">
-              <thead><tr><th>BENCHMARK</th><th className="num">SCORE</th><th>RECORDED</th></tr></thead>
-              <tbody>
-                {evaluations.map((e) => (
-                  <tr key={e.id}>
-                    <td className="strong">{e.benchmark}</td>
-                    <td className="num">{e.score.toFixed(3)}</td>
-                    <td className="muted">{fmtDate(e.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="sev-tally">
+              {(["critical", "high", "medium", "low", "info"] as const).map((s) => {
+                const n = evaluations.filter((e) => detailStr(e.details, "severity").toLowerCase() === s || (!detailStr(e.details, "severity") && s === "info")).length;
+                return n > 0 ? <span key={s} className={`sev-chip sev-${s}`}>{SEV_LABEL[s]} {n}</span> : null;
+              })}
+            </div>
+            <div className="findings">
+              {[...evaluations]
+                .sort((a, b) => sevRank(detailStr(b.details, "severity")) - sevRank(detailStr(a.details, "severity")) || b.score - a.score)
+                .map((e) => {
+                  const sev = (detailStr(e.details, "severity") || "info").toLowerCase();
+                  const target = detailStr(e.details, "target");
+                  const evidence = detailStr(e.details, "evidence");
+                  const remediation = detailStr(e.details, "remediation");
+                  return (
+                    <article key={e.id} className={`finding sev-border-${sev}`}>
+                      <div className="finding-top">
+                        <span className={`sev-badge sev-${sev}`}>{SEV_LABEL[sev] ?? sev}</span>
+                        <span className="finding-title">{e.benchmark}</span>
+                        <span className="finding-score" title="score">{e.score.toFixed(1)}</span>
+                      </div>
+                      {target && <div className="finding-row"><b>เป้าหมาย</b> <span className="mono">{target}</span></div>}
+                      {evidence && <div className="finding-row"><b>หลักฐาน</b> {evidence}</div>}
+                      {remediation && <div className="finding-row finding-fix"><b>วิธีแก้</b> {remediation}</div>}
+                      <div className="finding-when">{fmtDate(e.createdAt)}</div>
+                    </article>
+                  );
+                })}
+            </div>
+          </>
         )}
       </section>
 
