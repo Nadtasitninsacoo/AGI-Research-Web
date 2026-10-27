@@ -82,6 +82,22 @@ textarea.mono {
   font-size: 10px;
 }
 
+/* Command scope-target field: multi-line textarea + parsed preview */
+.cc-targets { min-height: 58px; line-height: 1.7; }
+.cc-targets-preview { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.cc-targets-count { color: #5fd38a; font-size: 10px; letter-spacing: 0.04em; }
+.cc-targets-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.cc-chip {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: #cfe9ff;
+  padding: 2px 7px;
+  background: rgba(45, 226, 230, 0.08);
+  border: 1px solid rgba(45, 226, 230, 0.26);
+  border-radius: 4px;
+}
+.cc-chip-more { color: #9aa0aa; background: rgba(255, 255, 255, 0.04); border-color: var(--line); }
+
 input:focus,
 select:focus,
 textarea:focus {

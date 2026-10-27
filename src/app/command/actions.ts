@@ -5,6 +5,7 @@ import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { db } from "@/lib/db";
 import type { FormState } from "@/lib/types";
 import { text } from "@/lib/validate";
+import { parseTargets } from "@/lib/targets";
 
 const asObject = (v: unknown): Record<string, unknown> => {
   if (v && typeof v === "object") return v as Record<string, unknown>;
@@ -18,27 +19,6 @@ const asObject = (v: unknown): Record<string, unknown> => {
   }
   return {};
 };
-
-/**
- * Normalize one scope entry to the host/IP form the engine matches against,
- * so an operator can paste a full link (https://app.lab.local:8443/login) and
- * have it stored as just `app.lab.local`. CIDR and wildcard domains are kept
- * verbatim — the engine understands those directly.
- */
-function normalizeTarget(raw: string): string {
-  const t = raw.trim().toLowerCase();
-  if (!t) return "";
-  if (/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(t)) return t; // CIDR
-  if (t.startsWith("*.")) return t; // wildcard domain
-  if (t.includes("://") || t.includes("/") || /:\d+$/.test(t)) {
-    try {
-      return new URL(t.includes("://") ? t : `http://${t}`).hostname;
-    } catch {
-      return t;
-    }
-  }
-  return t;
-}
 
 /**
  * Launch a command straight into the engine queue via MySQL (no backend token).
@@ -63,11 +43,9 @@ export async function launchCommandAction(_prev: FormState, formData: FormData):
     const agent = agents[0];
     if (!agent) return { ok: false, message: `ไม่พบเอเจนต์ "${agentName}"` };
 
-    // Optionally (re)set the engagement scope on this agent.
-    const targets = scopeTargetsRaw
-      .split(/[\s,]+/)
-      .map(normalizeTarget)
-      .filter(Boolean);
+    // Optionally (re)set the engagement scope on this agent. The field accepts
+    // many targets separated by anything (space / newline / comma / ; / |).
+    const targets = parseTargets(scopeTargetsRaw);
     if (targets.length) {
       const cfg = asObject(agent.config);
       const prevScope = asObject(cfg.scope);
