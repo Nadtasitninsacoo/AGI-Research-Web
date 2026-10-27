@@ -145,8 +145,8 @@ export function Recon() {
         </details>
 
         <label className="field rc-field">
-          <span>รายการ IP ที่จะสแกน (วางเองก็ได้ · คั่นด้วยอะไรก็ได้)</span>
-          <textarea className="mono cc-targets" rows={5} value={raw} onChange={(e) => setRaw(e.target.value)} placeholder={"8.8.8.8 1.1.1.1\n9.9.9.9"} autoComplete="off" />
+          <span>รายการ IP ที่จะสแกน · <b className="rc-fieldcount">{parsed.length.toLocaleString()} ตัว</b> (วางเองก็ได้ · คั่นด้วยอะไรก็ได้ · เลื่อนดูได้)</span>
+          <textarea className="mono cc-targets rc-ta" rows={10} value={raw} onChange={(e) => setRaw(e.target.value)} placeholder={"8.8.8.8 1.1.1.1\n9.9.9.9"} autoComplete="off" />
         </label>
         <div className="rc-scanbar">
           <button type="button" className="btn btn-danger" disabled={scanning || !parsed.length} onClick={scan}>

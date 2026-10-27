@@ -39,6 +39,8 @@
 .rc-msg { margin: 9px 0 0; font-size: 11px; color: #5fd38a; }
 
 .rc-field { margin-top: 2px; }
+.rc-fieldcount { color: #5fd38a; }
+.rc-ta { min-height: 200px; max-height: 420px; line-height: 1.75; }
 .rc-scanbar { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
 
 /* Summary cards */
