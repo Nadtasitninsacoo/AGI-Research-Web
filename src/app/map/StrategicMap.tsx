@@ -724,14 +724,15 @@ export function StrategicMap() {
     // contain "nmap"/"scan" (e.g. scanme.nmap.org) can't fake a scan intent.
     const lcs = (reconTarget ? raw.split(reconTarget).join(" ") : raw).toLowerCase();
     const scanIntent =
-      /(สแกนพอร์ต|สแกนพอร์ท|สแกน\s*port|scan\s*ports?|nmap|พอร์ตเปิด|open\s*ports?)/i.test(lcs) ||
-      (/(สแกน|scan)/i.test(lcs) && reconTarget !== "");
+      /(สแกนพอร์ต|สแกนพอร์ท|สแกนหาพอร์ต|สแกน\s*port|scan\s*ports?|port\s*scan|nmap|พอร์ตเปิด|open\s*ports?|เช็[คก]\s*พอร์ต|ตรวจ\s*พอร์ต|หา\s*พอร์ต|หา\s*port)/i.test(lcs) ||
+      // generic: a "scan" verb plus either a real target or the word "port"
+      (/(สแกน|scan)/i.test(lcs) && (reconTarget !== "" || /(พอร์ต|port)/i.test(lcs)));
     const pinIntent =
       /(ปักหมุด|ปักจุด|หมุด|ตำแหน่งไอพี|ตำแหน่ง|พิกัดไอพี|geo-?locate|geoip|locate|อยู่ที่ไหน|อยู่ไหน|ที่ไหน|where is|where)/i.test(lcs);
 
     if (scanIntent || (pinIntent && reconTarget)) {
       const target = reconTarget || host.trim();
-      if (!target) { setAiMsg('บอกเป้าหมายด้วย เช่น "สแกนพอร์ต 8.8.8.8" หรือ "ปักหมุด 8.8.8.8"'); return; }
+      if (!target) { setAiMsg('ต้องระบุ IP หรือ host ที่จะสแกน เช่น "สแกนพอร์ต 8.8.8.8" หรือ "สแกนหา port scanme.nmap.org" — ชื่อเมือง/สถานที่สแกนไม่ได้ (เมืองไม่ใช่โฮสต์)'); return; }
 
       // Custom ports: "พอร์ต 80,443", "ports 1-1000", or a bare "22,80,443" token.
       // The (?![\d.]) lookahead stops the keyword form from eating an IP octet.
