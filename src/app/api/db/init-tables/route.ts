@@ -33,6 +33,20 @@ const TABLES: { name: string; sql: string }[] = [
       KEY idx_approvals_status (status, created_at)
     ) ENGINE=InnoDB`,
   },
+  {
+    name: "lessons",
+    sql: `CREATE TABLE IF NOT EXISTS lessons (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      kind VARCHAR(20) NOT NULL DEFAULT 'retrospective',
+      tags VARCHAR(255) NOT NULL DEFAULT '',
+      problem TEXT NULL,
+      solution TEXT NOT NULL,
+      run_id BIGINT UNSIGNED NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_lessons_created (created_at)
+    ) ENGINE=InnoDB`,
+  },
 ];
 
 export async function POST(request: Request) {
@@ -58,7 +72,7 @@ export async function POST(request: Request) {
     });
     for (const t of TABLES) await conn.query(t.sql);
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
-      `SELECT table_name AS t FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('settings','command_approvals')`,
+      `SELECT table_name AS t FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('settings','command_approvals','lessons')`,
     );
     return NextResponse.json({ ok: true, created: TABLES.map((t) => t.name), present: rows.map((r) => r.t) });
   } catch (err) {

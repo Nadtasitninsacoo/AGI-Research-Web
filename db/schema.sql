@@ -139,3 +139,17 @@ CREATE TABLE IF NOT EXISTS command_approvals (
   PRIMARY KEY (id),
   KEY idx_approvals_status (status, created_at)
 ) ENGINE=InnoDB;
+
+-- Cross-run learning: HYDRA stores a concise lesson per run and recalls relevant
+-- ones at planning / re-planning time so the team reuses what worked.
+CREATE TABLE IF NOT EXISTS lessons (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  kind       VARCHAR(20) NOT NULL DEFAULT 'retrospective',
+  tags       VARCHAR(255) NOT NULL DEFAULT '',
+  problem    TEXT NULL,
+  solution   TEXT NOT NULL,
+  run_id     BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_lessons_created (created_at)
+) ENGINE=InnoDB;

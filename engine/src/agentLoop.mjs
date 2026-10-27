@@ -297,7 +297,7 @@ const TOOLS = [
 ];
 
 /** Execute one run_command tool call through the full guardrail chain. */
-async function execRunCommand({ args, scope, agentConfig, runParams, agentId, runId }) {
+async function execRunCommand({ args, scope, agentConfig, runParams, agentId, runId, cmdHistory }) {
   const shell = args.shell;
   const raw = String(args.command ?? "").trim();
   // Normalize before any check runs, so scope/policy see the real command and the
@@ -310,10 +310,26 @@ async function execRunCommand({ args, scope, agentConfig, runParams, agentId, ru
     await log({ agentId, runId, level: "debug", message: `NORMALIZED: ${raw}  ->  ${command}` });
   }
 
+  // Repeat guard: refuse an identical command that already failed this run, so a
+  // retry means diagnosing and changing something — not resending the same thing.
+  const historyKey = `${shell ?? ""}\u0000${command}`;
+  const prior = cmdHistory?.get(historyKey);
+  if (prior?.failed) {
+    await log({ agentId, runId, level: "warn", message: `REPEAT BLOCKED: ${command} (already ${prior.detail})` });
+    return (
+      `NOT RUN — you already ran this exact command and it ${prior.detail}. ` +
+      `Do not resend it unchanged. Read the earlier error/output, work out WHY it failed, then either fix the command ` +
+      `(different flags, path, target, or tool) or try a different approach. If it cannot work here, say so and move on.`
+    );
+  }
+
+  const remember = (detail) => cmdHistory?.set(historyKey, { failed: true, detail });
+
   // 1) Scope / rules of engagement.
   const sc = checkScope(command, scope);
   if (!sc.ok) {
     await log({ agentId, runId, level: "warn", message: `SCOPE BLOCK: ${command}`, context: { outOfScope: sc.outOfScope } });
+    remember("was refused as out of scope");
     return `REFUSED (out of scope): ${sc.reason}`;
   }
 
@@ -321,6 +337,7 @@ async function execRunCommand({ args, scope, agentConfig, runParams, agentId, ru
   const d = decide(command, agentConfig, runParams);
   if (d.decision === "deny") {
     await log({ agentId, runId, level: "warn", message: `POLICY DENY [${d.tier}]: ${command}`, context: { reason: d.reason } });
+    remember("was denied by policy");
     return `REFUSED: ${d.reason}`;
   }
   if (d.decision === "needs_approval") {
@@ -331,6 +348,7 @@ async function execRunCommand({ args, scope, agentConfig, runParams, agentId, ru
     });
     if (verdict.decision !== "approved") {
       await log({ agentId, runId, level: "warn", message: `APPROVAL ${verdict.decision.toUpperCase()} [${d.tier}]: ${command}` });
+      remember(`was not approved (${verdict.decision})`);
       return `NOT RUN — approval ${verdict.decision}. ${d.reason}`;
     }
     await log({ agentId, runId, level: "info", message: `APPROVED by operator [${d.tier}]: ${command}` });
@@ -343,6 +361,7 @@ async function execRunCommand({ args, scope, agentConfig, runParams, agentId, ru
   // than run blind. In-scope remote targets and localhost both pass.
   if ((d.tier === "active" || d.tier === "intrusive") && sc.targets.length === 0) {
     await log({ agentId, runId, level: "warn", message: `NO VERIFIABLE TARGET [${d.tier}]: ${command}` });
+    remember("was refused for naming no verifiable target");
     return "NOT RUN — this network action does not name a recognizable target " +
       "(an obfuscated or missing target is refused). Restate with an explicit in-scope host/IP.";
   }
@@ -356,10 +375,14 @@ async function execRunCommand({ args, scope, agentConfig, runParams, agentId, ru
     context: { exitCode: r.exitCode, timedOut: r.timedOut },
   });
 
+  const failed = r.exitCode !== 0 || r.timedOut;
+  cmdHistory?.set(historyKey, { failed, detail: `returned exit=${r.exitCode}${r.timedOut ? " (timeout)" : ""}` });
+
   const parts = [`$ ${command}`, `# shell=${r.shell} exit=${r.exitCode}${r.timedOut ? " TIMED_OUT" : ""}`];
   if (r.stdout) parts.push(`--- stdout ---\n${r.stdout}`);
   if (r.stderr) parts.push(`--- stderr ---\n${r.stderr}`);
   if (!r.stdout && !r.stderr) parts.push("(no output)");
+  if (failed) parts.push("# NOTE: this command failed. Diagnose the error above before any retry; do not resend it unchanged.");
   return parts.join("\n");
 }
 
@@ -431,6 +454,9 @@ export async function runAgent({ runId, agentId, agentName, model, objective, sc
   // a confirmed finding from an unbacked claim.
   let commandsRun = 0;
   let commandsOk = 0;
+  // Remember each command's outcome this run, to refuse re-running an identical
+  // command that already failed (forces the agent to diagnose and change, not loop).
+  const cmdHistory = new Map();
   // Guardrail blocks: commands stopped by scope / policy / approval. These are
   // authorization boundaries, not technical failures, so the orchestrator must
   // escalate them to a human — never "retry around" them.
@@ -477,7 +503,7 @@ export async function runAgent({ runId, agentId, agentName, model, objective, sc
         break;
       }
 
-      const ctx = { scope, agentConfig, runParams, agentId, runId };
+      const ctx = { scope, agentConfig, runParams, agentId, runId, cmdHistory };
       let result;
       switch (name) {
         case "run_command":

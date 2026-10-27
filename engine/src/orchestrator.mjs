@@ -16,6 +16,7 @@ import { log } from "./logger.mjs";
 import { query } from "./db.mjs";
 import { config } from "./config.mjs";
 import { buildHandoff, confirmFindings, decideSuccess, injectHandoff, triageUnverified, validatePlan, verifyHandoff, verifySubtask } from "./verify.mjs";
+import { extractTags, recallLessons, recordLesson, renderLessons } from "./lessons.mjs";
 
 const MAX_SUBTASKS = 5;
 // Extra re-planning rounds after the first pass, for subtasks that fail for
@@ -80,6 +81,10 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
   }
 
   // 1) PLAN -----------------------------------------------------------------
+  // Bring past experience into the team meeting: lessons from similar objectives.
+  const lessonBlock = renderLessons(await recallLessons(objective));
+  if (lessonBlock) await log({ agentId, runId, level: "info", message: `HYDRA recalled ${lessonBlock.split("\n- ").length - 1} past lesson(s) for planning.` });
+
   const rosterDesc = available
     .map((n) => {
       const r = roster.get(n);
@@ -94,7 +99,8 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
     `Split it into 1-${MAX_SUBTASKS} concrete subtasks, each assigned to exactly ONE agent by its exact name. ` +
     `Only these agents exist:\n${rosterDesc}\n\n` +
     `Order subtasks logically (planning/recon first, analysis/synthesis later). Keep each task specific and within the authorized scope. ` +
-    `Respond ONLY with JSON: {"plan":[{"agent":"<name>","task":"<concrete subtask>"}]}`;
+    `Respond ONLY with JSON: {"plan":[{"agent":"<name>","task":"<concrete subtask>"}]}` +
+    lessonBlock;
 
   let plan = [];
   try {
@@ -201,7 +207,8 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
       `You are HYDRA. Some subtasks did not produce a verified result for TECHNICAL reasons (not authorization). ` +
       `Propose a NEW plan that tries DIFFERENT, in-scope, authorized approaches to close the gaps. ` +
       `Do NOT attempt to bypass scope, policy, or approval boundaries — those are hard limits; if a gap needs them, leave it out. ` +
-      `Only these agents exist:\n${rosterDesc}\n\nRespond ONLY with JSON: {"plan":[{"agent":"<name>","task":"<concrete subtask>"}]}`;
+      `Only these agents exist:\n${rosterDesc}\n\nRespond ONLY with JSON: {"plan":[{"agent":"<name>","task":"<concrete subtask>"}]}` +
+      lessonBlock;
     let rplan = [];
     try {
       const r = await chat({ model: planModel, messages: [
@@ -244,7 +251,8 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
     `You are HYDRA. Integrate the team's subtask results into ONE unified answer for the commander. ` +
     `Resolve conflicts, remove redundancy, and be faithful to what each agent actually found (do not invent results). ` +
     `Only call a vulnerability CONFIRMED if it is marked confirmed below; present the rest as unverified leads. ` +
-    `Respond strictly as JSON: {"summary":"...","reasoning_notes":["..."],"confidence":0.0,"limitations":["..."],"content":"..."}`;
+    `Also distil ONE concrete lesson for next time in "lessons_learned": the main problem or limitation the team hit and how to handle it (a reusable fix, or a boundary to respect). ` +
+    `Respond strictly as JSON: {"summary":"...","reasoning_notes":["..."],"confidence":0.0,"limitations":["..."],"content":"...","lessons_learned":"..."}`;
   const synthUser =
     `Objective:\n${objective}\n\nSubtask results (with verification):\n` +
     results
@@ -277,6 +285,20 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
     message: `HYDRA verification: ${success.reason}; findings ${confirmedFindings.length} confirmed, ${unconfirmedFindings.length} unverified over ${results.length} subtasks` +
       (needsAuthorization.length ? `; ${needsAuthorization.length} need human authorization.` : "."),
     context: { success, confirmed: confirmedFindings.length, unconfirmed: unconfirmedFindings.length, handoffs, needsAuthorization },
+  });
+
+  // Learn: store one lesson so future runs plan with this experience. Prefer the
+  // model's distilled lesson; fall back to a factual summary of what happened.
+  const fallbackLesson =
+    (needsAuthorization.length ? `hit authorization limits (${needsAuthorization.map((e) => e.agent).join(", ")}); plan around them or request approval first. ` : "") +
+    (unconfirmedFindings.length ? `${unconfirmedFindings.length} finding(s) were claimed without evidence — require a successful command before confirming. ` : "") +
+    `${success.reason}.`;
+  await recordLesson({
+    kind: needsAuthorization.length ? "limitation" : "retrospective",
+    tags: extractTags(objective).join(" "),
+    problem: status === "succeeded" ? null : "the run did not fully succeed",
+    solution: (typeof structured?.lessons_learned === "string" && structured.lessons_learned.trim()) || fallbackLesson,
+    runId,
   });
 
   return {
