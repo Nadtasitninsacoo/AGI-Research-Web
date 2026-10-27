@@ -143,17 +143,24 @@ export function StrategicMap() {
       // for zooming to rooftops/houses. Kept in a SEPARATE pane above the base so
       // the dark CSS filter (scoped to the default tile pane) never inverts it,
       // and so OSM shows beneath any gaps. maxNativeZoom caps real tile requests
-      // at the provider's deepest level (z18); z19-22 are upscaled from it so the
+      // at the provider's deepest level (z19); z20-22 are upscaled from it so the
       // user can keep zooming closer (blurry past native, but no blank tiles).
+      // detectRetina pulls double-resolution tiles on high-DPI screens for clarity.
       m.createPane("sat");
       m.getPane("sat")!.style.zIndex = "250";
       satTiles.current = leaflet.tileLayer(
         "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        { pane: "sat", maxZoom: 22, maxNativeZoom: 18, attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics" },
+        {
+          pane: "sat",
+          maxZoom: 22,
+          maxNativeZoom: 19,     // Esri serves real z19 imagery almost everywhere — one level sharper than before
+          detectRetina: true,    // on high-DPI screens, fetch double-resolution tiles so imagery looks crisp
+          attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics",
+        },
       );
       satLabels.current = leaflet.tileLayer(
         "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-        { pane: "sat", maxZoom: 22, maxNativeZoom: 18, attribution: "" },
+        { pane: "sat", maxZoom: 22, maxNativeZoom: 19, detectRetina: true, attribution: "" },
       );
 
       darkTiles.current.addTo(m); // base is always on
@@ -339,7 +346,7 @@ export function StrategicMap() {
     if (!leaflet || !m) return;
     setLocMsg("");
     setLocating(true);
-    m.locate({ setView: true, maxZoom: 18, enableHighAccuracy: true, timeout: 10_000 });
+    m.locate({ setView: true, maxZoom: 19, enableHighAccuracy: true, timeout: 10_000 });
     m.once("locationfound", (e: LType.LocationEvent) => {
       setLocating(false);
       // Turn on satellite imagery immediately (don't wait for the React effect),
