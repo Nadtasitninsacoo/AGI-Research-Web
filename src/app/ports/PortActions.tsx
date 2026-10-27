@@ -33,7 +33,7 @@ export function PortsTable({ rows }: { rows: SavedPort[] }) {
   const [pending, start] = useTransition();
   const ids = useMemo(() => rows.map((r) => r.id), [rows]);
   const allOn = sel.size > 0 && ids.every((id) => sel.has(id));
-  const toggle = (id: number) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggle = (id: number) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toggleAll = () => setSel((s) => (ids.every((id) => s.has(id)) ? new Set() : new Set(ids)));
   const delOne = (id: number) => start(async () => { await deletePorts([id]); setSel((s) => { const n = new Set(s); n.delete(id); return n; }); });
   const delSel = () => start(async () => { await deletePorts([...sel]); setSel(new Set()); });
