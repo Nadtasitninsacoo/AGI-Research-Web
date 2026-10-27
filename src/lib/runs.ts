@@ -21,14 +21,31 @@ export async function getRunSnapshot(id: number): Promise<ApiResult<RunSnapshot>
   };
 }
 
-/** GET /api/runs/:id has no params/names; find them in the experiment's run list. */
+/**
+ * GET /api/runs/:id has no params/names; find them in the experiment's run list.
+ * This is cosmetic (names + prompt) and must not stall the page: the caller
+ * streams it. We fetch the first page, then any remaining pages in PARALLEL, so
+ * latency is ~2 round-trips regardless of how many runs the experiment has
+ * (instead of up to 10 sequential ones).
+ */
 export async function findRunRow(id: number, experimentId: number): Promise<Run | null> {
-  for (let offset = 0; offset < 1000; offset += 100) {
-    const res = await apiGet<Paginated<Run>>("/api/runs", { experimentId, limit: 100, offset });
-    if (!res.ok) return null;
-    const hit = res.data.data.find((r) => r.id === id);
-    if (hit) return hit;
-    if (offset + 100 >= res.data.pagination.total) return null;
+  const first = await apiGet<Paginated<Run>>("/api/runs", { experimentId, limit: 100, offset: 0 });
+  if (!first.ok) return null;
+  const hit = first.data.data.find((r) => r.id === id);
+  if (hit) return hit;
+
+  const total = first.data.pagination.total;
+  const offsets: number[] = [];
+  for (let offset = 100; offset < total && offset < 1000; offset += 100) offsets.push(offset);
+  if (!offsets.length) return null;
+
+  const pages = await Promise.all(
+    offsets.map((offset) => apiGet<Paginated<Run>>("/api/runs", { experimentId, limit: 100, offset })),
+  );
+  for (const page of pages) {
+    if (!page.ok) continue;
+    const found = page.data.data.find((r) => r.id === id);
+    if (found) return found;
   }
   return null;
 }

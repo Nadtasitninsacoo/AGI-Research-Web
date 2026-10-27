@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, use, useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { StatusTag } from "@/components/hud/StatusTag";
 import { Radar } from "@/components/hud/Radar";
 import { FlowPanel } from "@/components/hud/FlowPanel";
@@ -17,7 +17,33 @@ type Info = { experimentName: string | null; agentName: string | null; params: J
 
 const show = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v, null, 2));
 
-export function RunLive({ initial, info }: { initial: RunSnapshot; info: Info }) {
+/** Streamed cosmetic cells — they wait on the run-list lookup without blocking
+ *  the live panels, which render from the snapshot immediately. */
+function ExperimentName({ promise, fallbackId }: { promise: Promise<Info>; fallbackId: number }) {
+  return <>{use(promise).experimentName ?? `#${fallbackId}`}</>;
+}
+function AgentName({ promise }: { promise: Promise<Info> }) {
+  return <>{use(promise).agentName ?? "—"}</>;
+}
+function ParamsBlock({ promise }: { promise: Promise<Info> }) {
+  const params = use(promise).params;
+  const prompt = params && typeof params.prompt === "string" ? params.prompt : null;
+  const otherParams = params ? Object.entries(params).filter(([k]) => k !== "prompt") : [];
+  return (
+    <>
+      <h3 className="sub">PROMPT</h3>
+      {prompt !== null ? <pre className="block">{prompt}</pre> : <p className="muted">no prompt recorded</p>}
+      {otherParams.length > 0 && (
+        <>
+          <h3 className="sub">OTHER PARAMS</h3>
+          <pre className="block">{show(Object.fromEntries(otherParams))}</pre>
+        </>
+      )}
+    </>
+  );
+}
+
+export function RunLive({ initial, infoPromise }: { initial: RunSnapshot; infoPromise: Promise<Info> }) {
   const [snap, setSnap] = useState(initial);
   const [stale, setStale] = useState(false);
   const { run, logs, logsTotal, evaluations } = snap;
@@ -25,7 +51,7 @@ export function RunLive({ initial, info }: { initial: RunSnapshot; info: Info })
   const id = run.id;
 
   const pipeline = buildPipeline(logs, run.status, evaluations.length);
-  const modelLabel = info.agentName ?? `#${run.experimentId}`;
+  const modelLabel = `#${run.experimentId}`;
 
   // Toasts: pop one per new finding, and one when the run reaches a final state.
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -97,9 +123,6 @@ export function RunLive({ initial, info }: { initial: RunSnapshot; info: Info })
     return res;
   }, null);
 
-  const prompt = info.params && typeof info.params.prompt === "string" ? info.params.prompt : null;
-  const otherParams = info.params ? Object.entries(info.params).filter(([k]) => k !== "prompt") : [];
-
   return (
     <>
       <header className="hero">
@@ -132,9 +155,9 @@ export function RunLive({ initial, info }: { initial: RunSnapshot; info: Info })
         )}
         <dl className="kv">
           <dt>EXPERIMENT</dt>
-          <dd>{info.experimentName ?? `#${run.experimentId}`}</dd>
+          <dd><Suspense fallback={<span className="muted">…</span>}><ExperimentName promise={infoPromise} fallbackId={run.experimentId} /></Suspense></dd>
           <dt>AGENT</dt>
-          <dd>{info.agentName ?? "—"}</dd>
+          <dd><Suspense fallback={<span className="muted">…</span>}><AgentName promise={infoPromise} /></Suspense></dd>
           <dt>CREATED</dt>
           <dd>{fmtDate(run.createdAt)}</dd>
           <dt>STARTED</dt>
@@ -159,14 +182,9 @@ export function RunLive({ initial, info }: { initial: RunSnapshot; info: Info })
 
       <section className="panel span-7">
         <header className="panel-head"><span>02 // INPUT / OUTPUT</span><em>PARAMS · METRICS</em></header>
-        <h3 className="sub">PROMPT</h3>
-        {prompt !== null ? <pre className="block">{prompt}</pre> : <p className="muted">no prompt recorded</p>}
-        {otherParams.length > 0 && (
-          <>
-            <h3 className="sub">OTHER PARAMS</h3>
-            <pre className="block">{show(Object.fromEntries(otherParams))}</pre>
-          </>
-        )}
+        <Suspense fallback={<p className="muted">loading params…</p>}>
+          <ParamsBlock promise={infoPromise} />
+        </Suspense>
         {run.errorMessage && (
           <>
             <h3 className="sub">ERROR</h3>

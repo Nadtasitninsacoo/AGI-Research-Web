@@ -36,18 +36,17 @@ async function RunContent({ params }: { params: PageProps<"/runs/[id]">["params"
     );
   }
 
-  const row = await findRunRow(id, snap.data.run.experimentId);
+  // Cosmetic names + prompt. We do NOT await this: the live panels render from
+  // the snapshot immediately, and these stream in via Suspense inside RunLive.
+  const infoPromise = findRunRow(id, snap.data.run.experimentId).then((row) => ({
+    experimentName: row?.experimentName ?? null,
+    agentName: row?.agentName ?? null,
+    params: row?.params ?? null,
+  }));
 
   return (
     <PageFrame title={`RUN #${id}`} online>
-      <RunLive
-        initial={snap.data}
-        info={{
-          experimentName: row?.experimentName ?? null,
-          agentName: row?.agentName ?? null,
-          params: row?.params ?? null,
-        }}
-      />
+      <RunLive initial={snap.data} infoPromise={infoPromise} />
     </PageFrame>
   );
 }
