@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useCallback, useEffect, useRef, useState } from "react";
 import type * as LType from "leaflet";
+import * as mgrs from "mgrs";
 import { launchCommandAction } from "../command/actions";
 import { phoneAreaAction } from "./actions";
 import { Icon } from "@/components/Icon";
@@ -89,6 +90,32 @@ function patchPrefs(patch: MapPrefs) {
   try { localStorage.setItem(MAP_PREFS_KEY, JSON.stringify({ ...loadPrefs(), ...patch })); } catch { /* storage blocked */ }
 }
 
+// Military Grid Reference System — the coordinate standard NATO/militaries use.
+// forward([lon,lat], 5) gives 1-metre precision; we group it for readability:
+// "47P PR 65931 20229" = zone+band, 100 km square, easting, northing.
+function mgrsStr(lat: number, lon: number): string {
+  try {
+    const s = mgrs.forward([lon, lat], 5);
+    const m = s.match(/^(\d{1,2}[C-X])([A-Z]{2})(\d+)$/);
+    if (!m) return s;
+    const d = m[3], h = d.length / 2;
+    return `${m[1]} ${m[2]} ${d.slice(0, h)} ${d.slice(h)}`;
+  } catch { return "—"; }
+}
+
+// Persisted map annotations (marks + measurement path), per-browser, fail-safe.
+const ANNOT_KEY = "agi.map.annot.v1";
+type Annot = { marks: [number, number][]; measure: [number, number][] };
+function loadAnnot(): Annot {
+  try {
+    const a = JSON.parse(localStorage.getItem(ANNOT_KEY) || "{}");
+    return { marks: Array.isArray(a.marks) ? a.marks : [], measure: Array.isArray(a.measure) ? a.measure : [] };
+  } catch { return { marks: [], measure: [] }; }
+}
+function saveAnnotRaw(a: Annot) {
+  try { localStorage.setItem(ANNOT_KEY, JSON.stringify(a)); } catch { /* storage blocked */ }
+}
+
 export function StrategicMap() {
   const [state, action, pending] = useActionState(launchCommandAction, null);
 
@@ -131,9 +158,11 @@ export function StrategicMap() {
   const satGoogle = useRef<LType.TileLayer | null>(null);
   const satMapbox = useRef<LType.TileLayer | null>(null);
   const satEsri = useRef<LType.TileLayer | null>(null);
-  const satLabels = useRef<LType.TileLayer | null>(null);
+  const satLabels = useRef<LType.TileLayer | null>(null);       // Esri reference labels (any provider)
+  const satGoogleLabels = useRef<LType.TileLayer | null>(null); // Google hybrid labels (roads + Thai names)
   const stageRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLSpanElement>(null); // live cursor coords, updated without re-render
+  const mgrsRef = useRef<HTMLSpanElement>(null);   // live MGRS grid readout, updated without re-render
   // Always-current mode for the stable map click handler.
   const modeRef = useRef<Mode>(mode);
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -196,6 +225,12 @@ export function StrategicMap() {
         "https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
         { pane: "sat", subdomains: ["0", "1", "2", "3"], maxZoom: 22, maxNativeZoom: 20, attribution: "Imagery &copy; Google" },
       );
+      // Google hybrid labels (lyrs=h): transparent roads + place/soi names, aligned
+      // to Google imagery — used instead of the Esri label layer when on Google.
+      satGoogleLabels.current = leaflet.tileLayer(
+        "https://mt{s}.google.com/vt/lyrs=h&x={x}&y={y}&z={z}",
+        { pane: "sat", subdomains: ["0", "1", "2", "3"], maxZoom: 22, maxNativeZoom: 20, attribution: "" },
+      );
 
       // Mapbox (only when a token is set): real high-res imagery to z22 with full
       // global coverage. @2x retina 512px tiles kept aligned with zoomOffset -1.
@@ -246,9 +281,29 @@ export function StrategicMap() {
       // Live cursor coordinates — write straight to the DOM node to avoid a
       // React re-render on every mousemove.
       m.on("mousemove", (e: LType.LeafletMouseEvent) => {
-        if (cursorRef.current) cursorRef.current.textContent = `${fmt(e.latlng.lat)}, ${fmt(normLon(e.latlng.lng))}`;
+        const lat = e.latlng.lat, lon = normLon(e.latlng.lng);
+        if (cursorRef.current) cursorRef.current.textContent = `${fmt(lat)}, ${fmt(lon)}`;
+        if (mgrsRef.current) mgrsRef.current.textContent = mgrsStr(lat, lon);
       });
       m.on("dblclick", () => {}); // reserved; dblclick zoom stays default
+
+      // Restore saved marks + measurement path from a previous session.
+      const annot = loadAnnot();
+      for (const [la, ln] of annot.marks) addMark(leaflet.latLng(la, ln));
+      if (annot.measure.length) {
+        const pts = annot.measure.map(([la, ln]) => leaflet.latLng(la, ln));
+        pts.forEach((ll) => leaflet.circleMarker(ll, { radius: 3, className: "lf-vertex" }).addTo(measureLayer.current!));
+        measureLine.current = leaflet.polyline(pts, { className: "lf-measure-line" }).addTo(measureLayer.current!);
+        measurePts.current = pts;
+        let total = 0;
+        for (let i = 1; i < pts.length; i++) {
+          total += pts[i - 1].distanceTo(pts[i]);
+          leaflet.tooltip({ permanent: true, direction: "right", className: "lf-tip lf-tip-dist" })
+            .setLatLng(pts[i]).setContent(`${kmLabel(total)} · ${bearing(pts[i - 1], pts[i]).toFixed(0)}°`).addTo(measureLayer.current!);
+        }
+        setMeasureM(total);
+        setHasData(true);
+      }
     })();
 
     return () => {
@@ -260,6 +315,36 @@ export function StrategicMap() {
   }, []);
 
   // --- Click behaviour depends on the active tool ---
+  // Serialize marks + measurement path so they survive a reload.
+  const saveAnnot = useCallback(() => {
+    const marks: [number, number][] = [];
+    marksLayer.current?.eachLayer((lyr) => {
+      const ll = (lyr as LType.Marker).getLatLng?.();
+      if (ll) marks.push([ll.lat, normLon(ll.lng)]);
+    });
+    saveAnnotRaw({ marks, measure: measurePts.current.map((p) => [p.lat, normLon(p.lng)]) });
+  }, []);
+
+  // Place a draggable mark (shared by click, AI command and restore) with its
+  // tooltip, drag-relabel, right-click-remove and persistence wired in.
+  const addMark = useCallback((latlng: LType.LatLng, labelText?: string) => {
+    const leaflet = L.current;
+    if (!leaflet || !marksLayer.current) return;
+    const marker = leaflet.marker(latlng, { icon: pinIcon(leaflet, "mark"), draggable: true }).addTo(marksLayer.current);
+    const auto = () => `${fmt(marker.getLatLng().lat)}, ${fmt(normLon(marker.getLatLng().lng))}`;
+    marker.bindTooltip(labelText ?? auto(), { direction: "top", offset: [0, -10], className: "lf-tip" });
+    if (!labelText) marker.on("drag", () => marker.setTooltipContent(auto()));
+    marker.on("dragend", saveAnnot);
+    marker.on("contextmenu", () => {
+      marksLayer.current!.removeLayer(marker);
+      setMarkCount((c) => c - 1);
+      setHasData((marksLayer.current?.getLayers().length ?? 0) > 0 || measurePts.current.length > 0);
+      saveAnnot();
+    });
+    setMarkCount((c) => c + 1);
+    setHasData(true);
+  }, [saveAnnot]);
+
   const handleClick = useCallback((latlng: LType.LatLng) => {
     const leaflet = L.current;
     const m = map.current;
@@ -280,15 +365,8 @@ export function StrategicMap() {
     }
 
     if (modeRef.current === "mark") {
-      const marker = leaflet
-        .marker(latlng, { icon: pinIcon(leaflet, "mark"), draggable: true })
-        .addTo(marksLayer.current!);
-      const label = () => `${fmt(marker.getLatLng().lat)}, ${fmt(normLon(marker.getLatLng().lng))}`;
-      marker.bindTooltip(label(), { direction: "top", offset: [0, -10], className: "lf-tip" });
-      marker.on("drag", () => marker.setTooltipContent(label()));
-      marker.on("contextmenu", () => { marksLayer.current!.removeLayer(marker); setMarkCount((c) => c - 1); });
-      setMarkCount((c) => c + 1);
-      setHasData(true);
+      addMark(latlng);
+      saveAnnot();
       return;
     }
 
@@ -314,7 +392,8 @@ export function StrategicMap() {
         .setContent(`${kmLabel(total)} · ${bearing(prev, latlng).toFixed(0)}° · +${kmLabel(seg)}`)
         .addTo(measureLayer.current!);
     }
-  }, []);
+    saveAnnot();
+  }, [addMark, saveAnnot]);
 
   // --- Place search (Nominatim, Thai + English), debounced ---
   useEffect(() => {
@@ -385,14 +464,15 @@ export function StrategicMap() {
     const marks = marksLayer.current?.getLayers().length ?? 0;
     setHasData(marks > 0 || measurePts.current.length > 0);
   }, []);
-  const clearMarks = useCallback(() => { marksLayer.current?.clearLayers(); setMarkCount(0); refreshHasData(); }, [refreshHasData]);
+  const clearMarks = useCallback(() => { marksLayer.current?.clearLayers(); setMarkCount(0); refreshHasData(); saveAnnot(); }, [refreshHasData, saveAnnot]);
   const clearMeasure = useCallback(() => {
     measureLayer.current?.clearLayers();
     measurePts.current = [];
     measureLine.current = null;
     setMeasureM(0);
     refreshHasData();
-  }, [refreshHasData]);
+    saveAnnot();
+  }, [refreshHasData, saveAnnot]);
 
   // Remember the imagery configuration across sessions.
   useEffect(() => { patchPrefs({ layer, provider: satProvider, labels: showLabels }); }, [layer, satProvider, showLabels]);
@@ -405,25 +485,28 @@ export function StrategicMap() {
   }, [satProvider]);
 
   // The OSM base stays on always; this shows/hides the active satellite overlay
-  // (and its label layer) on top of it, and swaps providers when satProvider
-  // changes (removing every inactive one so they never stack).
+  // and its label layer on top of it, swaps providers (removing every inactive
+  // imagery/label layer so they never stack), and uses Google's own hybrid labels
+  // when on Google imagery (crisp roads + Thai soi names), Esri labels otherwise.
   useEffect(() => {
-    const m = map.current, sl = satLabels.current;
+    const m = map.current;
     if (!m) return;
-    const all = [satGoogle.current, satMapbox.current, satEsri.current];
+    const allImg = [satGoogle.current, satMapbox.current, satEsri.current];
+    const allLbl = [satLabels.current, satGoogleLabels.current];
     const active = activeSat();
+    const labels = satProvider === "google" ? satGoogleLabels.current : satLabels.current;
     if (layer === "sat") {
-      for (const t of all) if (t && t !== active && m.hasLayer(t)) m.removeLayer(t);
+      for (const t of allImg) if (t && t !== active && m.hasLayer(t)) m.removeLayer(t);
       if (active && !m.hasLayer(active)) active.addTo(m);
-      if (sl) {
-        if (showLabels && !m.hasLayer(sl)) sl.addTo(m);
-        if (!showLabels && m.hasLayer(sl)) m.removeLayer(sl);
+      for (const t of allLbl) if (t && t !== labels && m.hasLayer(t)) m.removeLayer(t);
+      if (labels) {
+        if (showLabels && !m.hasLayer(labels)) labels.addTo(m);
+        if (!showLabels && m.hasLayer(labels)) m.removeLayer(labels);
       }
     } else {
-      for (const t of all) if (t && m.hasLayer(t)) m.removeLayer(t);
-      if (sl && m.hasLayer(sl)) m.removeLayer(sl);
+      for (const t of [...allImg, ...allLbl]) if (t && m.hasLayer(t)) m.removeLayer(t);
     }
-  }, [layer, showLabels, activeSat]);
+  }, [layer, showLabels, satProvider, activeSat]);
 
   // "Find my location" — browser GPS/geolocation, then zoom in close (house level).
   const locate = useCallback(() => {
@@ -438,7 +521,8 @@ export function StrategicMap() {
       // so "see my house" works right away. OSM base stays beneath as fallback.
       const sat = activeSat();
       if (sat && !m.hasLayer(sat)) sat.addTo(m);
-      if (showLabels && satLabels.current && !m.hasLayer(satLabels.current)) satLabels.current.addTo(m);
+      const labels = satProvider === "google" ? satGoogleLabels.current : satLabels.current;
+      if (showLabels && labels && !m.hasLayer(labels)) labels.addTo(m);
       setLayer("sat");
       setAccuracy(e.accuracy);
       if (meMarker.current) meMarker.current.setLatLng(e.latlng);
@@ -452,7 +536,7 @@ export function StrategicMap() {
       setLocating(false);
       setLocMsg(/denied|permission/i.test(e.message) ? "ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง" : "หาตำแหน่งไม่สำเร็จ");
     });
-  }, [showLabels, activeSat]);
+  }, [showLabels, activeSat, satProvider]);
 
   // Fullscreen the map stage (Fullscreen API), re-fitting Leaflet afterwards.
   const toggleFullscreen = useCallback(() => {
@@ -607,16 +691,13 @@ export function StrategicMap() {
       setMeasureM(total);
       setMode("measure");
       setHasData(true);
+      saveAnnot();
       m.fitBounds(leaflet.latLngBounds(pts), { padding: [60, 60], maxZoom: 15 });
       setAiMsg(`ลากเส้น ${found.map((f) => f.label).join(" → ")} · รวม ${kmLabel(total)}` + (missed.length ? ` (ข้าม: ${missed.join(", ")})` : ""));
     } else {
-      // mark each place
-      found.forEach((f) => {
-        const marker = leaflet.marker(f.ll, { icon: pinIcon(leaflet, "mark"), draggable: true }).addTo(marksLayer.current!);
-        marker.bindTooltip(f.label, { direction: "top", offset: [0, -10], className: "lf-tip" });
-        marker.on("contextmenu", () => { marksLayer.current!.removeLayer(marker); setMarkCount((c) => c - 1); refreshHasData(); });
-        setMarkCount((c) => c + 1);
-      });
+      // mark each place (persisted, same behaviour as a manual mark)
+      found.forEach((f) => addMark(f.ll, f.label));
+      saveAnnot();
       setMode("mark");
       setHasData(true);
       if (found.length === 1) m.setView(found[0].ll, 13);
@@ -624,7 +705,7 @@ export function StrategicMap() {
       setAiMsg(`มาร์ค ${found.length} จุด: ${found.map((f) => f.label).join(", ")}` + (missed.length ? ` (ข้าม: ${missed.join(", ")})` : ""));
     }
     setAiBusy(false);
-  }, [aiCmd, clearMarks, clearMeasure, refreshHasData]);
+  }, [aiCmd, clearMarks, clearMeasure, addMark, saveAnnot]);
 
   const prompt = pt
     ? `สแกนพอร์ตและบริการของ ${host || "(target)"} (พิกัด ${fmt(pt.lat)}, ${fmt(pt.lon)}) แล้วรายงานพอร์ตที่เปิด`
@@ -725,10 +806,12 @@ export function StrategicMap() {
           <span className="smap-zoom">z{zoom}</span>
         </div>
 
-        {/* Live cursor coordinate HUD */}
+        {/* Live cursor coordinate HUD — lat/lon plus military grid (MGRS) */}
         <div className="lf-coordhud">
           <span className="lf-coordhud-k">LAT/LON</span>
           <span ref={cursorRef} className="lf-coordhud-v">—</span>
+          <span className="lf-coordhud-k">MGRS</span>
+          <span ref={mgrsRef} className="lf-coordhud-v">—</span>
         </div>
 
         {locMsg && <div className="lf-readout lf-readout-err">{locMsg}</div>}
@@ -776,7 +859,7 @@ export function StrategicMap() {
         <div className="smap-coord">
           {pt ? (
             <>
-              พิกัดที่ล็อก: <b>{fmt(pt.lat)}°, {fmt(pt.lon)}°</b>
+              พิกัดที่ล็อก: <b>{fmt(pt.lat)}°, {fmt(pt.lon)}°</b> · MGRS <b>{mgrsStr(pt.lat, pt.lon)}</b>
               <button type="button" className="lf-mini" onClick={copyCoord}><Icon name="copy" /> คัดลอก</button>
             </>
           ) : "เลือกโหมด ล็อกเป้า แล้วคลิกบนแผนที่เพื่อล็อกพิกัด"}
