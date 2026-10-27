@@ -5,7 +5,7 @@ import { useActionState, useCallback, useEffect, useRef, useState } from "react"
 import type * as LType from "leaflet";
 import * as mgrs from "mgrs";
 import { launchCommandAction } from "../command/actions";
-import { phoneAreaAction } from "./actions";
+import { phoneAreaAction, geoipAction } from "./actions";
 import { Icon } from "@/components/Icon";
 
 type Mode = "scan" | "mark" | "measure";
@@ -141,6 +141,8 @@ export function StrategicMap() {
   const [aiCmd, setAiCmd] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMsg, setAiMsg] = useState("");
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoMsg, setGeoMsg] = useState("");
 
   // Leaflet objects live in a ref so React re-renders never recreate the map.
   const elRef = useRef<HTMLDivElement>(null);
@@ -154,6 +156,7 @@ export function StrategicMap() {
   const searchMarker = useRef<LType.Marker | null>(null);
   const meMarker = useRef<LType.Marker | null>(null);
   const meCircle = useRef<LType.Circle | null>(null);
+  const geoMarker = useRef<LType.Marker | null>(null); // pinned IP/host geolocation
   const darkTiles = useRef<LType.TileLayer | null>(null);
   const satGoogle = useRef<LType.TileLayer | null>(null);
   const satMapbox = useRef<LType.TileLayer | null>(null);
@@ -538,6 +541,30 @@ export function StrategicMap() {
     });
   }, [showLabels, activeSat, satProvider]);
 
+  // Geolocate the IP/host in the target field and pin its approximate position.
+  // This is OSINT only (DNS + geo-IP DB) — it does NOT scan or connect to the host.
+  const geoLocateIp = useCallback(async () => {
+    const q = host.trim();
+    if (!q || geoBusy) return;
+    setGeoBusy(true);
+    setGeoMsg("");
+    const r = await geoipAction(q);
+    setGeoBusy(false);
+    if (!r.ok) { setGeoMsg(r.message); return; }
+    const leaflet = L.current, m = map.current;
+    if (!leaflet || !m) return;
+    const ll = leaflet.latLng(r.lat, r.lon);
+    const where = [r.city, r.region, r.country].filter(Boolean).join(", ") || "ไม่ทราบเมือง";
+    const tip =
+      `${r.ip}${r.host ? ` (${r.host})` : ""}<br>${where}` +
+      `${r.isp ? `<br>${r.isp}` : ""}<br>MGRS ${mgrsStr(r.lat, r.lon)}`;
+    if (geoMarker.current) geoMarker.current.setLatLng(ll);
+    else geoMarker.current = leaflet.marker(ll, { icon: pinIcon(leaflet, "search"), zIndexOffset: 1200 }).addTo(m);
+    geoMarker.current.bindTooltip(tip, { permanent: true, direction: "top", offset: [0, -10], className: "lf-tip" }).openTooltip();
+    m.setView(ll, 11);
+    setGeoMsg(`${r.ip} → ${where}${r.isp ? ` · ${r.isp}` : ""}`);
+  }, [host, geoBusy]);
+
   // Fullscreen the map stage (Fullscreen API), re-fitting Leaflet afterwards.
   const toggleFullscreen = useCallback(() => {
     const el = stageRef.current;
@@ -869,6 +896,14 @@ export function StrategicMap() {
           <span>เป้าหมายที่อนุญาต (IP / host) — ใช้สแกนจริง</span>
           <input value={host} onChange={(e) => setHost(e.target.value)} placeholder="เช่น 10.10.10.5 หรือ app.lab.local หรือ 127.0.0.1" autoComplete="off" />
         </label>
+
+        {/* OSINT: geolocate the IP/host (DNS + geo-IP DB) and pin it. No scan. */}
+        <div className="smap-geo">
+          <button type="button" className="btn btn-sm btn-ghost" onClick={geoLocateIp} disabled={geoBusy || !host.trim()}>
+            <Icon name="locate" /> {geoBusy ? "กำลังหา..." : "ปักหมุดตำแหน่ง IP/host นี้"}
+          </button>
+          {geoMsg && <span className="smap-geo-msg">{geoMsg}</span>}
+        </div>
 
         <div className="form-foot">
           <button type="submit" className="btn btn-danger" disabled={pending || !pt || !host}>
