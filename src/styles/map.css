@@ -589,6 +589,9 @@
 .smap-geo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -4px; }
 .smap-geo-msg { font-size: 12px; color: var(--muted, #9aa0aa); font-variant-numeric: tabular-nums; }
 
+/* DB-IP area → IP-range dots */
+.lf-ipdot { fill: #f84646; fill-opacity: 0.55; stroke: #ffd0d0; stroke-width: 1; stroke-opacity: 0.8; }
+
 .smap-ports { max-height: 240px; overflow: auto; border: 1px solid var(--line, #26303d); border-radius: 6px; }
 .smap-ports table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .smap-ports th, .smap-ports td { text-align: left; padding: 5px 9px; border-bottom: 1px solid var(--line, #26303d); }

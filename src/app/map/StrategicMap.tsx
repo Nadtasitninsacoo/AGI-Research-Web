@@ -5,7 +5,7 @@ import { useActionState, useCallback, useEffect, useRef, useState } from "react"
 import type * as LType from "leaflet";
 import * as mgrs from "mgrs";
 import { launchCommandAction } from "../command/actions";
-import { phoneAreaAction, geoipAction, portScanAction, shodanSearchAction, internetdbAction, type PortRow } from "./actions";
+import { phoneAreaAction, geoipAction, portScanAction, shodanSearchAction, internetdbAction, ipRangesInBoundsAction, type PortRow } from "./actions";
 import { Icon } from "@/components/Icon";
 
 type Mode = "scan" | "mark" | "measure";
@@ -182,6 +182,7 @@ export function StrategicMap() {
   const meCircle = useRef<LType.Circle | null>(null);
   const geoMarker = useRef<LType.Marker | null>(null); // pinned IP/host geolocation
   const shodanLayer = useRef<LType.LayerGroup | null>(null); // Shodan OSINT host pins
+  const ipgeoLayer = useRef<LType.LayerGroup | null>(null); // DB-IP area → IP-range dots
   const darkTiles = useRef<LType.TileLayer | null>(null);
   const satGoogle = useRef<LType.TileLayer | null>(null);
   const satMapbox = useRef<LType.TileLayer | null>(null);
@@ -687,6 +688,37 @@ export function StrategicMap() {
     return `Shodan: ${r.place} — ปักหมุด ${plotted} host (พบทั้งหมด ${r.total}) · query: ${r.query}`;
   }, []);
 
+  // KEYLESS area → IP ranges: read the offline DB-IP index for the CURRENT map
+  // bounds and dot every IP-range location. Reading a public geolocation dataset,
+  // no scan, no key. Accuracy is city/district centroid — not street level.
+  const ipsInBounds = useCallback(async (): Promise<string> => {
+    const leaflet = L.current, m = map.current;
+    if (!leaflet || !m) return "แผนที่ยังไม่พร้อม";
+    const b = m.getBounds();
+    const r = await ipRangesInBoundsAction({ south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast() });
+    if (!r.ok) return r.message;
+    if (!ipgeoLayer.current) ipgeoLayer.current = leaflet.layerGroup().addTo(m);
+    ipgeoLayer.current.clearLayers();
+    for (const p of r.points) {
+      const tip = `<b>${p.city || "?"}, ${p.cc}</b><br>${p.count} ช่วง IP<br>เช่น ${p.samples.join(", ")}`;
+      leaflet
+        .circleMarker([p.lat, p.lon], { radius: Math.min(11, 3 + Math.log10(p.count + 1) * 3), className: "lf-ipdot" })
+        .bindTooltip(tip, { direction: "top", className: "lf-tip" })
+        .addTo(ipgeoLayer.current);
+    }
+    if (r.shownPoints === 0) return "ไม่พบช่วง IP ในกรอบนี้ (ลองซูมออก/ไปใกล้เมือง)";
+    return `IP ในกรอบนี้: ${r.totalRanges} ช่วง · ${r.shownPoints} จุด${r.capped ? " · แสดงบางส่วน ซูมเข้าอีกเพื่อครบ" : ""} (ข้อมูล DB-IP ระดับเขต ไม่ใช่ระดับซอย)`;
+  }, []);
+
+  // Toolbar handler: run the area IP lookup and surface the result in the AI line.
+  const runIpsInBounds = useCallback(async () => {
+    setAiBusy(true);
+    setAiMsg("กำลังดึง IP ในกรอบแผนที่ (DB-IP · ฟรี)...");
+    const msg = await ipsInBounds();
+    setAiMsg(msg);
+    setAiBusy(false);
+  }, [ipsInBounds]);
+
   // Fullscreen the map stage (Fullscreen API), re-fitting Leaflet afterwards.
   const toggleFullscreen = useCallback(() => {
     const el = stageRef.current;
@@ -769,6 +801,7 @@ export function StrategicMap() {
       clearMeasure();
       if (searchMarker.current) { m.removeLayer(searchMarker.current); searchMarker.current = null; }
       shodanLayer.current?.clearLayers();
+      ipgeoLayer.current?.clearLayers();
       setAiMsg("ล้างแผนที่แล้ว");
       return;
     }
@@ -782,6 +815,17 @@ export function StrategicMap() {
     // Test keywords with the target removed, so a hostname that happens to
     // contain "nmap"/"scan" (e.g. scanme.nmap.org) can't fake a scan intent.
     const lcs = (reconTarget ? raw.split(reconTarget).join(" ") : raw).toLowerCase();
+
+    // KEYLESS area → IP ranges for the CURRENT map view (DB-IP offline index):
+    // "ไอพีในกรอบนี้", "ip พื้นที่นี้", "ไอพีตรงนี้", "แสดง ip ในแผนที่".
+    if (/(ไอพี|\bip\b)/i.test(lc) && /(ในกรอบ|กรอบนี้|พื้นที่นี้|แถวนี้|ตรงนี้|ในแผนที่|บริเวณนี้|แถบนี้|รอบนี้|ในจอ)/i.test(lc)) {
+      setAiBusy(true);
+      setAiMsg("กำลังดึง IP ในกรอบแผนที่ (DB-IP · ฟรี)...");
+      const msg = await ipsInBounds();
+      setAiMsg(msg);
+      setAiBusy(false);
+      return;
+    }
 
     // OSINT area lookup via Shodan: "shodan มอสโก", "หา host ในโตเกียว",
     // "ไอพีในลอนดอน". Only for AREAS (no IP/host in the command) — read-only.
@@ -937,7 +981,7 @@ export function StrategicMap() {
       setAiMsg(`มาร์ค ${found.length} จุด: ${found.map((f) => f.label).join(", ")}` + (missed.length ? ` (ข้าม: ${missed.join(", ")})` : ""));
     }
     setAiBusy(false);
-  }, [aiCmd, clearMarks, clearMeasure, addMark, saveAnnot, portScan, geoLocateIp, shodanArea, exposureLookup, host]);
+  }, [aiCmd, clearMarks, clearMeasure, addMark, saveAnnot, portScan, geoLocateIp, shodanArea, exposureLookup, ipsInBounds, host]);
 
   const prompt = pt
     ? `สแกนพอร์ตและบริการของ ${host || "(target)"} (พิกัด ${fmt(pt.lat)}, ${fmt(pt.lon)}) แล้วรายงานพอร์ตที่เปิด`
@@ -975,7 +1019,7 @@ export function StrategicMap() {
           value={aiCmd}
           onChange={(e) => setAiCmd(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !aiBusy) { e.preventDefault(); runAiCommand(); } }}
-          placeholder='สั่งไทยได้ เช่น "exposure 8.8.8.8" (ฟรี ไม่สแกน) · "สแกนพอร์ต 80,443 ของ 8.8.8.8" · "หา host ในมอสโก" · "ล้าง"'
+          placeholder='สั่งไทยได้ เช่น "ไอพีในกรอบนี้" (ฟรี) · "exposure 8.8.8.8" · "สแกนพอร์ต 80,443 ของ 8.8.8.8" · "ล้าง"'
           autoComplete="off"
           spellCheck={false}
           disabled={aiBusy}
@@ -1028,6 +1072,7 @@ export function StrategicMap() {
           <span className="lf-sep" />
           <button type="button" className="btn btn-sm btn-ghost" onClick={toggleFullscreen}>{isFs ? <><Icon name="minimize" /> ออก</> : <><Icon name="expand" /> เต็มจอ</>}</button>
           <button type="button" className="btn btn-sm btn-ghost" onClick={exportGeoJSON} disabled={!hasData}><Icon name="download" /> GeoJSON</button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={runIpsInBounds} disabled={aiBusy} title="แสดงช่วง IP ที่ geolocate อยู่ในกรอบแผนที่นี้ (DB-IP ฟรี ไม่สแกน)"><Icon name="target" /> IP พื้นที่</button>
         </div>
 
         {/* Zoom + reset */}

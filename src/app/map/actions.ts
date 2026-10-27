@@ -4,6 +4,9 @@ import { lookup } from "node:dns/promises";
 import net from "node:net";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { createReadStream, existsSync } from "node:fs";
+import { createInterface } from "node:readline";
+import { join } from "node:path";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { geocoder, carrier } from "libphonenumber-geo-carrier";
 
@@ -480,4 +483,70 @@ export async function internetdbAction(input: string): Promise<InternetDb> {
     const code = (err as { code?: string })?.code;
     return { ok: false, message: code === "ENOTFOUND" ? "resolve host ไม่สำเร็จ" : "ค้น InternetDB ล้มเหลว" };
   }
+}
+
+export type IpGeoPoint = { lat: number; lon: number; city: string; cc: string; count: number; samples: string[] };
+export type IpGeoResult =
+  | { ok: false; message: string }
+  | { ok: true; totalRanges: number; shownPoints: number; capped: boolean; points: IpGeoPoint[] };
+
+const int2ip = (n: number) =>
+  `${(n >>> 24) & 255}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}`;
+
+/**
+ * KEYLESS area → IP ranges. Reads the offline DB-IP City Lite index built by
+ * scripts/build-ipgeo.mjs and returns the IP ranges geolocated inside a map
+ * bounding box, grouped by point. This is a lookup of a public geolocation
+ * dataset — NO scanning, NO API key. IMPORTANT: IP geolocation is city/region
+ * level (points sit on city centroids), NOT street-accurate.
+ */
+export async function ipRangesInBoundsAction(b: {
+  south: number; west: number; north: number; east: number;
+}): Promise<IpGeoResult> {
+  const { south, west, north, east } = b ?? {};
+  if (![south, west, north, east].every((n) => Number.isFinite(n))) {
+    return { ok: false, message: "กรอบพิกัดไม่ถูกต้อง" };
+  }
+  if (north - south > 12 || east - west > 24) {
+    return { ok: false, message: "พื้นที่กว้างเกินไป — ซูมเข้าใกล้เมืองแล้วลองใหม่" };
+  }
+  const dir = join(process.cwd(), "data", "ipgeo", "bands");
+  if (!existsSync(dir)) {
+    return { ok: false, message: "ยังไม่ได้ build index — รัน: node scripts/build-ipgeo.mjs <dbip-city-lite.csv.gz>" };
+  }
+  const CAP = 600;
+  const groups = new Map<string, IpGeoPoint>();
+  let totalRanges = 0;
+  let capped = false;
+  try {
+    for (let band = Math.floor(south); band <= Math.floor(north); band++) {
+      const file = join(dir, `b${band}.ndjson`);
+      if (!existsSync(file)) continue;
+      const rl = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
+      for await (const line of rl) {
+        // startInt,endInt,lat,lon,cc,city
+        const c1 = line.indexOf(","), c2 = line.indexOf(",", c1 + 1);
+        const c3 = line.indexOf(",", c2 + 1), c4 = line.indexOf(",", c3 + 1), c5 = line.indexOf(",", c4 + 1);
+        if (c5 < 0) continue;
+        const lat = Number(line.slice(c2 + 1, c3));
+        const lon = Number(line.slice(c3 + 1, c4));
+        if (lat < south || lat > north || lon < west || lon > east) continue;
+        totalRanges++;
+        const key = `${lat},${lon}`;
+        let g = groups.get(key);
+        if (!g) {
+          if (groups.size >= CAP) { capped = true; continue; }
+          g = { lat, lon, city: line.slice(c5 + 1), cc: line.slice(c4 + 1, c5), count: 0, samples: [] };
+          groups.set(key, g);
+        }
+        g.count++;
+        if (g.samples.length < 6) g.samples.push(int2ip(Number(line.slice(0, c1))));
+      }
+      rl.close();
+    }
+  } catch {
+    return { ok: false, message: "อ่าน index ล้มเหลว" };
+  }
+  const points = [...groups.values()].sort((a, b2) => b2.count - a.count);
+  return { ok: true, totalRanges, shownPoints: points.length, capped, points };
 }

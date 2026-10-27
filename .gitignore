@@ -50,3 +50,6 @@ next-env.d.ts
 
 # engine runtime log (started from the dashboard button)
 engine-runtime.log
+
+# DB-IP City Lite derived index (178MB, built via scripts/build-ipgeo.mjs)
+/data/ipgeo/
