@@ -1,0 +1,25 @@
+{
+  "name": "agent-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/cli/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "node ../node_modules/eslint/bin/eslint.js src test agent.config.ts",
+    "test": "tsx --test \"test/unit/*.test.ts\"",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "smoke:1": "tsx test/smoke-step1.ts",
+    "smoke:3": "tsx test/scenarios/step3.ts",
+    "smoke:4": "tsx test/scenarios/step4.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.310",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
