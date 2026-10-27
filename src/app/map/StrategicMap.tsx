@@ -5,7 +5,7 @@ import { useActionState, useCallback, useEffect, useRef, useState } from "react"
 import type * as LType from "leaflet";
 import * as mgrs from "mgrs";
 import { launchCommandAction } from "../command/actions";
-import { phoneAreaAction, geoipAction, portScanAction, shodanSearchAction, type PortRow } from "./actions";
+import { phoneAreaAction, geoipAction, portScanAction, shodanSearchAction, internetdbAction, type PortRow } from "./actions";
 import { Icon } from "@/components/Icon";
 
 type Mode = "scan" | "mark" | "measure";
@@ -630,6 +630,29 @@ export function StrategicMap() {
     mk?.bindTooltip(label, { permanent: false, direction: "top", offset: [0, -10], className: "lf-tip" });
   }, [host, scanBusy]);
 
+  // KEYLESS OSINT exposure: Shodan InternetDB (free, no API key). Shows the open
+  // ports / CVEs already indexed for a host — WITHOUT scanning it. Fills the same
+  // ports table as the nmap scan. Returns a status string for the AI bar.
+  const exposureLookup = useCallback(async (targetArg?: string): Promise<string> => {
+    const q = (targetArg ?? host).trim();
+    if (!q) return "ใส่ IP/host ก่อน";
+    if (targetArg) setHost(targetArg);
+    setScanBusy(true);
+    setScanMsg(`กำลังดู exposure ${q} (InternetDB · ฟรี ไม่สแกน)...`);
+    setPorts(null);
+    const r = await internetdbAction(q);
+    setScanBusy(false);
+    if (!r.ok) { setScanMsg(r.message); return r.message; }
+    setPorts(r.ports.map((p) => ({ port: p, proto: "tcp", state: "open", service: "", version: "" })));
+    const vuln = r.vulns.length ? ` · ⚠ ${r.vulns.length} CVE (${r.vulns.slice(0, 4).join(", ")}${r.vulns.length > 4 ? "…" : ""})` : "";
+    const tags = r.tags.length ? ` · ${r.tags.slice(0, 4).join(", ")}` : "";
+    const m = r.ports.length
+      ? `${r.ip} (InternetDB ฟรี/ไม่สแกน): ${r.ports.length} พอร์ตเปิด${vuln}${tags}`
+      : `${r.ip}: InternetDB ไม่มีข้อมูล (ยังไม่ถูก index หรือไม่มีพอร์ตเปิด)`;
+    setScanMsg(m);
+    return m;
+  }, [host]);
+
   // OSINT: pull hosts Shodan has already indexed in an AREA and pin them.
   // Read-only — this does NOT scan; it reads Shodan's database. Returns a status
   // string for the AI bar to show.
@@ -778,6 +801,20 @@ export function StrategicMap() {
       return;
     }
 
+    // KEYLESS exposure lookup (InternetDB) for a single IP/host: "exposure 8.8.8.8",
+    // "internetdb 1.1.1.1", "ช่องโหว่ 8.8.8.8", "osint 8.8.8.8". No scan, no key.
+    const exposureIntent =
+      reconTarget !== "" &&
+      /(exposure|internetdb|internet\s*db|ช่องโหว่|cve|เปิดเผย|พอร์ตฟรี|osint)/i.test(lcs);
+    if (exposureIntent) {
+      setAiBusy(true);
+      setAiMsg(`กำลังดู exposure ${reconTarget} (InternetDB · ฟรี ไม่สแกน)...`);
+      const msg = await exposureLookup(reconTarget);
+      setAiMsg(msg);
+      setAiBusy(false);
+      return;
+    }
+
     const scanIntent =
       /(สแกนพอร์ต|สแกนพอร์ท|สแกนหาพอร์ต|สแกน\s*port|scan\s*ports?|port\s*scan|nmap|พอร์ตเปิด|open\s*ports?|เช็[คก]\s*พอร์ต|ตรวจ\s*พอร์ต|หา\s*พอร์ต|หา\s*port)/i.test(lcs) ||
       // generic: a "scan" verb plus either a real target or the word "port"
@@ -900,7 +937,7 @@ export function StrategicMap() {
       setAiMsg(`มาร์ค ${found.length} จุด: ${found.map((f) => f.label).join(", ")}` + (missed.length ? ` (ข้าม: ${missed.join(", ")})` : ""));
     }
     setAiBusy(false);
-  }, [aiCmd, clearMarks, clearMeasure, addMark, saveAnnot, portScan, geoLocateIp, shodanArea, host]);
+  }, [aiCmd, clearMarks, clearMeasure, addMark, saveAnnot, portScan, geoLocateIp, shodanArea, exposureLookup, host]);
 
   const prompt = pt
     ? `สแกนพอร์ตและบริการของ ${host || "(target)"} (พิกัด ${fmt(pt.lat)}, ${fmt(pt.lon)}) แล้วรายงานพอร์ตที่เปิด`
@@ -938,7 +975,7 @@ export function StrategicMap() {
           value={aiCmd}
           onChange={(e) => setAiCmd(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !aiBusy) { e.preventDefault(); runAiCommand(); } }}
-          placeholder='สั่งไทยได้ เช่น "สแกนพอร์ต 80,443 ของ 8.8.8.8" · "หา host ในมอสโก" (Shodan) · "ลากเส้นกรุงเทพไปเชียงใหม่" · "ล้าง"'
+          placeholder='สั่งไทยได้ เช่น "exposure 8.8.8.8" (ฟรี ไม่สแกน) · "สแกนพอร์ต 80,443 ของ 8.8.8.8" · "หา host ในมอสโก" · "ล้าง"'
           autoComplete="off"
           spellCheck={false}
           disabled={aiBusy}
@@ -1080,6 +1117,9 @@ export function StrategicMap() {
           </button>
           <button type="button" className="btn btn-sm btn-ghost" onClick={() => portScan(true)} disabled={scanBusy || !host.trim()}>
             top 1000
+          </button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => exposureLookup()} disabled={scanBusy || !host.trim()} title="ดูพอร์ต/CVE จาก Shodan InternetDB แบบฟรี ไม่สแกนจริง">
+            <Icon name="search" /> Exposure (ฟรี)
           </button>
           {scanMsg && <span className="smap-geo-msg">{scanMsg}</span>}
         </div>
