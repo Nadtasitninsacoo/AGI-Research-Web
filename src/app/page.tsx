@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Icon, type IconName } from "@/components/Icon";
+import { HeroCosmos } from "@/components/hud/HeroCosmos";
 import { Navbar } from "@/components/hud/Navbar";
 import { Nexus } from "@/components/hud/Nexus";
 import { Sidebar } from "@/components/hud/Sidebar";
@@ -157,7 +158,12 @@ async function DashboardFrame() {
 
         <main className="content mission-control">
           <header className="hero mission-hero hero-banner">
-            <span className="hero-planet" aria-hidden="true" />
+            <HeroCosmos />
+            <span className="hero-planet" aria-hidden="true">
+              <span className="orbit orbit-1"><i className="star" /></span>
+              <span className="orbit orbit-2"><i className="star" /></span>
+              <span className="orbit orbit-3"><i className="star" /></span>
+            </span>
             <div className="hero-copy">
               <div className="eyebrow">
                 <span className="eyebrow-mark" />
