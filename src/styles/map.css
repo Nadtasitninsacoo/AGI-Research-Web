@@ -83,8 +83,8 @@
 /* Zoom / pan controls */
 .smap-controls {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 11px;
+  right: 42px; /* clear the top-right corner bracket */
   display: flex;
   align-items: center;
   gap: 6px;
@@ -203,8 +203,8 @@
 
 .lf-tools {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 11px;
+  left: 42px; /* clear the top-left corner bracket */
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
@@ -473,6 +473,10 @@
 .smap-stage.is-fs .lf-map { height: 100vh; border-radius: 0; }
 .smap-stage:fullscreen { width: 100vw; height: 100vh; }
 .smap-stage:fullscreen .lf-map { height: 100vh; border-radius: 0; }
+
+/* Inset the bottom Leaflet controls so they clear the corner brackets. */
+.leaflet-bottom.leaflet-left { left: 34px; }
+.leaflet-bottom.leaflet-right { right: 34px; }
 
 /* Leaflet scale bar themed to match */
 .leaflet-control-scale-line {
