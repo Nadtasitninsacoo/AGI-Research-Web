@@ -6,7 +6,7 @@ import type { JSX } from "react";
 export type IconName =
   | "target" | "pin" | "ruler" | "globe" | "moon" | "tag" | "locate"
   | "expand" | "minimize" | "download" | "search" | "bot" | "send"
-  | "check" | "copy" | "phone" | "warn" | "keyboard" | "trash" | "plus" | "minus";
+  | "check" | "copy" | "phone" | "warn" | "keyboard" | "trash" | "plus" | "minus" | "refresh";
 
 const P: Record<IconName, JSX.Element> = {
   target: (<><circle cx="12" cy="12" r="9" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /><circle cx="12" cy="12" r="2.5" /></>),
@@ -30,6 +30,7 @@ const P: Record<IconName, JSX.Element> = {
   trash: (<><path d="M3 6h18" /><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" /><path d="M6 6v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6" /></>),
   plus: (<path d="M12 5v14M5 12h14" />),
   minus: (<path d="M5 12h14" />),
+  refresh: (<><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></>),
 };
 
 export function Icon({ name, size = "1em", className, strokeWidth = 2 }: {

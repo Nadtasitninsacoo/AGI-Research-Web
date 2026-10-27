@@ -349,6 +349,28 @@
   gap: 10px;
 }
 
+.nav-refresh {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  color: #c8c8ce;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.nav-refresh:hover {
+  color: #fff;
+  background: rgba(242, 27, 50, 0.14);
+  border-color: var(--line-hot);
+}
+.nav-refresh svg { width: 14px; height: 14px; }
+.nav-refresh.is-spinning svg { animation: nav-refresh-spin 0.7s linear infinite; }
+@keyframes nav-refresh-spin { to { transform: rotate(360deg); } }
+
 .clock {
   color: #eeeef1;
   font-size: 10px;

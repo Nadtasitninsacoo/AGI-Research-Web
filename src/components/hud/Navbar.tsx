@@ -1,5 +1,6 @@
 import { Clock } from "./Clock";
 import { BackButton } from "./BackButton";
+import { RefreshButton } from "./RefreshButton";
 
 type NavbarProps = {
   online: boolean;
@@ -34,6 +35,7 @@ export function Navbar({ online, title = "OVERVIEW", link = "DB", agentsActive, 
       </div>
 
       <div className="nav-right">
+        <RefreshButton />
         <span className="clock"><Clock /></span>
         <span className="avatar" title="Overseer">OV</span>
       </div>
