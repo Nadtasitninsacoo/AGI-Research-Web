@@ -17,9 +17,14 @@ const text = (v) => (typeof v === "string" ? v.trim() : "");
 
 /**
  * Did a subtask really do work and produce a usable result?
- * Evidence overrides the narrative: if the agent ran commands but none succeeded
- * (commandsRun > 0, commandsOk === 0), it is NOT verified however confident its
- * summary reads. Text-only agents (no commands) are judged on the summary alone.
+ * Evidence — not the narrative — decides. A subtask is verified ONLY when it
+ * rests on something real: at least one successful command (commandsOk > 0), or
+ * at least one confirmed finding (pass result.confirmedFindings). A confident
+ * summary with zero successful commands and zero confirmed findings is a
+ * narrative, not a result, and does NOT verify — this is what catches an agent
+ * that (for example) could not reach the model/tool backend yet still "reported"
+ * an analysis.
+ * @param {{status?:string, summary?:string, evidence?:object, confirmedFindings?:number}} result
  * @returns {{ verified: boolean, reason: string }}
  */
 export function verifySubtask(result) {
@@ -29,14 +34,35 @@ export function verifySubtask(result) {
   const ev = result.evidence ?? {};
   const ran = Number(ev.commandsRun ?? 0);
   const ok = Number(ev.commandsOk ?? 0);
-  if (ran > 0 && ok === 0) {
-    return { verified: false, reason: `ran ${ran} command(s) but none succeeded — no evidence of real work` };
-  }
+  const confirmed = Number(result.confirmedFindings ?? 0);
   const summary = text(result.summary);
   if (!summary) return { verified: false, reason: "empty result" };
   if (FAIL_SENTINEL.test(summary)) return { verified: false, reason: "result is an error/refusal, not a finding" };
-  const backed = ran > 0 ? ` (${ok}/${ran} commands succeeded)` : "";
-  return { verified: true, reason: `succeeded with a substantive result${backed}` };
+  if (ran > 0 && ok === 0) {
+    return { verified: false, reason: `ran ${ran} command(s) but none succeeded — no evidence of real work` };
+  }
+  // Require real evidence behind the claim, not just a well-written summary.
+  if (ok > 0) return { verified: true, reason: `backed by ${ok}/${ran} successful command(s)` };
+  if (confirmed > 0) return { verified: true, reason: `backed by ${confirmed} confirmed finding(s)` };
+  return { verified: false, reason: "no evidence — a narrative with no successful command and no confirmed finding" };
+}
+
+/**
+ * A compact fingerprint of how much verified work exists so far: verified
+ * subtasks, confirmed findings, and successful commands. If a re-planning round
+ * leaves this unchanged, the round produced no new evidence — the team is
+ * churning the same narrative — and the loop must stop instead of retrying blindly.
+ */
+export function evidenceSignature(results) {
+  let verified = 0;
+  let confirmed = 0;
+  let ok = 0;
+  for (const r of Array.isArray(results) ? results : []) {
+    if (r?.verified) verified += 1;
+    confirmed += (Array.isArray(r?.findings) ? r.findings : []).filter((f) => f?.confirmed).length;
+    ok += Number(r?.evidence?.commandsOk ?? 0);
+  }
+  return `${verified}|${confirmed}|${ok}`;
 }
 
 /**

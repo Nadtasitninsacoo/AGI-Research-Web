@@ -6,6 +6,7 @@ import {
   confirmFinding,
   confirmFindings,
   decideSuccess,
+  evidenceSignature,
   injectHandoff,
   isGuardrailBlocked,
   triageUnverified,
@@ -15,7 +16,8 @@ import {
 } from "../src/verify.mjs";
 
 test("verifySubtask: real work verifies, errors/empties/failures do not", () => {
-  assert.equal(verifySubtask({ status: "succeeded", summary: "Found open 22/tcp with banner X" }).verified, true);
+  // A finding needs backing evidence now: a successful command confirms it.
+  assert.equal(verifySubtask({ status: "succeeded", summary: "Found open 22/tcp with banner X", evidence: { commandsRun: 1, commandsOk: 1 } }).verified, true);
   assert.equal(verifySubtask({ status: "failed", summary: "whatever" }).verified, false);
   assert.equal(verifySubtask({ status: "succeeded", summary: "" }).verified, false);
   assert.equal(verifySubtask({ status: "succeeded", summary: "ERROR: empty command." }).verified, false);
@@ -30,8 +32,23 @@ test("verifySubtask: evidence overrides a confident summary (Problem D)", () => 
   );
   // Ran commands and some succeeded -> verified.
   assert.equal(verifySubtask({ status: "succeeded", summary: "Scanned ports", evidence: { commandsRun: 3, commandsOk: 2 } }).verified, true);
-  // Text-only agent (no commands) judged on summary alone.
-  assert.equal(verifySubtask({ status: "succeeded", summary: "Analysis of the handed-off data", evidence: { commandsRun: 0, commandsOk: 0 } }).verified, true);
+});
+
+test("verifySubtask: narrative-only work with no evidence does NOT verify", () => {
+  // No commands, no confirmed finding -> a narrative, not a result (the Ollama-down / 0-evidence case).
+  assert.equal(verifySubtask({ status: "succeeded", summary: "Analysis of the handed-off data", evidence: { commandsRun: 0, commandsOk: 0 } }).verified, false);
+  // But a confirmed finding is real evidence even with no command of its own.
+  assert.equal(verifySubtask({ status: "succeeded", summary: "Confirmed from prior data", evidence: { commandsRun: 0, commandsOk: 0 }, confirmedFindings: 1 }).verified, true);
+});
+
+test("evidenceSignature changes only when real evidence is added", () => {
+  const base = [{ verified: true, findings: [{ confirmed: true }], evidence: { commandsOk: 2 } }];
+  const same = [{ verified: true, findings: [{ confirmed: true }], evidence: { commandsOk: 2 } }];
+  const more = [...base, { verified: false, findings: [], evidence: { commandsOk: 0 } }]; // added nothing real
+  assert.equal(evidenceSignature(base), evidenceSignature(same));
+  assert.equal(evidenceSignature(base), evidenceSignature(more)); // narrative-only addition -> no change
+  const grew = [...base, { verified: true, findings: [], evidence: { commandsOk: 1 } }];
+  assert.notEqual(evidenceSignature(base), evidenceSignature(grew));
 });
 
 test("validatePlan drops exact-duplicate subtasks, keeps distinct ones (Problem C)", () => {

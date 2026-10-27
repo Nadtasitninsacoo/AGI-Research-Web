@@ -10,12 +10,12 @@
 //
 // Everything stays inside the existing scope + policy + approval controls: the
 // orchestrator cannot grant a specialist more than that specialist already has.
-import { chat } from "./ollama.mjs";
+import { chat, checkModel } from "./ollama.mjs";
 import { runAgent } from "./agentLoop.mjs";
 import { log } from "./logger.mjs";
 import { query } from "./db.mjs";
 import { config } from "./config.mjs";
-import { buildHandoff, confirmFindings, decideSuccess, injectHandoff, triageUnverified, validatePlan, verifyHandoff, verifySubtask } from "./verify.mjs";
+import { buildHandoff, confirmFindings, decideSuccess, evidenceSignature, injectHandoff, triageUnverified, validatePlan, verifyHandoff, verifySubtask } from "./verify.mjs";
 import { extractTags, recallLessons, recordLesson, renderLessons } from "./lessons.mjs";
 
 const MAX_SUBTASKS = 5;
@@ -94,6 +94,23 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
     .join("\n");
 
   const planModel = roster.get(available[0]).model; // HYDRA runs on the same local model
+
+  // Preflight: the whole team depends on the local model backend. If it is
+  // unreachable or the model is not pulled, stop NOW with the real error rather
+  // than marching through a doomed plan and reporting a hollow "succeeded".
+  const modelStatus = await checkModel(planModel);
+  if (modelStatus !== "ok") {
+    const msg = `HYDRA preflight failed: model backend not ready — ${modelStatus}. ` +
+      `This is a connectivity/configuration problem, not a security finding. Run halted; fix the backend and re-queue.`;
+    await log({ agentId, runId, level: "error", message: msg });
+    return {
+      status: "failed",
+      summary: msg,
+      findings: [],
+      metrics: { output: msg, outcome: "needs_input", reason: modelStatus, latencyMs: Date.now() - started },
+    };
+  }
+
   const planSystem =
     `You are HYDRA, the multi-agent team coordinator. Plan how a team of specialists will accomplish the objective. ` +
     `Split it into 1-${MAX_SUBTASKS} concrete subtasks, each assigned to exactly ONE agent by its exact name. ` +
@@ -169,8 +186,8 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
       outputTokens += res.metrics?.outputTokens ?? 0;
       const evidence = res.metrics?.evidence ?? res.evidence ?? {};
       const findings = confirmFindings(res.findings ?? [], evidence);
-      const verdict = verifySubtask({ status: res.status, summary: res.summary, evidence });
       const confirmedCount = findings.filter((f) => f.confirmed).length;
+      const verdict = verifySubtask({ status: res.status, summary: res.summary, evidence, confirmedFindings: confirmedCount });
       await log({
         agentId, runId, level: verdict.verified ? "info" : "warn",
         message: `VERIFY ${step.agent}: ${verdict.verified ? "work verified" : "unverified"} — ${verdict.reason}; ` +
@@ -201,6 +218,11 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
       });
     }
     if (!retry.length) break;
+
+    // Snapshot how much verified evidence exists before this round. If the round
+    // adds nothing new, we are looping on the same narrative — stop (fix for
+    // "re-planned twice but produced no new evidence").
+    const evidenceBefore = evidenceSignature(results);
 
     const open = retry.map((r) => `- ${r.agent} on "${r.task}" did not verify (${r.verifyReason})`).join("\n");
     const replanSystem =
@@ -233,6 +255,15 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
       context: { round, plan: rplan },
     });
     for (const [i, step] of rplan.entries()) await delegate(step, `R${round}.${i + 1}`);
+
+    if (evidenceSignature(results) === evidenceBefore) {
+      await log({
+        agentId, runId, level: "warn",
+        message: `Round ${round}: no new evidence (no new verified work, confirmed finding, or successful command). ` +
+          `Stopping re-planning to avoid an unproductive loop; unresolved gaps are reported as failed/needs-input.`,
+      });
+      break;
+    }
   }
 
   // 3) SYNTHESIZE -----------------------------------------------------------
@@ -249,8 +280,13 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
 
   const synthSystem =
     `You are HYDRA. Integrate the team's subtask results into ONE unified answer for the commander. ` +
-    `Resolve conflicts, remove redundancy, and be faithful to what each agent actually found (do not invent results). ` +
-    `Only call a vulnerability CONFIRMED if it is marked confirmed below; present the rest as unverified leads. ` +
+    `Be faithful to what each agent actually proved — do NOT overclaim and do NOT invent results. ` +
+    `Split your answer into three clearly labelled tiers and never promote an item above its evidence:\n` +
+    `  1) CONFIRMED — only results marked VERIFIED/confirmed below (backed by a successful command or confirmed finding);\n` +
+    `  2) UNVERIFIED LEADS / ASSUMPTIONS — claims with no backing evidence, stated as tentative;\n` +
+    `  3) FAILED OR BLOCKED — subtasks that produced no evidence or were stopped by a guardrail/connectivity.\n` +
+    `A failed model or tool connection is a connectivity/configuration problem — it is NOT proof that the target is vulnerable or was attacked. ` +
+    `Only call a vulnerability CONFIRMED if it is marked confirmed below; everything else stays in tier 2 or 3. ` +
     `Also distil ONE concrete lesson for next time in "lessons_learned": the main problem or limitation the team hit and how to handle it (a reusable fix, or a boundary to respect). ` +
     `Respond strictly as JSON: {"summary":"...","reasoning_notes":["..."],"confidence":0.0,"limitations":["..."],"content":"...","lessons_learned":"..."}`;
   const synthUser =
@@ -280,6 +316,11 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
 
   // Success is gated on verified subtasks, not on the synthesis returning JSON.
   const status = success.status;
+  // Distinguish an honest "failed" from "we are blocked and need a human":
+  // nothing verified but work was guardrail-blocked => needs_input, not a plain fail.
+  const outcome = status === "succeeded"
+    ? "succeeded"
+    : needsAuthorization.length ? "needs_input" : "failed";
   await log({
     agentId, runId, level: status === "succeeded" ? "info" : "warn",
     message: `HYDRA verification: ${success.reason}; findings ${confirmedFindings.length} confirmed, ${unconfirmedFindings.length} unverified over ${results.length} subtasks` +
@@ -308,6 +349,7 @@ export async function runOrchestrator({ runId, agentId, objective, scope, runPar
     metrics: {
       output: structured?.content || structured?.summary || finalSummary,
       structured: structured ?? null,
+      outcome,
       plan,
       subResults: results.map((r) => ({ agent: r.agent, task: r.task, status: r.status, summary: r.summary, verified: r.verified, verifyReason: r.verifyReason })),
       findings: confirmedFindings,
