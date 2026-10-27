@@ -252,10 +252,10 @@
 
 .hair {
   position: relative;
-  height: 4px;
+  height: 2px;
   overflow: hidden;
   background: #121419;
-  border-radius: 2px;
+  border-radius: 1px;
   box-shadow: var(--bevel-in);
 }
 
@@ -268,8 +268,8 @@
     var(--red-deep),
     var(--red-hot)
   );
-  border-radius: 2px;
+  border-radius: 1px;
   box-shadow:
-    0 0 8px var(--red-glow),
+    0 0 6px var(--red-glow),
     inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
