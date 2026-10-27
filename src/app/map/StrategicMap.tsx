@@ -5,7 +5,7 @@ import { useActionState, useCallback, useEffect, useRef, useState } from "react"
 import type * as LType from "leaflet";
 import * as mgrs from "mgrs";
 import { launchCommandAction } from "../command/actions";
-import { phoneAreaAction, geoipAction, portScanAction, shodanSearchAction, internetdbAction, ipRangesInBoundsAction, type PortRow } from "./actions";
+import { phoneAreaAction, geoipAction, portScanAction, shodanSearchAction, internetdbAction, ipRangesInBoundsAction, saveIpsAction, type PortRow, type IpGeoRange } from "./actions";
 import { Icon } from "@/components/Icon";
 
 type Mode = "scan" | "mark" | "measure";
@@ -167,6 +167,10 @@ export function StrategicMap() {
   const [scanBusy, setScanBusy] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
   const [ports, setPorts] = useState<PortRow[] | null>(null);
+  const [ipList, setIpList] = useState<IpGeoRange[] | null>(null);
+  const [ipTotal, setIpTotal] = useState(0);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
 
   // Leaflet objects live in a ref so React re-renders never recreate the map.
   const elRef = useRef<HTMLDivElement>(null);
@@ -696,16 +700,26 @@ export function StrategicMap() {
     if (!leaflet || !m) return "แผนที่ยังไม่พร้อม";
     const b = m.getBounds();
     const r = await ipRangesInBoundsAction({ south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast() });
-    if (!r.ok) return r.message;
+    if (!r.ok) { setIpList(null); return r.message; }
+    setIpList(r.ranges);
+    setIpTotal(r.totalRanges);
+    setSaveMsg("");
     if (!ipgeoLayer.current) ipgeoLayer.current = leaflet.layerGroup().addTo(m);
     ipgeoLayer.current.clearLayers();
-    for (const p of r.points) {
-      const tip = `<b>${p.city || "?"}, ${p.cc}</b><br>${p.count} ช่วง IP<br>เช่น ${p.samples.join(", ")}`;
-      leaflet
+    r.points.forEach((p, i) => {
+      const ip = p.samples[0] || "?";
+      const detail =
+        `<b>${ip}</b><br>${p.city || "?"}, ${p.cc} · ${p.count} ช่วง IP` +
+        (p.samples.length > 1 ? `<br>${p.samples.slice(0, 6).join(", ")}` : "");
+      const mk = leaflet
         .circleMarker([p.lat, p.lon], { radius: Math.min(11, 3 + Math.log10(p.count + 1) * 3), className: "lf-ipdot" })
-        .bindTooltip(tip, { direction: "top", className: "lf-tip" })
-        .addTo(ipgeoLayer.current);
-    }
+        .bindPopup(detail, { className: "lf-pop" })
+        .addTo(ipgeoLayer.current!);
+      // Show the representative IP number right on the map (top points only, to
+      // keep it legible); the rest reveal on hover and full detail on click.
+      if (i < 160) mk.bindTooltip(ip, { permanent: true, direction: "right", offset: [6, 0], className: "lf-iplabel" });
+      else mk.bindTooltip(detail, { direction: "top", className: "lf-tip" });
+    });
     if (r.shownPoints === 0) return "ไม่พบช่วง IP ในกรอบนี้ (ลองซูมออก/ไปใกล้เมือง)";
     return `IP ในกรอบนี้: ${r.totalRanges} ช่วง · ${r.shownPoints} จุด${r.capped ? " · แสดงบางส่วน ซูมเข้าอีกเพื่อครบ" : ""} (ข้อมูล DB-IP ระดับเขต ไม่ใช่ระดับซอย)`;
   }, []);
@@ -718,6 +732,16 @@ export function StrategicMap() {
     setAiMsg(msg);
     setAiBusy(false);
   }, [ipsInBounds]);
+
+  // Save the currently-listed IPs into the system DB (table saved_ips).
+  const saveIps = useCallback(async () => {
+    if (!ipList?.length || saveBusy) return;
+    setSaveBusy(true);
+    setSaveMsg("กำลังบันทึกลงฐานระบบ...");
+    const r = await saveIpsAction(ipList);
+    setSaveBusy(false);
+    setSaveMsg(r.ok ? `บันทึกแล้ว ${r.saved} รายการ (ซ้ำ/ข้าม ${r.duplicate}) จาก ${r.total}` : r.message);
+  }, [ipList, saveBusy]);
 
   // Fullscreen the map stage (Fullscreen API), re-fitting Leaflet afterwards.
   const toggleFullscreen = useCallback(() => {
@@ -802,6 +826,7 @@ export function StrategicMap() {
       if (searchMarker.current) { m.removeLayer(searchMarker.current); searchMarker.current = null; }
       shodanLayer.current?.clearLayers();
       ipgeoLayer.current?.clearLayers();
+      setIpList(null); setSaveMsg("");
       setAiMsg("ล้างแผนที่แล้ว");
       return;
     }
@@ -1035,6 +1060,26 @@ export function StrategicMap() {
         </button>
       </div>
       {aiMsg && <p className={`lf-ai-msg ${aiBusy ? "busy" : ""}`}>{aiMsg}</p>}
+
+      {ipList && ipList.length > 0 && (
+        <div className="smap-iplist">
+          <div className="smap-iplist-head">
+            <span>เลข IP ในกรอบ — แสดง {ipList.length}{ipTotal > ipList.length ? ` / ${ipTotal}` : ""} (DB-IP ระดับเขต)</span>
+            <span className="smap-iplist-act">
+              <button type="button" className="btn btn-sm btn-danger" onClick={saveIps} disabled={saveBusy}>
+                <Icon name="download" /> {saveBusy ? "กำลังบันทึก..." : `บันทึก ${ipList.length} เลข IP ลงฐานระบบ`}
+              </button>
+              <button type="button" className="lf-mini" onClick={() => { setIpList(null); setSaveMsg(""); ipgeoLayer.current?.clearLayers(); }}><Icon name="trash" /> ปิด</button>
+            </span>
+          </div>
+          {saveMsg && <p className="smap-iplist-msg">{saveMsg}</p>}
+          <div className="smap-iplist-body">
+            {ipList.map((r, i) => (
+              <span key={`${r.ip}-${i}`} className="smap-ipitem" title={`${r.city}, ${r.cc}`}><b>{r.ip}</b></span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div ref={stageRef} className={`smap-stage ${isFs ? "is-fs" : ""}`}>
         <div ref={elRef} className="lf-map lf-theme-dark" />

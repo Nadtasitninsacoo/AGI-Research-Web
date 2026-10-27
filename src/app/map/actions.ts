@@ -486,9 +486,12 @@ export async function internetdbAction(input: string): Promise<InternetDb> {
 }
 
 export type IpGeoPoint = { lat: number; lon: number; city: string; cc: string; count: number; samples: string[] };
+export type IpGeoRange = { ip: string; city: string; cc: string; lat: number; lon: number };
 export type IpGeoResult =
   | { ok: false; message: string }
-  | { ok: true; totalRanges: number; shownPoints: number; capped: boolean; points: IpGeoPoint[] };
+  | { ok: true; totalRanges: number; shownPoints: number; capped: boolean; points: IpGeoPoint[]; ranges: IpGeoRange[] };
+
+const IPGEO_LIST_CAP = 2000;
 
 const int2ip = (n: number) =>
   `${(n >>> 24) & 255}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}`;
@@ -516,6 +519,7 @@ export async function ipRangesInBoundsAction(b: {
   }
   const CAP = 600;
   const groups = new Map<string, IpGeoPoint>();
+  const ranges: IpGeoRange[] = [];
   let totalRanges = 0;
   let capped = false;
   try {
@@ -532,15 +536,19 @@ export async function ipRangesInBoundsAction(b: {
         const lon = Number(line.slice(c3 + 1, c4));
         if (lat < south || lat > north || lon < west || lon > east) continue;
         totalRanges++;
+        const city = line.slice(c5 + 1);
+        const cc = line.slice(c4 + 1, c5);
+        const ip = int2ip(Number(line.slice(0, c1)));
+        if (ranges.length < IPGEO_LIST_CAP) ranges.push({ ip, city, cc, lat, lon });
         const key = `${lat},${lon}`;
         let g = groups.get(key);
         if (!g) {
           if (groups.size >= CAP) { capped = true; continue; }
-          g = { lat, lon, city: line.slice(c5 + 1), cc: line.slice(c4 + 1, c5), count: 0, samples: [] };
+          g = { lat, lon, city, cc, count: 0, samples: [] };
           groups.set(key, g);
         }
         g.count++;
-        if (g.samples.length < 6) g.samples.push(int2ip(Number(line.slice(0, c1))));
+        if (g.samples.length < 6) g.samples.push(ip);
       }
       rl.close();
     }
@@ -548,5 +556,52 @@ export async function ipRangesInBoundsAction(b: {
     return { ok: false, message: "อ่าน index ล้มเหลว" };
   }
   const points = [...groups.values()].sort((a, b2) => b2.count - a.count);
-  return { ok: true, totalRanges, shownPoints: points.length, capped, points };
+  return { ok: true, totalRanges, shownPoints: points.length, capped, points, ranges };
+}
+
+export type SaveIpsResult = { ok: false; message: string } | { ok: true; saved: number; duplicate: number; total: number };
+
+/**
+ * Persist a batch of discovered IPs to the system database (table `saved_ips`,
+ * created on demand). Operator action on the local system DB; each IP is
+ * validated and duplicates are ignored (UNIQUE on ip). Not arbitrary SQL — a
+ * fixed INSERT of validated rows.
+ */
+export async function saveIpsAction(items: IpGeoRange[], note?: string): Promise<SaveIpsResult> {
+  const rows = (Array.isArray(items) ? items : [])
+    .filter((r) => r && net.isIP(String(r.ip)))
+    .slice(0, IPGEO_LIST_CAP);
+  if (!rows.length) return { ok: false, message: "ไม่มี IP ที่ถูกต้องให้บันทึก" };
+  const label = (note || "").slice(0, 200) || null;
+  try {
+    const { db } = await import("@/lib/db");
+    await db.query(
+      `CREATE TABLE IF NOT EXISTS saved_ips (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ip VARCHAR(45) NOT NULL,
+        city VARCHAR(160) NULL,
+        country VARCHAR(8) NULL,
+        lat DOUBLE NULL,
+        lon DOUBLE NULL,
+        source VARCHAR(40) NOT NULL DEFAULT 'db-ip',
+        note VARCHAR(255) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uniq_ip (ip)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    );
+    const values = rows.map((r) => [r.ip, r.city || null, r.cc || null, Number(r.lat) || null, Number(r.lon) || null, "db-ip", label]);
+    const [res] = await db.query(
+      "INSERT IGNORE INTO saved_ips (ip, city, country, lat, lon, source, note) VALUES ?",
+      [values],
+    );
+    const saved = (res as { affectedRows?: number }).affectedRows ?? 0;
+    return { ok: true, saved, duplicate: rows.length - saved, total: rows.length };
+  } catch (err) {
+    const code = (err as { code?: string })?.code;
+    if (code === "ECONNREFUSED" || code === "ER_ACCESS_DENIED_ERROR" || code === "ER_BAD_DB_ERROR") {
+      return { ok: false, message: "เชื่อมต่อฐานข้อมูลไม่ได้ — ตรวจค่า DATABASE_* ใน .env.local" };
+    }
+    return { ok: false, message: "บันทึกลงฐานข้อมูลล้มเหลว" };
+  }
 }
