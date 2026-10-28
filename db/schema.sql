@@ -153,3 +153,19 @@ CREATE TABLE IF NOT EXISTS lessons (
   PRIMARY KEY (id),
   KEY idx_lessons_created (created_at)
 ) ENGINE=InnoDB;
+
+-- Sentinel: defensive security events (scope blocks, forbidden attempts,
+-- lockdown changes). Powers the counter-attack monitor and the auto-response.
+CREATE TABLE IF NOT EXISTS security_events (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  kind       VARCHAR(40) NOT NULL,
+  severity   ENUM('info','warn','high','critical') NOT NULL DEFAULT 'warn',
+  run_id     BIGINT UNSIGNED NULL,
+  agent_id   BIGINT UNSIGNED NULL,
+  command    TEXT NULL,
+  detail     TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_sec_created (created_at),
+  KEY idx_sec_kind (kind, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
