@@ -1,4 +1,5 @@
 import type { AgentStat } from "@/lib/queries";
+import { NuclearMark } from "./NuclearMark";
 
 const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
@@ -8,14 +9,30 @@ const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
  * reads differently from the Overview orbit.
  */
 export function Reactor({ agents, successRate }: { agents: AgentStat[]; successRate: number }) {
+  const runs = agents.reduce((s, a) => s + a.runs, 0);
+  // Any running agent drives the core "critical": orbits spin, nucleus flares.
+  const reacting = agents.some((a) => a.status === "running");
   return (
     <div className="reactor">
-      <div className="reactor-core">
-        <span className="reactor-ring" />
-        <span className="reactor-ring reactor-ring-2" />
-        <div className="reactor-orb">
+      {/* Atom: a blue/black radiation nucleus with two numbered "electron" orbs
+          riding crossed orbital rings. Goes critical while an agent runs. */}
+      <div className={`reactor-atom${reacting ? " is-reacting" : ""}`}>
+        <span className="atom-orbit atom-orbit-a" />
+        <span className="atom-orbit atom-orbit-b" />
+        <span className="atom-orbit atom-orbit-c" />
+
+        <div className="atom-electron atom-electron-l">
           <b>{successRate}</b>
           <small>SCORE</small>
+        </div>
+
+        <div className="atom-nucleus">
+          <NuclearMark className="nucleus-mark" />
+        </div>
+
+        <div className="atom-electron atom-electron-r">
+          <b>{runs}</b>
+          <small>RUNS</small>
         </div>
       </div>
 
