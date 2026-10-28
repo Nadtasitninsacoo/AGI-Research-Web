@@ -158,6 +158,14 @@
 
 .nav-item svg { width: 15px; height: 15px; flex: none; }
 
+/* Button rendered as a nav row (Settings) — strip native button chrome. */
+.nav-button {
+  width: 100%;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .nav-item:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.045);

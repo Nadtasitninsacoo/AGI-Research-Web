@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Icon } from "./Icon";
 import { NavLinks, NavStatic, type NavItem } from "./NavLinks";
+import { SettingsNav } from "./SettingsNav";
 
 const NAVIGATE: NavItem[] = [
   { label: "Overview", icon: "overview", href: "/", match: "/" },
@@ -17,7 +18,6 @@ const NAVIGATE: NavItem[] = [
 
 const WORKSPACE: NavItem[] = [
   { label: "Datasets", icon: "datasets" },
-  { label: "Settings", icon: "settings" },
 ];
 
 function Group({ title, items }: { title: string; items: NavItem[] }) {
@@ -44,7 +44,13 @@ export function Sidebar({ online }: { online: boolean }) {
 
       <nav aria-label="Primary">
         <Group title="NAVIGATE" items={NAVIGATE} />
-        <Group title="WORKSPACE" items={WORKSPACE} />
+        <div className="nav-group">
+          <span className="nav-title">WORKSPACE</span>
+          <Suspense fallback={<NavStatic items={WORKSPACE} />}>
+            <NavLinks items={WORKSPACE} />
+          </Suspense>
+          <SettingsNav />
+        </div>
       </nav>
 
       <div className="core-card">
