@@ -1,3 +1,11 @@
+import type { RowDataPacket } from "mysql2";
+import { db } from "@/lib/db";
+
+// Dashboard data for the Overview and Nexus pages. Reads MySQL directly — the
+// same source the engine writes to — so these pages no longer depend on the
+// separate NestJS backend (which is decoupled/retired). Shapes are unchanged so
+// the pages consuming this need no edits.
+
 export type AgentStat = {
   id: number;
   name: string;
@@ -47,63 +55,105 @@ export type DashboardData = {
   benchmarks: BenchmarkRow[];
 };
 
-// Shape returned by the backend: GET {AGI_API_URL}/api/overview
-type OverviewResponse = DashboardData & { status: "ok"; source: string };
-
-const TOTAL_KEYS: (keyof DashboardData["totals"])[] = [
-  "agents",
-  "agentsRunning",
-  "projects",
-  "experiments",
-  "runs",
-  "runsRunning",
-  "runsQueued",
-  "runsSucceeded",
-  "runsFailed",
-];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isOverviewResponse(value: unknown): value is OverviewResponse {
-  if (!isRecord(value) || value.status !== "ok") return false;
-
-  const { totals } = value;
-  if (!isRecord(totals)) return false;
-  if (!TOTAL_KEYS.every((key) => typeof totals[key] === "number")) return false;
-
-  return (
-    Array.isArray(value.agents) &&
-    Array.isArray(value.runs) &&
-    Array.isArray(value.logs) &&
-    Array.isArray(value.benchmarks)
-  );
-}
+const num = (v: unknown): number => (v == null ? 0 : Number(v));
+const numOrNull = (v: unknown): number | null => (v == null ? null : Number(v));
+const iso = (v: unknown): string => (v instanceof Date ? v.toISOString() : String(v ?? ""));
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const base = process.env.AGI_API_URL;
+  const [totalsRows, agentRows, runRows, logRows, benchRows] = await Promise.all([
+    db.query<RowDataPacket[]>(
+      `SELECT
+         (SELECT COUNT(*) FROM agents) AS agents,
+         (SELECT COUNT(*) FROM agents WHERE status = 'running') AS agentsRunning,
+         (SELECT COUNT(*) FROM research_projects) AS projects,
+         (SELECT COUNT(*) FROM experiments) AS experiments,
+         (SELECT COUNT(*) FROM experiment_runs) AS runs,
+         (SELECT COUNT(*) FROM experiment_runs WHERE status = 'running') AS runsRunning,
+         (SELECT COUNT(*) FROM experiment_runs WHERE status = 'queued') AS runsQueued,
+         (SELECT COUNT(*) FROM experiment_runs WHERE status = 'succeeded') AS runsSucceeded,
+         (SELECT COUNT(*) FROM experiment_runs WHERE status = 'failed') AS runsFailed`,
+    ),
+    db.query<RowDataPacket[]>(
+      `SELECT a.id, a.name, a.model, a.status, a.description,
+              COUNT(DISTINCT r.id) AS runs,
+              COUNT(DISTINCT CASE WHEN r.status = 'succeeded' THEN r.id END) AS succeeded,
+              COUNT(DISTINCT CASE WHEN r.status = 'failed' THEN r.id END) AS failed,
+              AVG(ev.score) AS avgScore
+       FROM agents a
+       LEFT JOIN experiments e ON e.agent_id = a.id
+       LEFT JOIN experiment_runs r ON r.experiment_id = e.id
+       LEFT JOIN evaluations ev ON ev.run_id = r.id
+       GROUP BY a.id, a.name, a.model, a.status, a.description
+       ORDER BY a.name`,
+    ),
+    db.query<RowDataPacket[]>(
+      `SELECT r.id, r.status, e.name AS experiment, a.name AS agent,
+              (SELECT AVG(score) FROM evaluations WHERE run_id = r.id) AS accuracy,
+              r.created_at AS createdAt
+       FROM experiment_runs r
+       JOIN experiments e ON e.id = r.experiment_id
+       LEFT JOIN agents a ON a.id = e.agent_id
+       ORDER BY r.id DESC LIMIT 12`,
+    ),
+    db.query<RowDataPacket[]>(
+      `SELECT l.id, l.level, l.message, a.name AS agent, l.created_at AS createdAt
+       FROM agent_logs l
+       JOIN agents a ON a.id = l.agent_id
+       ORDER BY l.id DESC LIMIT 60`,
+    ),
+    db.query<RowDataPacket[]>(
+      `SELECT benchmark, AVG(score) AS score, COUNT(*) AS n
+       FROM evaluations GROUP BY benchmark ORDER BY score DESC LIMIT 12`,
+    ),
+  ]);
 
-  if (!base) {
-    throw new Error("AGI_API_URL is not configured");
-  }
+  const t = totalsRows[0][0] ?? {};
+  const totals: DashboardData["totals"] = {
+    agents: num(t.agents),
+    agentsRunning: num(t.agentsRunning),
+    projects: num(t.projects),
+    experiments: num(t.experiments),
+    runs: num(t.runs),
+    runsRunning: num(t.runsRunning),
+    runsQueued: num(t.runsQueued),
+    runsSucceeded: num(t.runsSucceeded),
+    runsFailed: num(t.runsFailed),
+  };
 
-  const response = await fetch(new URL("/api/overview", base), {
-    cache: "no-store",
-    signal: AbortSignal.timeout(5000),
-  });
+  const agents: AgentStat[] = agentRows[0].map((r) => ({
+    id: num(r.id),
+    name: String(r.name),
+    model: r.model != null ? String(r.model) : null,
+    status: r.status as AgentStat["status"],
+    description: r.description != null ? String(r.description) : null,
+    runs: num(r.runs),
+    succeeded: num(r.succeeded),
+    failed: num(r.failed),
+    avgScore: numOrNull(r.avgScore),
+  }));
 
-  if (!response.ok) {
-    throw new Error(`Backend returned HTTP ${response.status}`);
-  }
+  const runs: RunRow[] = runRows[0].map((r) => ({
+    id: num(r.id),
+    status: String(r.status),
+    experiment: String(r.experiment),
+    agent: r.agent != null ? String(r.agent) : null,
+    accuracy: numOrNull(r.accuracy),
+    createdAt: iso(r.createdAt),
+  }));
 
-  const body: unknown = await response.json();
+  const logs: LogRow[] = logRows[0].map((r) => ({
+    id: num(r.id),
+    level: r.level as LogRow["level"],
+    message: String(r.message),
+    agent: String(r.agent),
+    createdAt: iso(r.createdAt),
+  }));
 
-  if (!isOverviewResponse(body)) {
-    throw new Error("Backend returned an unexpected response shape");
-  }
-
-  const { totals, agents, runs, logs, benchmarks } = body;
+  const benchmarks: BenchmarkRow[] = benchRows[0].map((r) => ({
+    benchmark: String(r.benchmark),
+    score: num(r.score),
+    n: num(r.n),
+  }));
 
   return { totals, agents, runs, logs, benchmarks };
 }
