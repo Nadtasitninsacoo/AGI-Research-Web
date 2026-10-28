@@ -1,0 +1,130 @@
+/* ============================================================
+   USB LAB — local hardware recon
+   ============================================================ */
+.usb-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.usb-msg { margin: 8px 0 0; font-size: 11px; color: var(--dim); font-family: var(--font-mono), monospace; }
+
+.usb-tag { font-family: var(--font-mono), monospace; font-size: 9px; letter-spacing: 0.1em; padding: 2px 7px; border-radius: 3px; border: 1px solid var(--line); }
+.usb-tag.ok { color: var(--ok); border-color: rgba(60, 200, 120, 0.4); }
+.usb-tag.warn { color: var(--warn); border-color: rgba(245, 196, 81, 0.4); }
+
+.usb-table th, .usb-table td { white-space: nowrap; }
+.usb-table .usb-name { white-space: normal; color: var(--text-strong); max-width: 320px; }
+.usb-vid { font-family: var(--font-mono), monospace; color: var(--text); }
+.usb-busid { font-family: var(--font-mono), monospace; color: #5fb0ff; }
+.usb-ok { color: var(--ok); }
+.usb-bad { color: var(--warn); }
+.usb-table tr.is-sel { background: rgba(214, 22, 44, 0.08); }
+.usb-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+.usb-idrow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.usb-idval { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--dim); word-break: break-all; }
+
+.usb-prop td { vertical-align: top; font-size: 11px; }
+.usb-pk { font-family: var(--font-mono), monospace; color: var(--faint); white-space: nowrap; width: 230px; }
+.usb-pv { color: var(--text); word-break: break-word; }
+
+.usb-attach { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.usb-attach-h { font-size: 11px; color: var(--dim); }
+
+.usb-pre {
+  margin: 10px 0 0;
+  padding: 11px 13px;
+  max-height: 320px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--red-hot);
+  border-radius: 4px;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #cdd3dc;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- Live working signal (oscilloscope + sweep beam) ---- */
+.sig {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 42px;
+  margin: 10px 0 2px;
+  padding: 0 14px;
+  overflow: hidden;
+  border: 1px solid rgba(214, 22, 44, 0.32);
+  border-left: 2px solid var(--red-hot);
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(214, 22, 44, 0.1), rgba(214, 22, 44, 0.03));
+}
+.sig-label { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; font-family: var(--font-mono), monospace; font-size: 10px; letter-spacing: 0.22em; color: #ff6b78; white-space: nowrap; }
+.sig-led { width: 8px; height: 8px; border-radius: 50%; background: var(--red-hot); box-shadow: 0 0 9px 1px var(--red-hot); animation: sig-blink 0.8s steps(1, end) infinite; }
+.sig-wave { position: relative; z-index: 1; flex: 1; height: 100%; min-width: 0; }
+.sig-wave svg { display: block; width: 100%; height: 100%; }
+.sig-path { fill: none; stroke: #ff4a5c; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; filter: drop-shadow(0 0 4px rgba(255, 74, 92, 0.85)); }
+.sig-g { animation: sig-scroll 1s linear infinite; }
+.sig-note { position: relative; z-index: 2; font-family: var(--font-mono), monospace; font-size: 10px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 42%; }
+.sig::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -160px;
+  z-index: 1;
+  width: 160px;
+  background: linear-gradient(90deg, transparent, rgba(255, 120, 135, 0.4), transparent);
+  filter: blur(3px);
+  animation: sig-sweep 2.3s ease-in-out infinite;
+}
+@keyframes sig-scroll { to { transform: translateX(-80px); } }
+@keyframes sig-sweep { 0% { left: -160px; } 100% { left: 100%; } }
+@keyframes sig-blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0.22; } }
+@media (prefers-reduced-motion: reduce) { .sig-g, .sig::after, .sig-led { animation: none; } }
+
+/* ---- MIDI live control surface ---- */
+.midi-ports { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.midi-sel { display: flex; flex-direction: column; gap: 4px; }
+.midi-sel > span { font-size: 10px; color: var(--faint); font-family: var(--font-mono), monospace; letter-spacing: 0.06em; }
+.midi-sel select { background: rgba(0, 0, 0, 0.4); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; font-size: 12px; min-width: 190px; }
+.midi-ch select { min-width: 60px; }
+
+.midi-learn { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0 2px; padding: 10px 12px; border: 1px dashed var(--line-strong); border-radius: 6px; }
+.midi-learn.on { border-color: var(--red-hot); background: rgba(214, 22, 44, 0.06); }
+.midi-learn-hint { font-size: 11px; color: var(--dim); }
+.midi-learn-hint b { color: var(--text-strong); }
+
+.midi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
+.midi-ctrl { padding: 11px 12px; background: var(--grad-card, rgba(255, 255, 255, 0.03)); border: 1px solid var(--line); border-left: 2px solid #5fb0ff; border-radius: 6px; }
+.midi-ctrl.k-pc { border-left-color: var(--red-hot); }
+.midi-ctrl.k-note { border-left-color: var(--ok, #3cc878); }
+.midi-ctrl-top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.midi-label { flex: 1; min-width: 0; background: transparent; border: none; border-bottom: 1px solid transparent; color: var(--text-strong); font-size: 12px; font-weight: 600; padding: 2px 0; }
+.midi-label:hover, .midi-label:focus { border-bottom-color: var(--line-strong); outline: none; }
+.midi-tag { font-family: var(--font-mono), monospace; font-size: 8px; letter-spacing: 0.05em; color: var(--faint); white-space: nowrap; }
+.midi-slide { display: flex; align-items: center; gap: 10px; }
+.midi-slide input[type="range"] { flex: 1; accent-color: #5fb0ff; }
+.midi-slide b { font-family: var(--font-mono), monospace; font-size: 13px; color: var(--text); min-width: 28px; text-align: right; }
+.midi-pcrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.midi-pcrow b { font-family: var(--font-mono), monospace; color: var(--text); }
+
+.midi-manual { margin-top: 6px; }
+.midi-manual > summary { cursor: pointer; font-size: 12px; color: var(--dim); font-family: var(--font-mono), monospace; }
+.midi-manual-grid { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.midi-mrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.midi-mrow > span { font-size: 11px; color: var(--dim); min-width: 180px; }
+.midi-mrow input[type="number"] { width: 78px; background: rgba(0, 0, 0, 0.4); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px; }
+.midi-mrow input[type="range"] { accent-color: #5fb0ff; }
+.midi-mrow b { font-family: var(--font-mono), monospace; min-width: 28px; }
+.midi-sysex { flex: 1; min-width: 200px; background: rgba(0, 0, 0, 0.4); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; font-family: var(--font-mono), monospace; font-size: 12px; }
+
+.midi-log { margin-top: 12px; max-height: 150px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; background: rgba(0, 0, 0, 0.35); font-family: var(--font-mono), monospace; font-size: 10px; }
+.midi-logline { display: flex; gap: 8px; padding: 3px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.03); color: var(--dim); }
+.midi-logline.tx { color: #ff8a97; }
+.midi-logline.rx { color: #8fd3ff; }
+.midi-dir { min-width: 42px; opacity: 0.8; }
+
+.usb-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: var(--dim); line-height: 1.5; }
+.usb-steps b { color: var(--text-strong); }
+.usb-steps code, .usb-idrow code { background: rgba(255, 255, 255, 0.06); padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono), monospace; font-size: 11px; }

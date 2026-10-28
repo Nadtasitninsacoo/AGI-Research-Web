@@ -11,6 +11,7 @@ const NAVIGATE: NavItem[] = [
   { label: "IP Intel", icon: "globe", href: "/ip-intel", match: "/ip-intel" },
   { label: "Recon", icon: "scan", href: "/recon", match: "/recon" },
   { label: "Ports", icon: "ports", href: "/ports", match: "/ports" },
+  { label: "USB Lab", icon: "usb", href: "/usb", match: "/usb" },
   { label: "Agents", icon: "agents", href: "/agents", match: "/agents" },
   { label: "Experiments", icon: "experiments", href: "/experiments", match: "/experiments" },
   { label: "Runs", icon: "runs", href: "/runs", match: "/runs" },
