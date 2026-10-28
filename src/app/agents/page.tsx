@@ -1,6 +1,5 @@
 import { connection } from "next/server";
-import { apiGet } from "@/lib/api";
-import type { Agent } from "@/lib/types";
+import { listAgents } from "@/lib/entities";
 import { StatusTag } from "@/components/hud/StatusTag";
 import {
   Notice,
@@ -27,7 +26,7 @@ export default function AgentsPage() {
 async function AgentsContent() {
   await connection();
 
-  const res = await apiGet<Agent[]>("/api/agents");
+  const res = await listAgents();
   const agents = res.ok ? res.data : [];
 
   const active = agents.filter((agent) => agent.status === "running").length;

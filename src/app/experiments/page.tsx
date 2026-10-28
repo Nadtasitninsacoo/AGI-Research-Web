@@ -1,7 +1,6 @@
 import { connection } from "next/server";
-import { apiGet } from "@/lib/api";
+import { listAgents, listExperiments, listProjects } from "@/lib/entities";
 import { fmtDate, one, PAGE_SIZE, toPage } from "@/lib/format";
-import type { Agent, Experiment, Paginated, Project } from "@/lib/types";
 import { StatusTag } from "@/components/hud/StatusTag";
 import { Notice, PageFrame, PageHero, Pager, Shell } from "@/components/hud/Shell";
 import { ExperimentForm } from "./ExperimentForm";
@@ -21,9 +20,9 @@ async function ExperimentsContent({ searchParams }: { searchParams: PageProps<"/
   await connection();
   const page = toPage(one((await searchParams).page));
   const [exps, projects, agents] = await Promise.all([
-    apiGet<Paginated<Experiment>>("/api/experiments", { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
-    apiGet<Paginated<Project>>("/api/projects", { limit: 100 }),
-    apiGet<Agent[]>("/api/agents"),
+    listExperiments(PAGE_SIZE, (page - 1) * PAGE_SIZE),
+    listProjects(100),
+    listAgents(),
   ]);
 
   const projectRows = projects.ok ? projects.data.data : [];

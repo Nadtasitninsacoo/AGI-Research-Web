@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { apiGet } from "@/lib/api";
+import { listRuns } from "@/lib/entities";
 import { fmtDate, fmtDuration, one, PAGE_SIZE, toPage } from "@/lib/format";
-import { isRunStatus, RUN_STATUSES, type Paginated, type Run } from "@/lib/types";
+import { isRunStatus, RUN_STATUSES, type Run } from "@/lib/types";
 import { StatusTag } from "@/components/hud/StatusTag";
 import { Notice, PageFrame, PageHero, Pager, Shell } from "@/components/hud/Shell";
 
@@ -30,7 +30,7 @@ async function RunsContent({ searchParams }: { searchParams: PageProps<"/runs">[
   const rawStatus = one(sp.status);
   const status = isRunStatus(rawStatus) ? rawStatus : undefined;
 
-  const res = await apiGet<Paginated<Run>>("/api/runs", {
+  const res = await listRuns({
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
     status,
