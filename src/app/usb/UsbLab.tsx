@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { SignalScan } from "@/components/hud/SignalScan";
 import { MidiControl } from "./MidiControl";
+import { HidUsbLab } from "./HidUsbLab";
+import { AdbPanel } from "./AdbPanel";
 import { dfuList, usbInspect, usbScan, wslLsusb, type UsbDevice, type UsbProp } from "./actions";
 
 const WIN = typeof navigator !== "undefined" && /Win/i.test(navigator.platform);
@@ -188,6 +190,9 @@ export function UsbLab() {
         </ol>
         <p className="hint">ขั้นนี้ทำเองนอกเว็บ (ต้องใช้สิทธิ์ไดรเวอร์จับ USB) — เว็บนี้ช่วยส่วน enumerate + DFU ให้</p>
       </section>
+
+      <HidUsbLab />
+      <AdbPanel />
     </>
   );
 }

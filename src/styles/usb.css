@@ -125,6 +125,25 @@
 .midi-logline.rx { color: #8fd3ff; }
 .midi-dir { min-width: 42px; opacity: 0.8; }
 
+/* ---- WebHID live report grid (bit LEDs) ---- */
+.hid-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.hid-head b { color: var(--text-strong); }
+.hid-ids { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--dim); }
+.hid-coll { font-family: var(--font-mono), monospace; font-size: 9px; letter-spacing: 0.05em; color: #5fb0ff; border: 1px solid rgba(95, 176, 255, 0.3); border-radius: 3px; padding: 1px 6px; }
+
+.hid-reports { display: flex; flex-direction: column; gap: 12px; margin: 14px 0; }
+.hid-report-h { font-family: var(--font-mono), monospace; font-size: 10px; color: var(--faint); margin-bottom: 7px; letter-spacing: 0.06em; }
+.hid-bytes { display: flex; flex-wrap: wrap; gap: 8px; }
+.hid-byte { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 7px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: 5px; }
+.hid-bval { font-family: var(--font-mono), monospace; font-size: 13px; color: var(--text-strong); }
+.hid-bits { display: flex; gap: 2px; }
+.hid-bits i { width: 6px; height: 10px; border-radius: 1px; background: rgba(255, 255, 255, 0.08); transition: background 80ms, box-shadow 80ms; }
+.hid-bits i.on { background: var(--red-hot); box-shadow: 0 0 6px var(--red-glow); }
+.hid-bidx { font-family: var(--font-mono), monospace; font-size: 8px; color: var(--faint); }
+
+/* ---- ADB ---- */
+.adb-detail { margin-top: 12px; }
+
 .usb-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: var(--dim); line-height: 1.5; }
 .usb-steps b { color: var(--text-strong); }
 .usb-steps code, .usb-idrow code { background: rgba(255, 255, 255, 0.06); padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono), monospace; font-size: 11px; }
