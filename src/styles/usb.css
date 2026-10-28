@@ -92,8 +92,17 @@
 
 .midi-learn { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0 2px; padding: 10px 12px; border: 1px dashed var(--line-strong); border-radius: 6px; }
 .midi-learn.on { border-color: var(--red-hot); background: rgba(214, 22, 44, 0.06); }
-.midi-learn-hint { font-size: 11px; color: var(--dim); }
+.midi-learn > .btn { flex: none; }
+.midi-learn-hint { flex: 1 1 240px; min-width: 0; font-size: 11px; color: var(--dim); line-height: 1.45; }
 .midi-learn-hint b { color: var(--text-strong); }
+
+.midi-add { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 2px; }
+.midi-add > span { font-size: 11px; color: var(--dim); }
+.midi-add input[type="number"] { width: 70px; background: rgba(0, 0, 0, 0.4); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px; }
+.midi-empty { margin: 8px 0 0; font-size: 11px; color: var(--dim); line-height: 1.5; }
+.midi-empty b { color: var(--warn); }
+.midi-x { background: none; border: none; color: var(--faint); cursor: pointer; font-size: 11px; padding: 0 2px; flex: none; }
+.midi-x:hover { color: var(--red-hot); }
 
 .midi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
 .midi-ctrl { padding: 11px 12px; background: var(--grad-card, rgba(255, 255, 255, 0.03)); border: 1px solid var(--line); border-left: 2px solid #5fb0ff; border-radius: 6px; }
