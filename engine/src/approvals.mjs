@@ -3,6 +3,7 @@
 // the table is missing or the DB errors, the request resolves as "unavailable"
 // and the caller treats it as not approved (the command does not run).
 import { query, execute } from "./db.mjs";
+import { notifyApprovalNeeded } from "./notify.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -36,6 +37,9 @@ async function expire(id) {
 export async function requestAndWait({ runId, agentId, command, reason, tier, timeoutMs, pollMs }) {
   const id = await createRequest({ runId, agentId, command, reason, tier });
   if (!id) return { decision: "unavailable", id: null };
+
+  // Fire-and-forget push so the operator can approve from their phone (links to web).
+  await notifyApprovalNeeded({ command, reason, tier });
 
   const deadline = Date.now() + Math.max(1000, timeoutMs ?? 300_000);
   const step = Math.max(500, pollMs ?? 2_500);

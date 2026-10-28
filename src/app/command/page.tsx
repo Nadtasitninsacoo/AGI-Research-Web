@@ -8,6 +8,7 @@ import { AutoApproveToggle } from "@/components/hud/AutoApproveToggle";
 import { ApprovalsQueue } from "@/components/hud/ApprovalsQueue";
 import { WebFetchTool } from "@/components/hud/WebFetchTool";
 import { DbInitButton } from "@/components/hud/DbInitButton";
+import { NotifySettings } from "@/components/hud/NotifySettings";
 import { CommandConsole, type AgentOpt } from "./CommandConsole";
 import { JobsTable, type JobRow } from "./JobsTable";
 
@@ -71,6 +72,12 @@ async function CommandContent() {
         <AutoApproveToggle />
         <DbInitButton />
         <ApprovalsQueue />
+      </section>
+
+      <section className="panel span-12" id="notify">
+        <header className="panel-head"><span>00c // แจ้งเตือน TELEGRAM</span><em>งานเสร็จ/ล้มเหลว · ขออนุมัติ</em></header>
+        <NotifySettings />
+        <p className="muted hint">engine จะส่งข้อความเข้า Telegram เมื่อ run จบหรือมีคำขออนุมัติ (ข้อความขออนุมัติแนบลิงก์มาที่หน้านี้) · เปลี่ยนบัญชีรับแจ้งเตือนได้ที่ช่อง Chat ID</p>
       </section>
 
       <section className="panel span-7" id="command">

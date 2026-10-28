@@ -13,6 +13,7 @@ import { parseScope } from "./scope.mjs";
 import { runAgent } from "./agentLoop.mjs";
 import { runOrchestrator } from "./orchestrator.mjs";
 import { checkModel } from "./ollama.mjs";
+import { notifyRunFinished } from "./notify.mjs";
 import { printBanner, check, printReady } from "./banner.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -152,11 +153,16 @@ async function processRun(id) {
     });
     await setAgentStatus(agentId, result.status === "failed" ? "error" : "idle");
     await log({ agentId, runId: id, level: "info", message: `Run ${runStatus}.` });
+    await notifyRunFinished({
+      runId: id, status: runStatus, experiment: row.experiment_name, agent: agentName,
+      summary: isBad ? result.summary : undefined,
+    });
   } catch (err) {
     const message = err?.message ?? String(err);
     await log({ agentId, runId: id, level: "error", message: `Run crashed: ${message}` });
     await finalizeRun(id, { status: "failed", metrics: {}, errorMessage: message.slice(0, 2000) });
     await setAgentStatus(agentId, "error");
+    await notifyRunFinished({ runId: id, status: "failed", experiment: row.experiment_name, agent: agentName, summary: message });
   }
 }
 
