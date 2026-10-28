@@ -12,8 +12,10 @@ export function SignalScan({ label = "WORKING", note }: { label?: string; note?:
     <div className="sig" role="status" aria-label={label}>
       <span className="sig-label"><i className="sig-led" />{label}</span>
       <div className="sig-wave">
-        <svg viewBox="0 0 480 40" preserveAspectRatio="none" aria-hidden="true">
-          <g className="sig-g"><path className="sig-path" d={WAVE} /></g>
+        {/* width/height + fill="none" as attributes so a half-loaded CSS state
+            still renders a thin stroked line, never a full-height black blob. */}
+        <svg width="100%" height="40" viewBox="0 0 480 40" preserveAspectRatio="none" aria-hidden="true">
+          <g className="sig-g"><path className="sig-path" fill="none" d={WAVE} /></g>
         </svg>
       </div>
       {note && <span className="sig-note">{note}</span>}

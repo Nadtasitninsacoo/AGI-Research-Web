@@ -56,6 +56,7 @@ export function MidiControl() {
   const [pc, setPc] = useState("0");
   const [ccNum, setCcNum] = useState("7");
   const [ccVal, setCcVal] = useState(64);
+  const [addCc, setAddCc] = useState("7");
   const [sysex, setSysex] = useState("F0 7E 7F 06 01 F7"); // Universal "Identity Request"
 
   const pushLog = useCallback((l: Omit<LogLine, "t">) => {
@@ -149,6 +150,15 @@ export function MidiControl() {
     return () => { if (input) input.onmidimessage = null; };
   }, [inId, learn, pushLog]);
 
+  // Add a control by hand — many pedals only RECEIVE MIDI (they never transmit
+  // when you turn a physical knob), so Learn stays empty. Building the control
+  // yourself and sending to it is the reliable path.
+  function addControl(kind: "cc" | "pc", num: number) {
+    const key = kind === "cc" ? `cc-${ch}-${num}` : `pc-${ch}`;
+    setCtrls((prev) => (prev.some((x) => x.key === key) ? prev : [...prev, { key, kind, num, ch, value: 0, label: kind === "cc" ? ccLabel(num) : "Program / Preset", auto: false }]));
+  }
+  const removeControl = (key: string) => setCtrls((p) => p.filter((c) => c.key !== key));
+
   const rename = (key: string, label: string) => setCtrls((p) => p.map((c) => (c.key === key ? { ...c, label, auto: false } : c)));
   const drive = (c: Ctrl, val: number) => {
     setCtrls((p) => p.map((x) => (x.key === c.key ? { ...x, value: val } : x)));
@@ -204,6 +214,16 @@ export function MidiControl() {
           </div>
           {learn && <SignalScan label="LISTENING · MIDI" note={`${ctrls.length} controls`} />}
 
+          <div className="midi-add">
+            <span>สร้างปุ่มเอง:</span>
+            <input type="number" min={0} max={127} value={addCc} onChange={(e) => setAddCc(e.target.value)} title="เลข CC" />
+            <button type="button" className="lf-mini" onClick={() => addControl("cc", Math.min(127, Math.max(0, Number(addCc) || 0)))}><Icon name="plus" /> สไลเดอร์ CC</button>
+            <button type="button" className="lf-mini" onClick={() => addControl("pc", 0)}><Icon name="plus" /> ปุ่มเปลี่ยน Preset</button>
+          </div>
+          {learn && ctrls.length === 0 && (
+            <p className="midi-empty">บิดปุ่มแล้วยังไม่ขึ้น? เพดัลหลายรุ่น <b>รับ MIDI อย่างเดียว ไม่ส่งออก</b> — กด “สร้างปุ่มเอง” ด้านบนเพื่อสร้างสไลเดอร์/ปุ่ม แล้วลากส่งไปหาเพดัลดูว่าคุมอะไร (ดู log ด้านล่างว่ามีสัญญาณเข้าหรือไม่)</p>
+          )}
+
           {ctrls.length > 0 && (
             <div className="midi-grid">
               {ctrls.map((c) => (
@@ -211,6 +231,7 @@ export function MidiControl() {
                   <div className="midi-ctrl-top">
                     <input className="midi-label" value={c.label} onChange={(e) => rename(c.key, e.target.value)} title="แก้ชื่อปุ่ม" />
                     <span className="midi-tag">{c.kind === "cc" ? `CC${c.num}` : c.kind === "pc" ? "PC" : `N${c.num}`}·ch{c.ch + 1}{c.auto ? " ·เดา" : ""}</span>
+                    <button type="button" className="midi-x" onClick={() => removeControl(c.key)} aria-label="ลบปุ่ม">✕</button>
                   </div>
                   {c.kind === "cc" ? (
                     <div className="midi-slide">
