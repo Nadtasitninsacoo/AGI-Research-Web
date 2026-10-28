@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from "react";
 
 // Telegram notification settings. The token is write-only (never returned by the
 // API); leave it blank to keep the saved one. Changing the receiving account =
-// update the chat id and Save.
+// update the chat id and Save. This is a controlled floating modal — the trigger
+// lives in the sidebar (see SettingsNav), not on any page.
 
 type State = { enabled: boolean; chatId: string; baseUrl: string; tokenSet: boolean; tokenHint: string };
 
-export function NotifySettings() {
+export function NotifySettings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [s, setS] = useState<State | null>(null);
   const [token, setToken] = useState("");
   const [chatId, setChatId] = useState("");
@@ -32,16 +33,30 @@ export function NotifySettings() {
     }
   }
 
+  // Load fresh (and reset the transient note/token) each time the modal opens.
   useEffect(() => {
+    if (!open) return;
     alive.current = true;
-    const kick = () => {
-      void load();
-    };
-    kick();
+    setNote(null);
+    setToken("");
+    void load();
     return () => {
       alive.current = false;
     };
-  }, []);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, busy, onClose]);
+
+  function close() {
+    if (!busy) onClose();
+  }
 
   async function save() {
     if (busy) return;
@@ -81,60 +96,79 @@ export function NotifySettings() {
     }
   }
 
+  if (!open) return null;
+
   return (
-    <div className="notify-settings">
-      <label className="notify-row notify-toggle">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-        <span>เปิดแจ้งเตือนผ่าน Telegram (งานเสร็จ/ล้มเหลว + ขออนุมัติ)</span>
-      </label>
+    <div className="modal-overlay" role="presentation" onClick={close}>
+      <div
+        className="modal modal-wide"
+        role="dialog"
+        aria-modal="true"
+        aria-label="ตั้งค่าแจ้งเตือน Telegram"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h3 className="modal-title">แจ้งเตือน TELEGRAM</h3>
+          <button type="button" className="modal-close" onClick={close} disabled={busy} aria-label="ปิด">
+            ✕
+          </button>
+        </div>
 
-      <label className="notify-row">
-        <span>Bot Token</span>
-        <input
-          type="password"
-          className="field-input"
-          placeholder={s?.tokenSet ? `ตั้งไว้แล้ว (${s.tokenHint}) — เว้นว่างเพื่อใช้ตัวเดิม` : "วาง bot token จาก @BotFather"}
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          autoComplete="off"
-        />
-      </label>
+        <div className="notify-settings">
+          <label className="notify-row notify-toggle">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            <span>เปิดแจ้งเตือนผ่าน Telegram (งานเสร็จ/ล้มเหลว + ขออนุมัติ)</span>
+          </label>
 
-      <label className="notify-row">
-        <span>Chat ID</span>
-        <input
-          className="field-input"
-          placeholder="chat id ปลายทาง (เปลี่ยนบัญชีรับแจ้งเตือนที่นี่)"
-          value={chatId}
-          onChange={(e) => setChatId(e.target.value)}
-          autoComplete="off"
-        />
-      </label>
+          <label className="notify-row">
+            <span>Bot Token</span>
+            <input
+              type="password"
+              className="field-input"
+              placeholder={s?.tokenSet ? `ตั้งไว้แล้ว (${s.tokenHint}) — เว้นว่างเพื่อใช้ตัวเดิม` : "วาง bot token จาก @BotFather"}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              autoComplete="off"
+            />
+          </label>
 
-      <label className="notify-row">
-        <span>Base URL เว็บ</span>
-        <input
-          className="field-input"
-          placeholder="เช่น http://192.168.1.50:3001 (ให้ลิงก์อนุมัติเปิดได้จากมือถือ)"
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
-          autoComplete="off"
-        />
-      </label>
+          <label className="notify-row">
+            <span>Chat ID</span>
+            <input
+              className="field-input"
+              placeholder="chat id ปลายทาง (เปลี่ยนบัญชีรับแจ้งเตือนที่นี่)"
+              value={chatId}
+              onChange={(e) => setChatId(e.target.value)}
+              autoComplete="off"
+            />
+          </label>
 
-      <div className="notify-actions">
-        <button type="button" className="btn btn-danger btn-sm" onClick={save} disabled={busy}>
-          {busy ? "…" : "บันทึก"}
-        </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={test} disabled={busy}>
-          ส่งข้อความทดสอบ
-        </button>
+          <label className="notify-row">
+            <span>Base URL เว็บ</span>
+            <input
+              className="field-input"
+              placeholder="เช่น http://192.168.1.50:3001 (ให้ลิงก์อนุมัติเปิดได้จากมือถือ)"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              autoComplete="off"
+            />
+          </label>
+
+          <div className="notify-actions">
+            <button type="button" className="btn btn-danger btn-sm" onClick={save} disabled={busy}>
+              {busy ? "…" : "บันทึก"}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={test} disabled={busy}>
+              ส่งข้อความทดสอบ
+            </button>
+          </div>
+
+          {note && <p className={`notice notice-${note.ok ? "ok" : "error"}`} role="status">{note.text}</p>}
+          <small className="muted">
+            วิธีได้ค่า: ทัก <code>@BotFather</code> สร้าง bot → ได้ token · ทัก <code>@userinfobot</code> เพื่อดู chat id ของคุณ · แล้วทักบอทของคุณ 1 ครั้งก่อน
+          </small>
+        </div>
       </div>
-
-      {note && <p className={`notice notice-${note.ok ? "ok" : "error"}`} role="status">{note.text}</p>}
-      <small className="muted">
-        วิธีได้ค่า: ทัก <code>@BotFather</code> สร้าง bot → ได้ token · ทัก <code>@userinfobot</code> เพื่อดู chat id ของคุณ · แล้วทักบอทของคุณ 1 ครั้งก่อน
-      </small>
     </div>
   );
 }
