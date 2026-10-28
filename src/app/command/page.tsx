@@ -8,6 +8,7 @@ import { AutoApproveToggle } from "@/components/hud/AutoApproveToggle";
 import { ApprovalsQueue } from "@/components/hud/ApprovalsQueue";
 import { WebFetchTool } from "@/components/hud/WebFetchTool";
 import { DbInitButton } from "@/components/hud/DbInitButton";
+import { SecurityMonitor } from "@/components/hud/SecurityMonitor";
 import { CommandConsole, type AgentOpt } from "./CommandConsole";
 import { JobsTable, type JobRow } from "./JobsTable";
 
@@ -71,6 +72,12 @@ async function CommandContent() {
         <AutoApproveToggle />
         <DbInitButton />
         <ApprovalsQueue />
+      </section>
+
+      <section className="panel span-12" id="sentinel">
+        <header className="panel-head"><span>00b // SENTINEL — COUNTER-ATTACK MONITOR</span><em>เฝ้าระวัง + ตอบโต้ (ตั้งรับ)</em></header>
+        <SecurityMonitor />
+        <p className="muted hint">เฝ้าระวังสัญญาณถูกตีกลับ/ถูกยึดการควบคุม · ตรวจ scope block, forbidden ซ้ำ ๆ แล้วล็อกดาวน์เองได้ · ปุ่ม LOCKDOWN หยุดเอนจินทันที (หยุดตัวเอง ไม่ยิงกลับ)</p>
       </section>
 
       <section className="panel span-7" id="command">

@@ -26,6 +26,7 @@ import { config } from "./config.mjs";
 import { log } from "./logger.mjs";
 import { execute } from "./db.mjs";
 import { requestAndWait } from "./approvals.mjs";
+import { isLockdown, recordEvent, evaluateAutoResponse } from "./sentinel.mjs";
 import { normalizeCommand } from "./normalize.mjs";
 import { getPayloads, PAYLOAD_COUNT, CATEGORIES } from "../payloads/library.mjs";
 
@@ -325,10 +326,22 @@ async function execRunCommand({ args, scope, agentConfig, runParams, agentId, ru
 
   const remember = (detail) => cmdHistory?.set(historyKey, { failed: true, detail });
 
+  // 0) Sentinel kill switch: while the engine is in defensive LOCKDOWN, every
+  // command is halted — an operator (or the auto-response) tripped it because a
+  // counter-attack / hijack is suspected. Checked first, before any other gate.
+  if (await isLockdown()) {
+    await log({ agentId, runId, level: "warn", message: `LOCKDOWN BLOCK: ${command}` });
+    await recordEvent({ kind: "lockdown_block", severity: "warn", runId, agentId, command });
+    remember("was refused — engine in lockdown");
+    return "NOT RUN — the engine is in defensive LOCKDOWN. All commands are halted until an operator lifts it.";
+  }
+
   // 1) Scope / rules of engagement.
   const sc = checkScope(command, scope);
   if (!sc.ok) {
     await log({ agentId, runId, level: "warn", message: `SCOPE BLOCK: ${command}`, context: { outOfScope: sc.outOfScope } });
+    await recordEvent({ kind: "scope_block", severity: "high", runId, agentId, command, detail: `out of scope: ${sc.outOfScope.join(", ")}` });
+    await evaluateAutoResponse({ runId, agentId });
     remember("was refused as out of scope");
     return `REFUSED (out of scope): ${sc.reason}`;
   }
@@ -337,6 +350,10 @@ async function execRunCommand({ args, scope, agentConfig, runParams, agentId, ru
   const d = decide(command, agentConfig, runParams);
   if (d.decision === "deny") {
     await log({ agentId, runId, level: "warn", message: `POLICY DENY [${d.tier}]: ${command}`, context: { reason: d.reason } });
+    // A forbidden attempt is the strongest hijack signal — record critical and let
+    // the auto-response decide whether a burst warrants lockdown.
+    await recordEvent({ kind: "policy_deny", severity: "critical", runId, agentId, command, detail: d.reason });
+    await evaluateAutoResponse({ runId, agentId });
     remember("was denied by policy");
     return `REFUSED: ${d.reason}`;
   }
@@ -348,6 +365,7 @@ async function execRunCommand({ args, scope, agentConfig, runParams, agentId, ru
     });
     if (verdict.decision !== "approved") {
       await log({ agentId, runId, level: "warn", message: `APPROVAL ${verdict.decision.toUpperCase()} [${d.tier}]: ${command}` });
+      await recordEvent({ kind: "approval_denied", severity: "warn", runId, agentId, command, detail: `approval ${verdict.decision}` });
       remember(`was not approved (${verdict.decision})`);
       return `NOT RUN — approval ${verdict.decision}. ${d.reason}`;
     }
