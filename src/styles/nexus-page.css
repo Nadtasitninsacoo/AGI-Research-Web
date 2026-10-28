@@ -181,19 +181,136 @@
 .reactor { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 22px 14px 10px; }
 
 .reactor-core { position: relative; display: grid; place-items: center; width: 180px; height: 180px; }
-.reactor-orb {
+/* ---- Atom: radiation nucleus + two electron orbs on crossed orbits ---- */
+.reactor-atom {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 128px;
-  height: 128px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 38%, #ff5661 0%, #c3122a 42%, #6c0714 66%, #0a0507 100%);
-  box-shadow: 0 0 70px 10px rgba(214, 22, 44, 0.45), inset 0 0 34px rgba(0, 0, 0, 0.62);
+  width: 368px;
+  height: 196px;
+  max-width: 100%;
 }
-.reactor-orb b { color: #fff; font-size: 38px; font-weight: 300; line-height: 1; letter-spacing: -0.02em; }
-.reactor-orb small { margin-top: 3px; color: #e9b9bf; font-family: var(--font-geist-mono), monospace; font-size: 7px; letter-spacing: 0.34em; }
-.reactor-ring { position: absolute; inset: 14px; border: 1px solid var(--line-hot); border-radius: 50%; animation: cerberus-ping 3.2s ease-out infinite; }
-.reactor-ring-2 { inset: 2px; animation-delay: 1.6s; }
+
+/* Three crossed elliptical orbits (classic atom). The flat one (a) carries the
+   two electrons at its horizontal tips; the tilted pair build the cross. */
+.atom-orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 348px;
+  height: 120px;
+  border: 1px solid var(--line-hot);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) rotate(0deg);
+}
+.atom-orbit-a { border-color: rgba(214, 22, 44, 0.3); }
+.atom-orbit-b { transform: translate(-50%, -50%) rotate(60deg); border-color: rgba(60, 170, 255, 0.24); }
+.atom-orbit-c { transform: translate(-50%, -50%) rotate(-60deg); border-color: rgba(60, 170, 255, 0.24); }
+
+/* Nucleus — classic black-on-yellow radiation hazard, glowing + pulsing. */
+.atom-nucleus {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.72);
+  background: radial-gradient(circle at 50% 34%, #6fe0ff 0%, #0f9bf2 44%, #0b4f93 74%, #02101d 100%);
+  box-shadow:
+    0 0 52px 8px rgba(24, 150, 245, 0.5),
+    0 0 14px 2px rgba(90, 205, 255, 0.6),
+    inset 0 0 26px rgba(0, 0, 0, 0.62);
+  animation: atom-pulse 3.4s ease-in-out infinite;
+}
+.nucleus-mark {
+  width: 84px;
+  height: 84px;
+  color: #0b0b0b;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
+}
+
+/* Electrons — red score orbs riding the orbit tips, each with a number. */
+.atom-electron {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  background: radial-gradient(circle at 50% 36%, #ff5661 0%, #c3122a 44%, #6c0714 70%, #0a0507 100%);
+  box-shadow: 0 0 30px 3px rgba(214, 22, 44, 0.42), inset 0 0 20px rgba(0, 0, 0, 0.6);
+}
+.atom-electron-l { left: 0; }
+.atom-electron-r { right: 0; }
+.atom-electron b { color: #fff; font-size: 25px; font-weight: 300; line-height: 1; letter-spacing: -0.02em; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
+.atom-electron small { margin-top: 2px; color: #e9b9bf; font-family: var(--font-geist-mono), monospace; font-size: 6px; letter-spacing: 0.3em; }
+
+@keyframes atom-pulse {
+  0%, 100% { box-shadow: 0 0 52px 8px rgba(24, 150, 245, 0.5), 0 0 14px 2px rgba(90, 205, 255, 0.6), inset 0 0 26px rgba(0, 0, 0, 0.62); }
+  50% { box-shadow: 0 0 72px 14px rgba(24, 150, 245, 0.72), 0 0 20px 4px rgba(90, 205, 255, 0.82), inset 0 0 26px rgba(0, 0, 0, 0.62); }
+}
+/* ---- REACTION: core goes critical while an agent runs ---- */
+.reactor-atom.is-reacting .atom-orbit-a { animation: orbit-spin-a 7s linear infinite; }
+.reactor-atom.is-reacting .atom-orbit-b { animation: orbit-spin-b 5.5s linear infinite; }
+.reactor-atom.is-reacting .atom-orbit-c { animation: orbit-spin-c 6.2s linear infinite; }
+.reactor-atom.is-reacting .atom-orbit-a { border-color: rgba(214, 22, 44, 0.5); }
+.reactor-atom.is-reacting .atom-orbit-b,
+.reactor-atom.is-reacting .atom-orbit-c { border-color: rgba(90, 200, 255, 0.5); }
+
+.reactor-atom.is-reacting .atom-nucleus { animation: atom-critical 0.85s ease-in-out infinite; }
+/* Expanding shock ring emitted from the nucleus. */
+.atom-nucleus::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid rgba(90, 205, 255, 0.75);
+  opacity: 0;
+  pointer-events: none;
+}
+.reactor-atom.is-reacting .atom-nucleus::after { animation: nuke-ping 1.15s ease-out infinite; }
+.reactor-atom.is-reacting .atom-electron { animation: electron-hot 1.1s ease-in-out infinite; }
+.reactor-atom.is-reacting .atom-electron-r { animation-delay: 0.55s; }
+
+@keyframes orbit-spin-a {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+@keyframes orbit-spin-b {
+  from { transform: translate(-50%, -50%) rotate(60deg); }
+  to { transform: translate(-50%, -50%) rotate(420deg); }
+}
+@keyframes orbit-spin-c {
+  from { transform: translate(-50%, -50%) rotate(-60deg); }
+  to { transform: translate(-50%, -50%) rotate(300deg); }
+}
+@keyframes atom-critical {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 56px 10px rgba(24, 150, 245, 0.6), 0 0 16px 3px rgba(120, 220, 255, 0.7), inset 0 0 26px rgba(0, 0, 0, 0.62);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 96px 22px rgba(60, 180, 255, 0.9), 0 0 30px 8px rgba(150, 235, 255, 0.95), inset 0 0 22px rgba(0, 0, 0, 0.55);
+  }
+}
+@keyframes nuke-ping {
+  0% { transform: scale(1); opacity: 0.75; }
+  100% { transform: scale(1.85); opacity: 0; }
+}
+@keyframes electron-hot {
+  0%, 100% { transform: translateY(-50%) scale(1); box-shadow: 0 0 30px 3px rgba(214, 22, 44, 0.42), inset 0 0 20px rgba(0, 0, 0, 0.6); }
+  50% { transform: translateY(-50%) scale(1.08); box-shadow: 0 0 46px 8px rgba(255, 70, 90, 0.75), inset 0 0 18px rgba(0, 0, 0, 0.55); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atom-orbit, .atom-nucleus, .atom-electron, .atom-nucleus::after { animation: none; }
+}
 
 .reactor-bars { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 11px; }
 .reactor-bars .nx-empty { text-align: center; }
@@ -201,16 +318,26 @@
 .rb-name { display: flex; align-items: center; gap: 8px; font-family: var(--font-geist-mono), monospace; font-size: 10px; letter-spacing: 0.08em; color: var(--text-strong); }
 .rb-gauge {
   position: relative;
-  height: 9px;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid var(--line);
-  border-radius: 2px;
+  height: 14px;
   overflow: hidden;
-  /* segmented "equalizer" ticks */
-  -webkit-mask: repeating-linear-gradient(90deg, #000 0 7px, transparent 7px 9px);
-  mask: repeating-linear-gradient(90deg, #000 0 7px, transparent 7px 9px);
+  /* Molecular chain: atom "beads" strung on a thin bond line. The dim track
+     shows the whole chain; the fill (i) lights the completed links. */
+  background: rgba(150, 190, 255, 0.1);
+  --chain:
+    radial-gradient(circle 4px at 7px 50%, #000 46%, rgba(0, 0, 0, 0) 54%) 0 0 / 14px 100% repeat-x,
+    linear-gradient(#000, #000) 0 50% / 100% 2px no-repeat;
+  -webkit-mask: var(--chain);
+  mask: var(--chain);
 }
-.rb-gauge i { display: block; height: 100%; background: var(--grad-red); box-shadow: 0 0 10px var(--red-glow); transition: width 0.4s ease; }
+.rb-gauge i {
+  display: block;
+  height: 100%;
+  background: radial-gradient(circle 4px at 7px 50%, #8fe3ff 0%, #1f9bf2 48%, #0a4f93 100%), var(--grad-red);
+  background-size: 14px 100%, 100% 100%;
+  background-repeat: repeat-x, no-repeat;
+  box-shadow: 0 0 10px rgba(40, 160, 245, 0.6);
+  transition: width 0.4s ease;
+}
 .rb.s-running .rb-gauge i { animation: cerberus-pulse 1.6s infinite; }
 .rb.s-error .rb-gauge i { background: linear-gradient(180deg, #ff5661, #a50f1e); }
 .rb-val { font-family: var(--font-geist-mono), monospace; font-size: 10px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
