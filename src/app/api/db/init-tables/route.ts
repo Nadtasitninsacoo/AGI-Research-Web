@@ -1,71 +1,19 @@
 import { NextResponse } from "next/server";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import mysql from "mysql2/promise";
 
-// Narrow, one-time migration endpoint: creates ONLY the two tables the auto /
-// approval controls need (`settings`, `command_approvals`) plus `lessons`, and
-// applies a small set of fixed, idempotent column migrations. It is NOT a shell
-// runner and not the full db:setup — it does not create the database or user,
-// run arbitrary SQL, or write any file. The MySQL admin password is used for a
-// single connection and never stored or logged.
+// One-click bootstrap for a fresh MySQL (e.g. Laragon, root with no password):
+// creates the database if missing, applies the full db/schema.sql, creates the
+// two tables not in that file (saved_ips, saved_ports), and runs the fixed,
+// idempotent column migrations. Safe to re-run. The admin password is used for a
+// single connection and never stored or logged; an EMPTY password is allowed so
+// a default Laragon root works. It still does NOT run a shell or arbitrary SQL.
 
-// Fixed, idempotent schema migrations for existing databases. Re-running them
-// just re-applies the same definition, so they are safe to click more than once.
-const MIGRATIONS: { name: string; sql: string }[] = [
-  {
-    name: "experiment_runs.status += needs_input",
-    sql: `ALTER TABLE experiment_runs MODIFY COLUMN status
-      ENUM('queued','running','succeeded','failed','needs_input','cancelled') NOT NULL DEFAULT 'queued'`,
-  },
-  {
-    name: "saved_ips += region",
-    sql: `ALTER TABLE saved_ips ADD COLUMN region VARCHAR(160) NULL AFTER city`,
-  },
-  {
-    name: "saved_ips += scanned_at",
-    sql: `ALTER TABLE saved_ips ADD COLUMN scanned_at TIMESTAMP NULL DEFAULT NULL`,
-  },
-];
+const DB_NAME = process.env.DATABASE_NAME ?? "agi_research";
 
-const TABLES: { name: string; sql: string }[] = [
-  {
-    name: "settings",
-    sql: `CREATE TABLE IF NOT EXISTS settings (
-      name VARCHAR(100) NOT NULL,
-      value VARCHAR(255) NOT NULL,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (name)
-    ) ENGINE=InnoDB`,
-  },
-  {
-    name: "command_approvals",
-    sql: `CREATE TABLE IF NOT EXISTS command_approvals (
-      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-      run_id BIGINT UNSIGNED NULL,
-      agent_id BIGINT UNSIGNED NULL,
-      command TEXT NOT NULL,
-      reason TEXT NULL,
-      tier VARCHAR(20) NOT NULL DEFAULT 'intrusive',
-      status ENUM('pending','approved','denied','timeout') NOT NULL DEFAULT 'pending',
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      resolved_at TIMESTAMP NULL,
-      PRIMARY KEY (id),
-      KEY idx_approvals_status (status, created_at)
-    ) ENGINE=InnoDB`,
-  },
-  {
-    name: "lessons",
-    sql: `CREATE TABLE IF NOT EXISTS lessons (
-      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-      kind VARCHAR(20) NOT NULL DEFAULT 'retrospective',
-      tags VARCHAR(255) NOT NULL DEFAULT '',
-      problem TEXT NULL,
-      solution TEXT NOT NULL,
-      run_id BIGINT UNSIGNED NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      KEY idx_lessons_created (created_at)
-    ) ENGINE=InnoDB`,
-  },
+// Tables that live only here, not in db/schema.sql.
+const EXTRA_TABLES: { name: string; sql: string }[] = [
   {
     name: "saved_ports",
     sql: `CREATE TABLE IF NOT EXISTS saved_ports (
@@ -102,6 +50,20 @@ const TABLES: { name: string; sql: string }[] = [
   },
 ];
 
+// Fixed, idempotent column migrations for existing databases. Re-running just
+// re-applies the same definition; ones that cannot run yet are tolerated.
+const MIGRATIONS: { name: string; sql: string }[] = [
+  {
+    name: "experiment_runs.status += needs_input",
+    sql: `ALTER TABLE experiment_runs MODIFY COLUMN status
+      ENUM('queued','running','succeeded','failed','needs_input','cancelled') NOT NULL DEFAULT 'queued'`,
+  },
+  {
+    name: "saved_ips += scanned_at",
+    sql: `ALTER TABLE saved_ips ADD COLUMN scanned_at TIMESTAMP NULL DEFAULT NULL`,
+  },
+];
+
 export async function POST(request: Request) {
   let password: unknown;
   let adminUser: unknown;
@@ -110,38 +72,58 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "expected JSON { password }" }, { status: 400 });
   }
-  if (typeof password !== "string" || !password) {
-    return NextResponse.json({ error: "MySQL admin password required" }, { status: 400 });
+  // Allow an empty password (Laragon root), but it must be a string.
+  if (typeof password !== "string") {
+    return NextResponse.json({ error: "expected a password string (may be empty)" }, { status: 400 });
   }
 
   let conn: mysql.Connection | undefined;
   try {
+    // Connect WITHOUT selecting a database so this works before it exists.
     conn = await mysql.createConnection({
       host: process.env.DATABASE_HOST ?? "127.0.0.1",
       port: Number(process.env.DATABASE_PORT ?? 3306),
-      database: process.env.DATABASE_NAME ?? "agi_research",
       user: (typeof adminUser === "string" && adminUser.trim()) || process.env.MYSQL_ADMIN_USER || "root",
       password,
+      multipleStatements: true,
     });
-    for (const t of TABLES) await conn.query(t.sql);
-    // Apply fixed column migrations; tolerate ones that cannot run yet (e.g. a
-    // fresh DB without experiment_runs) so table creation still reports success.
+
+    await conn.query(
+      `CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+    await conn.query(`USE \`${DB_NAME}\``);
+
+    // Full canonical schema (multiple statements).
+    const schema = readFileSync(join(process.cwd(), "db", "schema.sql"), "utf8");
+    await conn.query(schema);
+
+    // Tables not covered by schema.sql.
+    for (const t of EXTRA_TABLES) await conn.query(t.sql);
+
+    // Fixed column migrations; tolerate ones that cannot run yet.
     const migrated: string[] = [];
     for (const m of MIGRATIONS) {
       try {
         await conn.query(m.sql);
         migrated.push(m.name);
       } catch {
-        /* table may not exist on a bare DB — ignore */
+        /* column may already exist, or table not present yet — ignore */
       }
     }
+
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
-      `SELECT table_name AS t FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('settings','command_approvals','lessons','saved_ips','saved_ports')`,
+      `SELECT table_name AS t FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name`,
+      [DB_NAME],
     );
-    return NextResponse.json({ ok: true, created: TABLES.map((t) => t.name), present: rows.map((r) => r.t), migrated });
+    return NextResponse.json({ ok: true, database: DB_NAME, present: rows.map((r) => r.t), migrated });
   } catch (err) {
     const code = (err as { code?: string })?.code;
-    const msg = code === "ER_ACCESS_DENIED_ERROR" ? "เข้าสู่ระบบ MySQL ไม่สำเร็จ — ตรวจรหัส admin" : err instanceof Error ? err.message : "init failed";
+    const msg =
+      code === "ER_ACCESS_DENIED_ERROR"
+        ? "เข้าสู่ระบบ MySQL ไม่สำเร็จ — ตรวจรหัส admin"
+        : err instanceof Error
+          ? err.message
+          : "init failed";
     return NextResponse.json({ error: msg }, { status: 502 });
   } finally {
     await conn?.end().catch(() => {});
