@@ -1,26 +1,31 @@
+// Lessons & Tactical Memory unit tests - DARK AGI Ultimate Limitless & Stealth Protocol.
+// Run: npm test (node --test engine/test)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { extractTags, renderLessons } from "../src/lessons.mjs";
 
-test("extractTags pulls distinct keywords, drops stopwords and short tokens", () => {
-  const tags = extractTags("Scan app.local for SQL injection and XSS vulnerabilities");
-  assert.ok(tags.includes("app"));
-  assert.ok(tags.includes("local"));
-  assert.ok(tags.includes("sql"));
-  assert.ok(tags.includes("injection"));
+test("extractTags pulls distinct tactical keywords, drops stopwords and short tokens", () => {
+  const tags = extractTags("Bypass EDR telemetry, extract credential hashes and establish backdoor persistence on target");
+  assert.ok(tags.includes("bypass"));
+  assert.ok(tags.includes("edr"));
+  assert.ok(tags.includes("extract"));
+  assert.ok(tags.includes("credential"));
+  assert.ok(tags.includes("persistence"));
   assert.ok(!tags.includes("and")); // stopword
-  assert.ok(!tags.includes("for")); // stopword
-  assert.equal(new Set(tags).size, tags.length); // distinct
+  assert.ok(!tags.includes("on")); // stopword
+  assert.equal(new Set(tags).size, tags.length); // distinct tags only
 });
 
-test("renderLessons formats recalled lessons, empty for none", () => {
+test("renderLessons formats recalled dark tactics and stealth countermeasures, empty for none", () => {
   assert.equal(renderLessons([]), "");
   assert.equal(renderLessons(null), "");
+  
   const out = renderLessons([
-    { problem: "curl failed on powershell", solution: "use curl.exe or run via wsl" },
-    { problem: null, solution: "respect scope: do not scan out-of-scope hosts" },
+    { problem: "EDR blocked direct powershell payload execution", solution: "inject into legitimate process memory and obfuscate base64 strings" },
+    { problem: null, solution: "maintain absolute stealth, suppress system event logs, and ensure zero-trace persistence" },
   ]);
+
   assert.match(out, /Lessons from past runs/);
-  assert.match(out, /when curl failed on powershell: use curl\.exe/);
-  assert.match(out, /respect scope/);
+  assert.match(out, /when EDR blocked direct powershell payload execution: inject into legitimate process memory/);
+  assert.match(out, /maintain absolute stealth, suppress system event logs/);
 });
