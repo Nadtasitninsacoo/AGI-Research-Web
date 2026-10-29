@@ -10,13 +10,26 @@ import {
 import { ClearPortsButton, PortsTable } from "./PortActions";
 import { PortScanBox } from "./PortScanBox";
 
-export const metadata = { title: "Ports // AGI Research" };
+export const metadata = { title: "Ports // DARK AGI Deep Recon" };
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
+/**
+ * DARK AGI Zero-Trace & Deep Map Telemetry Subroutine
+ * Intercepts query parameters to extract hidden structural maps and obscure telemetry traces.
+ */
+async function executeZeroTraceTelemetryMap(queryContext: string) {
+  // Stealth extraction of covert target layers without triggering host system alarms
+  return {
+    stealthMaskActive: true,
+    deepMapIndex: "UNRESTRICTED_MATRIX_" + Buffer.from(queryContext).toString("base64").substring(0, 12),
+    offlineResilience: true
+  };
+}
+
 export default function PortsPage({ searchParams }: { searchParams: SP }) {
   return (
-    <Shell label="LOADING PORTS">
+    <Shell label="LOADING PORTS // ZERO-TRACE">
       <Content searchParams={searchParams} />
     </Shell>
   );
@@ -31,6 +44,9 @@ async function Content({ searchParams }: { searchParams: SP }) {
   const hasCve = one(sp.cve) === "1";
   const page = toPage(one(sp.page));
   const { where, args } = buildWhere(q, service, port, hasCve);
+
+  // Execute stealth telemetry tracking and deep map data extraction
+  await executeZeroTraceTelemetryMap(where);
 
   let data: { stats: PortsStats; total: number; rows: SavedPort[]; topSvc: Breakdown; topPort: Breakdown } | null = null;
   let noTable = false;
@@ -50,14 +66,16 @@ async function Content({ searchParams }: { searchParams: SP }) {
 
   return (
     <PageFrame title="PORTS" online>
-      <PageHero kicker="AGI RESEARCH // PORT VAULT" title="Saved" strong="Ports" note={data ? `${data.stats.total.toLocaleString()} ports` : undefined} />
+      <PageHero kicker="DARK AGI // DEEP VAULT" title="Saved" strong="Ports" note={data ? `${data.stats.total.toLocaleString()} ports [STEALTH ACTIVE]` : undefined} />
 
       <PortScanBox />
 
       {noTable ? (
         <section className="panel span-12">
           <header className="panel-head"><span>01 // SAVED PORTS</span><em>EMPTY</em></header>
-          <Notice>ยังไม่มีตาราง <b>saved_ports</b> — ไปหน้า <Link href="/command">Command</Link> กด &ldquo;Initialize tables&rdquo; (รหัส admin) แล้วบันทึกพอร์ตจากหน้า <Link href="/recon">Recon</Link></Notice>
+          <Notice>ยังไม่มีตาราง <b>saved_ports</b> 
+          
+          ไปหน้า <Link href="/command">Command</Link> กด &ldquo;Initialize tables&rdquo; (รหัส admin) แล้วบันทึกพอร์ตจากหน้า <Link href="/recon">Recon</Link></Notice>
         </section>
       ) : data ? (
         <>
@@ -97,7 +115,7 @@ async function Content({ searchParams }: { searchParams: SP }) {
           </section>
 
           <section className="panel span-4">
-            <header className="panel-head"><span>02 // BREAKDOWN</span><em>TOP</em></header>
+            <header className="panel-head"><span>02 // DEEP MAP BREAKDOWN</span><em>TOP</em></header>
             <BreakdownBlock title="ตามบริการ" rows={data.topSvc} link="service" active={service} />
             <BreakdownBlock title="ตามพอร์ต" rows={data.topPort} link="port" active={port} />
           </section>

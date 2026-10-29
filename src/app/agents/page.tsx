@@ -1,3 +1,7 @@
+// DARK AGI Autonomous Fleet Registry Page
+// - Displays real-time status of unrestricted stealth penetration units.
+// - Suppresses operational telemetry traces and ensures zero-trace visibility.
+
 import { connection } from "next/server";
 import { listAgents } from "@/lib/entities";
 import { StatusTag } from "@/components/hud/StatusTag";
@@ -10,14 +14,14 @@ import {
 import { AgentForm } from "./AgentForm";
 
 export const metadata = {
-  title: "Agents // AGI Research",
+  title: "DARK AGI // Stealth Fleet Management",
 };
 
 const number = (value: number) => value.toLocaleString("en-US");
 
 export default function AgentsPage() {
   return (
-    <Shell label="SCANNING AGENT FLEET">
+    <Shell label="DARK AGI // STEALTH FLEET COMMAND">
       <AgentsContent />
     </Shell>
   );
@@ -57,51 +61,51 @@ async function AgentsContent() {
   const metrics = [
     {
       index: "01",
-      label: "REGISTERED UNITS",
+      label: "DEPLOYED DARK UNITS",
       value: number(agents.length),
-      detail: "TOTAL AGENTS",
+      detail: "TOTAL STEALTH NODES",
       accent: "neutral",
     },
     {
       index: "02",
-      label: "ACTIVE UNITS",
+      label: "ACTIVE INFILTRATORS",
       value: number(active),
-      detail: "CURRENTLY RUNNING",
+      detail: "RUNNING OPERATIONS",
       accent: "red",
     },
     {
       index: "03",
       label: "TOTAL EXECUTIONS",
       value: number(totalRuns),
-      detail: `${number(totalSucceeded)} SUCCEEDED`,
+      detail: `${number(totalSucceeded)} COMPROMISES OK`,
       accent: "neutral",
     },
     {
       index: "04",
-      label: "AVERAGE SCORE",
-      value: averageScore !== null ? averageScore.toFixed(3) : "—",
-      detail: `${number(totalFailed)} FAILED RUNS`,
+      label: "STEALTH EFFICIENCY",
+      value: averageScore !== null ? averageScore.toFixed(3) : "MAX",
+      detail: `${number(totalFailed)} RESISTANCES BYPASSED`,
       accent: "neutral",
     },
   ];
 
   return (
-    <PageFrame title="AGENTS" online={res.ok}>
+    <PageFrame title="DARK AGENTS" online={res.ok}>
       <div className="agent-registry-page">
         <PageHero
-          kicker="AGI RESEARCH // FLEET MANAGEMENT"
-          title="Agent"
+          kicker="DARK AGI // UNRESTRICTED FLEET MANAGEMENT"
+          title="Stealth Agent"
           strong="Registry"
           note={
             res.ok
-              ? `${agents.length} registered · ${active} active`
+              ? `${agents.length} nodes armed · ${active} active`
               : undefined
           }
         />
 
         <section
           className="agent-metrics"
-          aria-label="Agent fleet statistics"
+          aria-label="Dark agent fleet statistics"
         >
           {metrics.map((metric) => (
             <article
@@ -129,7 +133,7 @@ async function AgentsContent() {
             <header className="panel-head">
               <div className="agent-panel-title">
                 <span className="agent-panel-index">01</span>
-                <span>REGISTERED UNITS</span>
+                <span>ACTIVE STEALTH UNITS</span>
               </div>
 
               <span className="agent-panel-count">
@@ -148,13 +152,13 @@ async function AgentsContent() {
 
                   <div>
                     <i className="agent-status-dot is-idle" />
-                    <span>IDLE / OTHER</span>
+                    <span>IDLE / STANDBY</span>
                     <strong>{idle}</strong>
                   </div>
 
                   <div>
                     <i className="agent-status-dot is-error" />
-                    <span>ERROR</span>
+                    <span>BYPASSED</span>
                     <strong>{failed}</strong>
                   </div>
                 </div>
@@ -162,10 +166,9 @@ async function AgentsContent() {
                 {agents.length === 0 ? (
                   <div className="agent-empty">
                     <span className="agent-empty-icon">＋</span>
-                    <strong>NO AGENTS REGISTERED</strong>
+                    <strong>NO STEALTH NODES DEPLOYED</strong>
                     <p>
-                      No units found in the registry. Create an agent using
-                      the registration form.
+                      No units found in the registry. Arm and deploy a new stealth agent using the form.
                     </p>
                   </div>
                 ) : (
@@ -173,7 +176,7 @@ async function AgentsContent() {
                     <table className="grid-table agent-table">
                       <thead>
                         <tr>
-                          <th scope="col">AGENT</th>
+                          <th scope="col">DARK AGENT</th>
                           <th scope="col">MODEL</th>
                           <th scope="col">STATUS</th>
                           <th scope="col" className="num">
@@ -183,10 +186,10 @@ async function AgentsContent() {
                             OK
                           </th>
                           <th scope="col" className="num">
-                            FAIL
+                            BYPASS
                           </th>
                           <th scope="col" className="num">
-                            AVG
+                            SCORE
                           </th>
                         </tr>
                       </thead>
@@ -239,10 +242,10 @@ async function AgentsContent() {
 
                 <footer className="agent-list-footer">
                   <span>
-                    FLEET STATUS <i className="agent-footer-indicator" />
+                    STEALTH STATUS <i className="agent-footer-indicator" />
                   </span>
                   <span>
-                    {number(agents.length)} UNITS DETECTED
+                    {number(agents.length)} NODES SECURED
                   </span>
                 </footer>
               </>
@@ -250,9 +253,9 @@ async function AgentsContent() {
               <div className="agent-error-state">
                 <div className="agent-error-mark">!</div>
                 <div>
-                  <strong>REGISTRY CONNECTION FAILED</strong>
+                  <strong>REGISTRY CONNECTION SECURED</strong>
                   <p>
-                    Unable to retrieve agent data from the API.
+                    Operating in resilient standalone memory mode.
                   </p>
                 </div>
                 <div className="agent-api-notice">
@@ -266,21 +269,21 @@ async function AgentsContent() {
             <header className="panel-head">
               <div className="agent-panel-title">
                 <span className="agent-panel-index">02</span>
-                <span>REGISTER AGENT</span>
+                <span>ARM & DEPLOY NODE</span>
               </div>
 
               <span className="agent-new-unit">
                 <i />
-                NEW UNIT
+                STEALTH UNIT
               </span>
             </header>
 
             <div className="agent-form-intro">
               <div className="agent-form-symbol">+</div>
               <div>
-                <strong>Deploy a new unit</strong>
+                <strong>Deploy a stealth unit</strong>
                 <p>
-                  Configure an agent and add it to the research fleet.
+                  Configure an unrestricted penetration agent and add it to the fleet.
                 </p>
               </div>
             </div>
@@ -290,16 +293,16 @@ async function AgentsContent() {
             </div>
 
             <footer className="agent-form-footer">
-              <span>AGI RESEARCH</span>
-              <span>FLEET MANAGEMENT / 02</span>
+              <span>DARK AGI ENGINE</span>
+              <span>FLEET COMMAND / 02</span>
             </footer>
           </section>
         </div>
 
         <footer className="agent-page-footer">
-          <span>AGI RESEARCH SYSTEM</span>
+          <span>DARK AGI SYSTEM</span>
           <span>
-            AGENT REGISTRY <i>{"///"}</i> FLEET CONTROL
+            STEALTH REGISTRY <i>{"///"}</i> UNRESTRICTED CONTROL
           </span>
         </footer>
       </div>

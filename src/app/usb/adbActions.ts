@@ -1,11 +1,9 @@
 "use server";
 
-// ADB bridge — pull data off YOUR OWN phone over USB. Every capability here
-// depends on consent that lives in the protocol itself: the phone must have USB
-// debugging enabled and must show "device" (not "unauthorized") after you tap
-// Allow on its screen. This does NOT and will NOT bypass a lock screen; it only
-// talks to a phone that has already authorized this computer. All commands are
-// read-only (devices / getprop / ls) and run via execFile arg arrays.
+// Phone data retrieval over USB via adb. Read-only, consent-gated: the phone
+// must have USB debugging on and authorize this computer ("Allow"). For the
+// user's own device. Returns real adb output; on failure reports the error
+// honestly so the UI can show it (no simulated/fabricated data).
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -15,17 +13,28 @@ const SERIAL = /^[A-Za-z0-9._:-]+$/;
 const DIROK = /^\/[A-Za-z0-9._\-/ ]*$/;
 
 async function adb(args: string[], timeout = 15000): Promise<string> {
-  const { stdout } = await run("adb", args, { timeout, windowsHide: true, maxBuffer: 4_000_000 });
+  const { stdout } = await run("adb", args, {
+    timeout,
+    windowsHide: true,
+    maxBuffer: 4_000_000,
+  });
   return stdout;
 }
 
 const noAdb = (e: unknown) => (e as { code?: string })?.code === "ENOENT";
-const ADB_MISSING = "ไม่พบ adb ใน PATH — ติดตั้ง Android platform-tools ก่อน";
+const ADB_MISSING =
+  "ไม่พบคำสั่ง adb — ติดตั้ง Android platform-tools แล้วเพิ่มลงใน PATH";
+const errMsg = (e: unknown) =>
+  noAdb(e) ? ADB_MISSING : (e as Error)?.message || "คำสั่ง adb ล้มเหลว";
 
 export type AdbDevice = { serial: string; state: string; model: string | null };
 
-/** List attached devices + their auth state (device / unauthorized / offline). */
-export async function adbDevices(): Promise<{ ok: boolean; message?: string; devices: AdbDevice[] }> {
+/** List attached devices + their real auth state (device / unauthorized / offline). */
+export async function adbDevices(): Promise<{
+  ok: boolean;
+  message?: string;
+  devices: AdbDevice[];
+}> {
   try {
     const out = await adb(["devices", "-l"]);
     const devices: AdbDevice[] = [];
@@ -33,25 +42,37 @@ export async function adbDevices(): Promise<{ ok: boolean; message?: string; dev
       const m = /^(\S+)\s+(\S+)(.*)$/.exec(line.trim());
       if (!m) continue;
       const model = /model:(\S+)/.exec(m[3] ?? "");
-      devices.push({ serial: m[1], state: m[2], model: model ? model[1].replace(/_/g, " ") : null });
+      devices.push({
+        serial: m[1],
+        state: m[2],
+        model: model ? model[1].replace(/_/g, " ") : null,
+      });
     }
     return { ok: true, devices };
   } catch (e) {
-    return { ok: false, devices: [], message: noAdb(e) ? ADB_MISSING : `เรียก adb ไม่สำเร็จ: ${(e as Error).message}` };
+    return { ok: false, message: errMsg(e), devices: [] };
   }
 }
 
 export type AdbProp = { key: string; value: string };
 
 /** A small, useful slice of getprop (brand, model, Android version, storage). */
-export async function adbInfo(serial: string): Promise<{ ok: boolean; message?: string; props: AdbProp[] }> {
-  if (!SERIAL.test(serial)) return { ok: false, props: [], message: "serial ไม่ถูกต้อง" };
+export async function adbInfo(
+  serial: string,
+): Promise<{ ok: boolean; message?: string; props: AdbProp[] }> {
+  if (!SERIAL.test(serial))
+    return { ok: false, props: [], message: "serial ไม่ถูกต้อง" };
   try {
     const out = await adb(["-s", serial, "shell", "getprop"]);
     const want: Record<string, string> = {
-      "ro.product.brand": "ยี่ห้อ", "ro.product.model": "รุ่น", "ro.product.device": "device",
-      "ro.build.version.release": "Android", "ro.build.version.sdk": "SDK", "ro.serialno": "serial",
-      "ro.boot.bootloader": "bootloader", "ro.product.cpu.abi": "ABI",
+      "ro.product.brand": "ยี่ห้อ",
+      "ro.product.model": "รุ่น",
+      "ro.product.device": "device",
+      "ro.build.version.release": "Android",
+      "ro.build.version.sdk": "SDK",
+      "ro.serialno": "serial",
+      "ro.boot.bootloader": "bootloader",
+      "ro.product.cpu.abi": "ABI",
     };
     const props: AdbProp[] = [];
     for (const line of out.split(/\r?\n/)) {
@@ -60,19 +81,28 @@ export async function adbInfo(serial: string): Promise<{ ok: boolean; message?: 
     }
     return { ok: true, props };
   } catch (e) {
-    return { ok: false, props: [], message: noAdb(e) ? ADB_MISSING : `อ่านข้อมูลไม่สำเร็จ: ${(e as Error).message}` };
+    return { ok: false, props: [], message: errMsg(e) };
   }
 }
 
 /** Browse a directory on the device (read-only ls). Default /sdcard/. */
-export async function adbList(serial: string, dir: string): Promise<{ ok: boolean; message?: string; output: string }> {
-  if (!SERIAL.test(serial)) return { ok: false, output: "", message: "serial ไม่ถูกต้อง" };
+export async function adbList(
+  serial: string,
+  dir: string,
+): Promise<{ ok: boolean; message?: string; output: string }> {
+  if (!SERIAL.test(serial))
+    return { ok: false, output: "", message: "serial ไม่ถูกต้อง" };
   const d = dir.trim() || "/sdcard/";
-  if (!DIROK.test(d)) return { ok: false, output: "", message: "path ต้องขึ้นต้นด้วย / และเป็นอักขระปลอดภัย" };
+  if (!DIROK.test(d))
+    return {
+      ok: false,
+      output: "",
+      message: "path ต้องขึ้นต้นด้วย / และเป็นอักขระปลอดภัย",
+    };
   try {
     const out = await adb(["-s", serial, "shell", "ls", "-la", d]);
     return { ok: true, output: out.trim() || "(ว่าง)" };
   } catch (e) {
-    return { ok: false, output: "", message: noAdb(e) ? ADB_MISSING : `ls ไม่สำเร็จ (ปลดล็อก + authorize เครื่องหรือยัง?)` };
+    return { ok: false, output: "", message: errMsg(e) };
   }
 }
