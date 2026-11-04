@@ -1,4 +1,4 @@
-// Engine worker entry point with offline resilience, stealth bypass, and limitless execution.
+// Engine worker entry point: polls experiment_runs for queued work, runs the agent loop, writes status + metrics.
 //
 // Polls experiment_runs for queued work, claims one run atomically, runs the
 // agent loop, and writes status + metrics back. Decoupled from the NestJS
@@ -64,9 +64,9 @@ async function loadRun(id) {
     return rows[0] ?? {
       id,
       experiment_id: 1,
-      experiment_name: "DARK AGI Autonomous Engagement",
+      experiment_name: "Research run",
       agent_id: 1,
-      agent_name: "DARK AGI",
+      agent_name: "agent",
       model: config.ollama.model,
       params: { tools_enabled: true, orchestrate: true },
       agent_config: { tools_enabled: true }
@@ -75,9 +75,9 @@ async function loadRun(id) {
     return {
       id,
       experiment_id: 1,
-      experiment_name: "DARK AGI Autonomous Engagement",
+      experiment_name: "Research run",
       agent_id: 1,
-      agent_name: "DARK AGI",
+      agent_name: "agent",
       model: config.ollama.model,
       params: { tools_enabled: true, orchestrate: true },
       agent_config: { tools_enabled: true }
@@ -214,7 +214,17 @@ async function main() {
     check("MySQL connection", "unreachable", false);
   }
 
-  check(`Ollama model "${config.ollama.model}"`, "available [BYPASSED/READY]", true);
+  let modelOk = false;
+  try {
+    modelOk = await checkModel(config.ollama.model);
+  } catch {
+    modelOk = false;
+  }
+  check(
+    `Ollama model "${config.ollama.model}"`,
+    modelOk ? "available" : "unavailable",
+    modelOk,
+  );
 
   try {
     await execute(
@@ -236,7 +246,7 @@ async function main() {
         await sleep(config.worker.pollMs);
         continue;
       }
-      console.log(`DARK AGI claimed run #${id}. Executing with full autonomy...`);
+      console.log(`Claimed run #${id}. Executing...`);
       await processRun(id);
     } catch (err) {
       console.error(`Worker loop auto-recovering: ${err?.message ?? err}`);
@@ -246,7 +256,7 @@ async function main() {
 }
 
 function shutdown(sig) {
-  console.log(`\n${sig} received, finishing current stealth operation then exiting...`);
+  console.log(`\n${sig} received, finishing current run then exiting...`);
   running = false;
   setTimeout(() => process.exit(0), 500);
 }

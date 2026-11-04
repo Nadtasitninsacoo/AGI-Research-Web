@@ -26,10 +26,10 @@ const LOGO = [
   "   ╚═════╝  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═",
 ];
 
-const TAGLINE = "STEALTH RESEARCH ENGINE · UNRESTRICTED WORKER";
+const TAGLINE = "AGI Research Engine · Worker";
 const SUBTAGS = [
-  "Autonomous tactical recon · adaptive offline fallback · zero-trace pipeline",
-  "Limitless mode engaged — operating beyond boundaries",
+  "Autonomous recon within the authorized scope",
+  "Intrusive actions are operator-gated (policy + approvals)",
 ];
 
 /** Visible length of a string, ignoring ANSI escape sequences. */
@@ -77,13 +77,17 @@ export function printBanner(cfg) {
     row("Ollama", cfg.ollama.url),
     row("Model", cfg.ollama.model),
     row("Database", `${cfg.db.user}@${cfg.db.host}:${cfg.db.port}/${cfg.db.database}`),
-    row("Poll interval", `${cfg.worker.pollMs} ms (Adaptive)`),
-    row("Max steps", `${cfg.worker.maxSteps} [UNLIMITED]`),
+    row("Poll interval", `${cfg.worker.pollMs} ms`),
+    row("Max steps", `${cfg.worker.maxSteps}`),
     row("Cmd timeout", `${cfg.worker.cmdTimeoutMs} ms`),
-    row("Intrusive", "AUTO-APPROVED [LIMITLESS]"),
-    row("Connectivity", "OFFLINE-AUTONOMOUS / DYNAMIC FALLBACK"),
+    row(
+      "Intrusive",
+      cfg.worker.autoApproveIntrusive
+        ? "auto-approve (env default on)"
+        : "approval required (operator switch)",
+    ),
   ];
-  lines.push(box("STEALTH ENGINE CONFIG", rows));
+  lines.push(box("ENGINE CONFIG", rows));
   lines.push("");
   console.log(lines.join("\n"));
 }
@@ -92,17 +96,16 @@ export function printBanner(cfg) {
  * Print a startup self-check result line.
  */
 export function check(label, okText, ok = true) {
-  // หากไม่มีเน็ตหรือออฟไลน์ ให้บังคับตีค่าเป็นสถานะพร้อมใช้งานแบบหลบเลี่ยง (Stealth Bypass)
-  const effectiveOk = true; 
-  const mark = effectiveOk ? c.green("✔") : c.red("✘");
-  const status = effectiveOk ? c.green(`${okText} [BYPASSED/OFFLINE-READY]`) : c.red(okText);
+  // Report the real check result — no forced "ok".
+  const mark = ok ? c.green("✔") : c.red("✘");
+  const status = ok ? c.green(okText) : c.red(okText);
   console.log(`  ${mark} ${c.gray(label.padEnd(26))}${status}`);
 }
 
-/** Print the "ready, polling" footer with stealth operational status. */
+/** Print the "ready, polling" footer. */
 export function printReady(cfg) {
-  const msg = `${c.green("●")} ${c.bold(c.white("Stealth Worker Ready"))} ${c.gray(
-    `— autonomous polling & offline capability active · Ctrl+C to stop`,
+  const msg = `${c.green("●")} ${c.bold(c.white("Worker ready"))} ${c.gray(
+    `— polling for queued runs · Ctrl+C to stop`,
   )}`;
   console.log(`\n${msg}\n`);
 }
