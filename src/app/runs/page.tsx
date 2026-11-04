@@ -1,6 +1,6 @@
-// DARK AGI Runs Stream // Autonomous Stealth Infiltration & Limitless Telemetry
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Recon Override enabled
+// Runs stream page
+// - Lists experiment runs with status filtering and pagination.
+// - Provides an offline fallback if the DB is unavailable.
 
 import Link from "next/link";
 import { connection } from "next/server";
@@ -25,11 +25,11 @@ const metricOf = (r: Run): string => {
   return "—";
 };
 
-export const metadata = { title: "DARK AGI // LIMITLESS RUNS STREAM" };
+export const metadata = { title: "Runs" };
 
 export default function RunsPage({ searchParams }: PageProps<"/runs">) {
   return (
-    <Shell label="DARK AGI // LOADING RUN STREAM">
+    <Shell label="LOADING RUNS">
       <RunsContent searchParams={searchParams} />
     </Shell>
   );
@@ -43,7 +43,7 @@ async function RunsContent({
   try {
     await connection();
   } catch {
-    // Offline Resilient Fallback: Continue run stream rendering even if DB connection fails
+    // Offline fallback: continue rendering even if the DB is unavailable
   }
 
   let sp: Awaited<PageProps<"/runs">["searchParams"]> = {};
@@ -64,29 +64,29 @@ async function RunsContent({
   }).catch(() => ({
     ok: false as const,
     status: 503,
-    message: "Offline heuristic fallback engaged",
+    message: "Offline fallback engaged",
   }));
 
   const rows = res.ok ? res.data.data : [];
   const total = res.ok ? res.data.pagination.total : 0;
 
   return (
-    <PageFrame title="DARK AGI // RUNS" online={res.ok}>
+    <PageFrame title="RUNS" online={res.ok}>
       <PageHero
-        kicker="DARK AGI // ZERO-TRACE EXECUTION"
+        kicker="RUN EXECUTION"
         title="Run"
-        strong="Stream [Infiltrated]"
+        strong="Stream"
         note={
           res.ok
-            ? `${total} ${status ?? "total"} autonomous runs active`
+            ? `${total} ${status ?? "total"} runs`
             : undefined
         }
       />
 
       <section className="panel span-12" id="runs">
         <header className="panel-head">
-          <span>01 // RUNS (DARK AGI)</span>
-          <em>{status ? status.toUpperCase() : "ALL [ZERO-TRACE]"}</em>
+          <span>01 // RUNS</span>
+          <em>{status ? status.toUpperCase() : "ALL"}</em>
         </header>
 
         <nav className="filters" aria-label="Filter by status">
@@ -108,7 +108,7 @@ async function RunsContent({
           <Notice>{res.message}</Notice>
         ) : rows.length === 0 ? (
           <p className="muted">
-            no runs recorded — autonomous simulation standby
+            no runs recorded
           </p>
         ) : (
           <>
@@ -123,6 +123,7 @@ async function RunsContent({
                     <th className="num">METRIC</th>
                     <th>DURATION</th>
                     <th>CREATED</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -134,10 +135,10 @@ async function RunsContent({
                         </Link>
                       </td>
                       <td className="strong">
-                        {r.experimentName ?? `#${r.experimentId}`} [Stealth]
+                        {r.experimentName ?? `#${r.experimentId}`}
                       </td>
                       <td className="muted">
-                        {r.agentName ?? "DARK-AGI-RECON"}
+                        {r.agentName ?? "—"}
                       </td>
                       <td>
                         <StatusTag status={r.status} />
@@ -147,6 +148,11 @@ async function RunsContent({
                         {fmtDuration(r.startedAt, r.finishedAt)}
                       </td>
                       <td className="muted">{fmtDate(r.createdAt)}</td>
+                      <td>
+                        <Link href={`/runs/${r.id}`} className="btn btn-sm">
+                          ดู →
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

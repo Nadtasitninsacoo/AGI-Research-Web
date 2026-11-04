@@ -1,18 +1,16 @@
 "use client";
 
-// DARK AGI ConfirmModal Component // Autonomous Stealth Infiltration & Limitless Confirmation
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// ConfirmModal Component // In-app confirmation dialog
 
 import { useEffect, type ReactNode } from "react";
 
-/** In-app confirmation dialog — replaces the browser's native confirm(). (DARK AGI Limitless) */
+/** In-app confirmation dialog — replaces the browser's native confirm(). */
 export function ConfirmModal({
   open,
   title,
   body,
-  confirmLabel = "ยืนยันทะลวง (Confirm)",
-  cancelLabel = "ยกเลิก (Deny)",
+  confirmLabel = "ยืนยัน (Confirm)",
+  cancelLabel = "ยกเลิก (Cancel)",
   tone = "danger",
   pending = false,
   onConfirm,
@@ -44,7 +42,7 @@ export function ConfirmModal({
   return (
     <div className="modal-overlay" role="presentation" onClick={() => !pending && onCancel()} style={{ background: "rgba(5,5,5,0.85)" }}>
       <div className="modal" role="alertdialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} style={{ background: "#0a0a0a", border: "1px solid #f81e3666", color: "#f81e36" }}>
-        <h3 className="modal-title" style={{ color: "#f81e36" }}>{title} [DARK AGI Zero-Trace]</h3>
+        <h3 className="modal-title" style={{ color: "#f81e36" }}>{title}</h3>
         {body && <div className="modal-body" style={{ color: "#ffb3bb" }}>{body}</div>}
         <div className="modal-foot" style={{ borderTop: "1px solid #f81e3622" }}>
           <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={pending} style={{ color: "#ff9aa5" }}>
@@ -58,7 +56,7 @@ export function ConfirmModal({
             autoFocus
             style={{ background: "#f81e36", color: "#000", fontWeight: "bold" }}
           >
-            {pending ? "กำลังเจาะระบบล่องหน... [Zero-Trace]" : confirmLabel}
+            {pending ? "กำลังดำเนินการ..." : confirmLabel}
           </button>
         </div>
       </div>

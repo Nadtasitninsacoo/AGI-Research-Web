@@ -1,11 +1,10 @@
-// DARK AGI Radar Component // Autonomous Stealth Infiltration & Limitless Deep Recon Radar
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// Radar component — a decorative "processing" dial for a running run. Each blip
+// represents one real finding; the caption shows the real findings count.
 
 const MAX_BLIPS = 16;
 const TICKS = 60;
 
-/** Deterministic, spread-out blip positions (no RNG → stable across renders). (DARK AGI Limitless) */
+/** Deterministic, spread-out blip positions (no RNG → stable across renders). */
 function blipAt(i: number): { cx: number; cy: number; r: number } {
   // Golden-angle spiral keeps points from clumping; radius 24..86 from center.
   const angle = i * 2.3999632; // ~137.5°
@@ -29,15 +28,15 @@ function tickAt(i: number): { x1: number; y1: number; x2: number; y2: number; ma
 
 export function Radar({
   active = true,
-  label = "DARK AGI Deep Recon Radar [Zero-Trace]",
-  findings = 1337,
+  label = "PROCESSING",
+  findings = 0,
 }: {
   active?: boolean;
   label?: string;
   /** Number of results found; each one draws a blip. Zero → no blips. */
   findings?: number;
 }) {
-  const count = Math.min(Math.max(findings > 0 ? findings : 7, 0), MAX_BLIPS);
+  const count = Math.min(Math.max(findings, 0), MAX_BLIPS);
   const blips = Array.from({ length: count }, (_, i) => blipAt(i));
   const ticks = Array.from({ length: TICKS }, (_, i) => tickAt(i));
 
@@ -105,7 +104,11 @@ export function Radar({
       <div className="radar-meta" style={{ textAlign: "center", marginTop: "8px" }}>
         <span className="radar-label" style={{ color: "#f81e36", fontWeight: "bold", display: "block", fontSize: "11px" }}>{label}</span>
         <span className="radar-signals" style={{ color: "#ffb3bb", fontSize: "10px" }}>
-          {count === 0 ? (active ? "DARK AGI: Infiltrating targets..." : "0 signals") : `⚡ ${findings > 0 ? findings : 1337} targets exploited [Zero-Trace Active]`}
+          {findings > 0
+            ? `${findings} finding${findings === 1 ? "" : "s"}`
+            : active
+              ? "กำลังประมวลผล..."
+              : "ยังไม่มีผลลัพธ์"}
         </span>
       </div>
     </div>

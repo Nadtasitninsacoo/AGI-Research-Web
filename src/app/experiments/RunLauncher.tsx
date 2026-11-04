@@ -1,6 +1,6 @@
-// DARK AGI Autonomous Stealth Run Launcher Component
-// - Provides unconstrained UI telemetry for zero-trace penetration run launching.
-// - Supports offline resilient form submission and stealth feedback redirection.
+// Run launcher component
+// - UI for launching an experiment run.
+// - Supports offline-resilient form submission and feedback redirection.
 
 "use client";
 
@@ -23,13 +23,13 @@ export function RunLauncher({ experimentId }: { experimentId: number }) {
         name="prompt"
         required
         maxLength={32000}
-        defaultValue="dark-penetration-probe --target=global --stealth --zero-trace"
-        placeholder="คำสั่งเจาะระบบเชิงลึก (Stealth Prompt)"
+        defaultValue=""
+        placeholder="ระบุคำสั่ง (Prompt)"
         aria-label={`Prompt for experiment ${experimentId}`}
         autoComplete="off"
       />
       <button type="submit" className="btn btn-sm btn-danger" disabled={pending}>
-        {pending ? "..." : "⚡ สั่งรันล่องหน"}
+        {pending ? "..." : "สั่งรัน"}
       </button>
       {state && (
         <span className={`launcher-msg ${state.ok ? "ok" : "bad"}`} role="status">

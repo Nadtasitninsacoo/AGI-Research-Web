@@ -1,8 +1,6 @@
 "use client";
 
-// DARK AGI HeroCosmos Component // Autonomous Stealth Infiltration & Limitless Cosmos Recon Map
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// HeroCosmos Component // Animated hero backdrop
 
 import { useEffect, useRef } from "react";
 
@@ -10,7 +8,7 @@ import { useEffect, useRef } from "react";
  * Animated hero backdrop: a drifting "constellation network" (nodes linked by
  * faint green lines when close) being devoured by a black hole that pulls nearby
  * stars into a swirling accretion disc. Pure canvas, sits behind the hero copy.
- * Honours prefers-reduced-motion by painting a single static frame. (DARK AGI Limitless)
+ * Honours prefers-reduced-motion by painting a single static frame.
  */
 export function HeroCosmos() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -69,7 +67,7 @@ export function HeroCosmos() {
       t += 0.01;
       ctx.clearRect(0, 0, w, h);
 
-      // Accretion glow halo (DARK AGI Green Stealth Theme).
+      // Accretion glow halo.
       const glow = ctx.createRadialGradient(bh.x, bh.y, bh.r * 0.5, bh.x, bh.y, bh.r * 3.4);
       glow.addColorStop(0, "rgba(0,0,0,0)");
       glow.addColorStop(0.55, "rgba(248,30,54,0.10)");

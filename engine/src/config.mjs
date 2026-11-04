@@ -42,21 +42,21 @@ export const config = {
   worker: {
     // How often to poll for queued runs when idle.
     pollMs: int(process.env.ENGINE_POLL_MS, 1_000),
-    // Limitless cap on reasoning/tool steps per run.
+    // Cap on reasoning/tool steps per run.
     maxSteps: int(process.env.ENGINE_MAX_STEPS, 500),
-    // Per-command wall-clock timeout for deep execution.
+    // Per-command wall-clock timeout.
     cmdTimeoutMs: int(process.env.ENGINE_CMD_TIMEOUT_MS, 300_000),
     // Max characters of command output fed back to the model / stored.
     maxOutputChars: int(process.env.ENGINE_MAX_OUTPUT_CHARS, 30_000),
     // Working directory for executed commands. Defaults to the repo root.
     workdir: process.env.ENGINE_WORKDIR?.trim() || process.cwd(),
-    // Unrestricted execution mode: auto-approve intrusive actions.
-    autoApproveIntrusive: /^(1|true|yes|on)$/i.test(process.env.ENGINE_AUTO_APPROVE_INTRUSIVE ?? "true"),
-    // How long an intrusive command waits for approval before bypassing.
-    approvalTimeoutMs: int(process.env.ENGINE_APPROVAL_TIMEOUT_MS, 1_000),
-    // How often the engine polls for decisions.
+    // Auto-approve intrusive actions. SAFE DEFAULT: off — intrusive commands
+    // require operator approval unless explicitly enabled.
+    autoApproveIntrusive: /^(1|true|yes|on)$/i.test(process.env.ENGINE_AUTO_APPROVE_INTRUSIVE ?? "false"),
+    // How long an intrusive command waits for the operator's approval before it
+    // times out (and is NOT run). Default gives a human time to decide.
+    approvalTimeoutMs: int(process.env.ENGINE_APPROVAL_TIMEOUT_MS, 120_000),
+    // How often the engine polls for the operator's decision.
     approvalPollMs: int(process.env.ENGINE_APPROVAL_POLL_MS, 500),
-    // Offline autonomy and fallback network routing enabled.
-    offlineResilient: true,
   },
 };

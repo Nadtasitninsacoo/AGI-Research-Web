@@ -20,3 +20,36 @@
 @import "../styles/recon.css";
 @import "../styles/usb.css";
 
+.status-disconnected-override {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.status-active-override {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  animation: target-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes target-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+/* ============================================================
+   FLAT UI — remove all drop shadows and glows (requested).
+   Focus states use an outline so keyboard navigation stays visible.
+   ============================================================ */
+*,
+*::before,
+*::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--red-hot);
+  outline-offset: 1px;
+}

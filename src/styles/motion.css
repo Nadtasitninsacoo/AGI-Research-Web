@@ -42,3 +42,96 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================================
+   TAKEOVER — live FX: running lights, status signals, stop btn
+   Additive only. Driven by real agent.status in the page.
+   ============================================================ */
+
+@keyframes tko-run {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* Flowing "running light" border on a panel (ไฟวิ่ง) */
+.tko-runlight { position: relative; isolation: isolate; }
+.tko-runlight::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(56, 189, 248, 0) 18%,
+    rgba(56, 189, 248, 0.9) 42%,
+    rgba(244, 63, 94, 0.9) 58%,
+    rgba(56, 189, 248, 0) 82%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: tko-run 3.2s linear infinite;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+}
+.tko-runlight.is-hot::before {
+  background: linear-gradient(
+    120deg,
+    transparent 0%, rgba(244,63,94,0) 18%,
+    rgba(244,63,94,0.95) 46%, rgba(251,146,60,0.95) 60%,
+    rgba(244,63,94,0) 82%, transparent 100%);
+  background-size: 200% 100%;
+  animation-duration: 2.1s;
+}
+
+/* Status dot signal */
+.tko-dot { display:inline-block; width:8px; height:8px; border-radius:9999px; position:relative; flex:none; }
+.tko-dot.is-idle    { background:#22d3ee; box-shadow:0 0 6px #22d3ee; }
+.tko-dot.is-error   { background:#f43f5e; box-shadow:0 0 6px #f43f5e; animation:tko-blink 1s steps(2) infinite; }
+.tko-dot.is-running { background:#34d399; box-shadow:0 0 9px #34d399; }
+.tko-dot.is-running::after {
+  content:""; position:absolute; inset:-3px; border-radius:9999px;
+  border:1px solid #34d399; animation:tko-ping 1.4s cubic-bezier(0,0,.2,1) infinite;
+}
+@keyframes tko-ping  { 0%{transform:scale(1);opacity:.85} 100%{transform:scale(2.6);opacity:0} }
+@keyframes tko-blink { 50%{opacity:.2} }
+
+/* Working / live progress bar (indeterminate, only shown while running) */
+.tko-workbar {
+  position:relative; height:4px; width:100%; border-radius:9999px;
+  background:rgba(52,211,153,.14); overflow:hidden;
+}
+.tko-workbar::before {
+  content:""; position:absolute; top:0; left:0; height:100%; width:40%;
+  border-radius:inherit;
+  background:linear-gradient(90deg, transparent, #34d399, #22d3ee, transparent);
+  animation:tko-slide 1.25s ease-in-out infinite;
+}
+@keyframes tko-slide { 0%{transform:translateX(-120%)} 100%{transform:translateX(320%)} }
+
+/* STOP / LIVE control buttons */
+.tko-stop {
+  position:relative; overflow:hidden;
+  border:1px solid rgba(244,63,94,.5); color:#fecdd3;
+  background:rgba(244,63,94,.08); border-radius:6px; transition:all .15s ease;
+}
+.tko-stop:hover { background:rgba(244,63,94,.18); color:#fff; box-shadow:0 0 14px rgba(244,63,94,.45); }
+.tko-stop::before {
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(90deg, transparent, rgba(244,63,94,.28), transparent);
+  background-size:50% 100%; animation:tko-run 1.8s linear infinite;
+}
+.tko-live {
+  border:1px solid rgba(52,211,153,.5); color:#a7f3d0;
+  background:rgba(52,211,153,.08); border-radius:6px; transition:all .15s ease;
+}
+.tko-live:hover { background:rgba(52,211,153,.18); color:#fff; box-shadow:0 0 14px rgba(52,211,153,.4); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tko-runlight::before, .tko-dot.is-running::after, .tko-dot.is-error,
+  .tko-workbar::before, .tko-stop::before { animation: none; }
+}

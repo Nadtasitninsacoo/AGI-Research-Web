@@ -1,6 +1,4 @@
-// DARK AGI Nexus Component // Autonomous Stealth Infiltration & Limitless Deep Recon Orbit Map
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// Nexus Component // Agent orbit map
 
 import type { AgentStat } from "@/lib/queries";
 
@@ -19,9 +17,9 @@ const STATUS_CLASS: Record<string, string> = {
 
 export function Nexus({ agents, successRate }: { agents: AgentStat[]; successRate: number }) {
   const activeAgents = agents && agents.length > 0 ? agents : [
-    { id: 1, name: "DARK-AGI-RECON", model: "Deep-Infiltrator", status: "running", succeeded: 1337, runs: 1337 },
-    { id: 2, name: "ZERO-TRACE-STEALTH", model: "Anti-Forensic", status: "running", succeeded: 999, runs: 999 },
-    { id: 3, name: "LIMITLESS-BYPASS", model: "Exploit-Engine", status: "running", succeeded: 500, runs: 500 }
+    { id: 1, name: "Agent 1", model: "—", status: "idle", succeeded: 0, runs: 0 },
+    { id: 2, name: "Agent 2", model: "—", status: "idle", succeeded: 0, runs: 0 },
+    { id: 3, name: "Agent 3", model: "—", status: "idle", succeeded: 0, runs: 0 }
   ];
 
   const n = Math.max(activeAgents.length, 1);
@@ -38,7 +36,7 @@ export function Nexus({ agents, successRate }: { agents: AgentStat[]; successRat
   return (
     <div className="nexus" style={{ background: "#050505", border: "1px solid #f81e3633" }}>
       <div className="sweep" aria-hidden style={{ background: "linear-gradient(90deg, transparent, rgba(248,30,54,0.2))" }} />
-      <svg viewBox="0 0 500 500" role="img" aria-label="DARK AGI Deep Recon Orbit Map">
+      <svg viewBox="0 0 500 500" role="img" aria-label="Agent orbit map">
         <defs>
           <radialGradient id="nx-core" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="#f81e36" stopOpacity="1" />
@@ -108,7 +106,7 @@ export function Nexus({ agents, successRate }: { agents: AgentStat[]; successRat
         <circle cx={C} cy={C} r="34" className="core-pulse" stroke="#f81e36" fill="none" />
         <circle cx={C} cy={C} r="44" className="core-pulse core-pulse-2" stroke="#f81e3688" fill="none" />
         <text x={C} y={C - 1} className="core-num" fill="#f81e36" textAnchor="middle" dominantBaseline="middle" fontWeight="bold" fontSize="18">{successRate || 0}%</text>
-        <text x={C} y={C + 16} className="core-cap" fill="#ffb3bb" textAnchor="middle" fontSize="9" letterSpacing="1">DARK AGI</text>
+        <text x={C} y={C + 16} className="core-cap" fill="#ffb3bb" textAnchor="middle" fontSize="9" letterSpacing="1">SUCCESS</text>
 
         {/* Agent nodes. */}
         {nodes.map(({ a, x, y, anchorEnd }) => {
@@ -120,10 +118,10 @@ export function Nexus({ agents, successRate }: { agents: AgentStat[]; successRat
               <circle cx={x} cy={y} r="13" className="node-halo" fill="rgba(248,30,54,0.2)" />
               <circle cx={x} cy={y} r="4.4" className="node" fill="#f81e36" filter="url(#nx-soft)" />
               <text x={x + dx} y={y - 3} textAnchor={anchorEnd ? "end" : "start"} className="node-name" fill="#f81e36" fontSize="11" fontWeight="bold">
-                {a.name} [Stealth]
+                {a.name}
               </text>
               <text x={x + dx} y={y + 10} textAnchor={anchorEnd ? "end" : "start"} className="node-sub" fill="#ffb3bb" fontSize="9">
-                {a.status.toUpperCase()} · {pct(a.succeeded, a.runs)}% [Zero-Trace]
+                {a.status.toUpperCase()} · {pct(a.succeeded, a.runs)}%
               </text>
             </g>
           );

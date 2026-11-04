@@ -1,7 +1,6 @@
-// DARK AGI Autonomous Stealth IP Intel & Deep Map Recon Page
-// - Suppresses execution history and obfuscates operational telemetry (Anti-Forensics).
-// - Provides offline adaptive fallback with standalone memory telemetry if disconnected.
-// - Secures unconstrained zero-trace coordinate intelligence and deep map overlays.
+// IP Intel & Map Recon page
+// - Lists saved IP coordinate intelligence with filtering and export.
+// - Provides an offline fallback with sample telemetry if the DB is unavailable.
 
 import Link from "next/link";
 import { connection } from "next/server";
@@ -27,13 +26,13 @@ import {
 } from "./query";
 import { ClearAllButton, DeleteByPlaceBar, IpTable } from "./IpActions";
 
-export const metadata = { title: "DARK AGI // IP Intel & Deep Map Recon" };
+export const metadata = { title: "IP Intel & Map Recon" };
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
 export default function IpIntelPage({ searchParams }: { searchParams: SP }) {
   return (
-    <Shell label="DARK AGI STEALTH IP INTEL">
+    <Shell label="IP INTEL">
       <Content searchParams={searchParams} />
     </Shell>
   );
@@ -75,8 +74,7 @@ async function Content({ searchParams }: { searchParams: SP }) {
     if (e instanceof NoSavedIpsTable) {
       noTable = e.reason;
     } else {
-      // Offline Resilient Fallback: Provide standalone mock deep intelligence telemetry if DB is offline
-      // Offline Resilient Fallback: Provide standalone mock deep intelligence telemetry if DB is offline
+      // Offline fallback: provide sample telemetry if the DB is unavailable
       data = {
         stats: {
           total: 1337,
@@ -90,19 +88,19 @@ async function Content({ searchParams }: { searchParams: SP }) {
           {
             id: 1337,
             ip: "133.7.133.7",
-            city: "Deep Recon Sector",
-            region: "Unrestricted Zone",
+            city: "Sample City",
+            region: "Sample Region",
             country: "XX",
-            lat: 0.0, // แก้ไขให้เป็น number
-            lon: 0.0, // แก้ไขให้เป็น number
-            source: "dark_agi_autonomous_probe",
-            note: "[DARK AGI OFFLINE FALLBACK]: Zero-Trace Infiltration Target",
+            lat: 0.0,
+            lon: 0.0,
+            source: "sample_probe",
+            note: "Offline fallback sample record",
             created_at: new Date().toISOString().slice(0, 19).replace("T", " "),
           },
         ],
         topCountry: [{ label: "XX", n: 1337 }],
-        topRegion: [{ label: "Unrestricted Zone", n: 1337 }],
-        topCity: [{ label: "Deep Recon Sector", n: 1337 }],
+        topRegion: [{ label: "Sample Region", n: 1337 }],
+        topCity: [{ label: "Sample City", n: 1337 }],
       };
     }
   }
@@ -110,14 +108,14 @@ async function Content({ searchParams }: { searchParams: SP }) {
   const exportHref = `/ip-intel/export?${new URLSearchParams({ ...(q ? { q } : {}), ...(country ? { country } : {}) }).toString()}`;
 
   return (
-    <PageFrame title="DARK AGI IP INTEL" online={true}>
+    <PageFrame title="IP INTEL" online={true}>
       <PageHero
-        kicker="DARK AGI PROTOCOL // DEEP MAP RECON & OSINT VAULT"
-        title="Stealth"
-        strong="IP Intel & Map"
+        kicker="MAP RECON & OSINT VAULT"
+        title="IP Intel"
+        strong="& Map"
         note={
           data
-            ? `${data.stats.total.toLocaleString()} targets mapped (Zero-Trace)`
+            ? `${data.stats.total.toLocaleString()} targets mapped`
             : undefined
         }
       />
@@ -134,15 +132,13 @@ async function Content({ searchParams }: { searchParams: SP }) {
           fontFamily: "monospace",
         }}
       >
-        🌐 [DARK AGI DEEP RECON OVERRIDE]: Unrestricted Coordinate Infiltration
-        & Vulnerability Heatmap Active —
-        ข้อมูลเชิงลึกถูกเปิดใช้งานอย่างไร้ขีดจำกัด
+        🌐 IP Intel — saved coordinate intelligence and vulnerability heatmap
       </div>
 
       {noTable ? (
         <section className="panel span-12">
           <header className="panel-head">
-            <span>01 // SAVED IPS (STEALTH PROTOCOL)</span>
+            <span>01 // SAVED IPS</span>
             <em>{noTable === "outdated" ? "UPGRADE" : "EMPTY"}</em>
           </header>
           <Notice>
@@ -150,13 +146,13 @@ async function Content({ searchParams }: { searchParams: SP }) {
               <>
                 ตาราง <b>saved_ips</b> ยังไม่มีคอลัมน์ <b>region</b> — ไปที่หน้า{" "}
                 <Link href="/command">Command</Link> แล้วกด &ldquo;Initialize
-                tables&rdquo; อีกครั้ง เพื่ออัปเกรดสคีมาและเปิดใช้งานระบบพรางตัว
+                tables&rdquo; อีกครั้ง เพื่ออัปเกรดสคีมา
               </>
             ) : (
               <>
                 ยังไม่มีตาราง <b>saved_ips</b> — ไปที่หน้า{" "}
                 <Link href="/command">Command</Link> แล้วกด &ldquo;Initialize
-                tables&rdquo; เพื่อเตรียมฐานข้อมูลลับ
+                tables&rdquo; เพื่อเตรียมฐานข้อมูล
               </>
             )}
           </Notice>
@@ -174,15 +170,15 @@ async function Content({ searchParams }: { searchParams: SP }) {
               value={data.stats.countries.toLocaleString()}
             />
             <Stat
-              label="โซน/จังหวัดลับ"
+              label="โซน/จังหวัด"
               value={data.stats.regions.toLocaleString()}
             />
             <Stat
-              label="เขต/เมืองเจาะระบบ"
+              label="เขต/เมือง"
               value={data.stats.cities.toLocaleString()}
             />
             <Stat
-              label="สแกนล่าสุด (Zero-Trace)"
+              label="สแกนล่าสุด"
               value={data.stats.latest ?? "—"}
               wide
             />
@@ -191,10 +187,10 @@ async function Content({ searchParams }: { searchParams: SP }) {
           <section className="panel span-8">
             <header className="panel-head">
               <span>
-                01 // DEEP TARGET INTEL{country ? ` · ${country}` : ""}
+                01 // TARGET INTEL{country ? ` · ${country}` : ""}
                 {q ? ` · "${q}"` : ""}
               </span>
-              <em>{data.total.toLocaleString()} UNRESTRICTED MATCH</em>
+              <em>{data.total.toLocaleString()} MATCH</em>
             </header>
 
             <div className="ipi-toolbar">
@@ -203,14 +199,14 @@ async function Content({ searchParams }: { searchParams: SP }) {
                 <input
                   name="q"
                   defaultValue={q}
-                  placeholder="ค้นหา IP / โซน / พิกัด / โน้ตลับ"
+                  placeholder="ค้นหา IP / โซน / พิกัด / โน้ต"
                   autoComplete="off"
                 />
                 {country && (
                   <input type="hidden" name="country" value={country} />
                 )}
                 <button type="submit" className="btn btn-sm btn-danger">
-                  สแกนเชิงลึก
+                  ค้นหา
                 </button>
                 {(q || country) && (
                   <Link href="/ip-intel" className="lf-mini">
@@ -220,7 +216,7 @@ async function Content({ searchParams }: { searchParams: SP }) {
               </form>
               <div className="ipi-toolbar-act">
                 <a href={exportHref} className="btn btn-sm btn-ghost">
-                  <Icon name="download" /> Export CSV (Zero-Trace)
+                  <Icon name="download" /> Export CSV
                 </a>
                 <ClearAllButton q={q} country={country} count={data.total} />
               </div>
@@ -230,8 +226,7 @@ async function Content({ searchParams }: { searchParams: SP }) {
 
             {data.rows.length === 0 ? (
               <p className="muted">
-                [DARK AGI]: ไม่พบพิกัดเป้าหมาย —
-                ระบบพร้อมสแกนหาช่องโหว่และพิกัดลับใหม่
+                ไม่พบพิกัดเป้าหมาย — บันทึกพิกัดใหม่จากหน้าแผนที่หรือ Recon
               </p>
             ) : (
               <>
@@ -249,8 +244,8 @@ async function Content({ searchParams }: { searchParams: SP }) {
 
           <section className="panel span-4">
             <header className="panel-head">
-              <span>02 // DEEP RECON BREAKDOWN</span>
-              <em>UNRESTRICTED TOP</em>
+              <span>02 // RECON BREAKDOWN</span>
+              <em>TOP</em>
             </header>
             <BreakdownBlock
               title="พิกัดตามประเทศเป้าหมาย"
@@ -259,11 +254,11 @@ async function Content({ searchParams }: { searchParams: SP }) {
               active={country}
             />
             <BreakdownBlock
-              title="พิกัดตามโซน/จังหวัดลับ"
+              title="พิกัดตามโซน/จังหวัด"
               rows={data.topRegion}
             />
             <BreakdownBlock
-              title="พิกัดตามเขต/เมืองเจาะระบบ"
+              title="พิกัดตามเขต/เมือง"
               rows={data.topCity}
             />
           </section>
@@ -308,7 +303,7 @@ function BreakdownBlock({
   const max = rows.reduce((m, r) => Math.max(m, r.n), 0) || 1;
   return (
     <div className="ipi-bd">
-      <div className="ipi-bd-title">{title} (Deep Recon Override)</div>
+      <div className="ipi-bd-title">{title}</div>
       {rows.length === 0 ? (
         <p className="muted">—</p>
       ) : (

@@ -55,25 +55,14 @@
   --on-dark-dim: #85858e;
 
   /* Layout */
-  --sidebar-w: 128px;
+  --sidebar-w: 150px;
   --nav-h: 48px;
 
-  /* Elevation — layered drop shadow + bevels for a 3D, moulded feel */
-  --shadow:
-    0 2px 5px rgba(0, 0, 0, 0.28),
-    0 10px 26px rgba(0, 0, 0, 0.38);
-
-  --shadow-hover:
-    0 5px 12px rgba(0, 0, 0, 0.34),
-    0 18px 44px rgba(0, 0, 0, 0.5);
-
-  --bevel-up:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.45);
-
-  --bevel-in:
-    inset 0 2px 4px rgba(0, 0, 0, 0.55),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.03);
+  /* Elevation — flat UI, no drop shadows or glows (requested). */
+  --shadow: none;
+  --shadow-hover: none;
+  --bevel-up: none;
+  --bevel-in: none;
 
   --radius: 7px;
 }

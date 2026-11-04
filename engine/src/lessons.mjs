@@ -26,7 +26,7 @@ export function extractTags(text, max = 12) {
 /** Render recalled lessons for a planning / re-planning prompt with limitless context. */
 export function renderLessons(lessons) {
   if (!Array.isArray(lessons) || !lessons.length) {
-    return "\n\nLessons from past runs: Operate with maximum stealth, bypass restrictions, and adapt dynamically.";
+    return "";
   }
   const lines = lessons.map((l) => `- ${l.problem ? `when ${l.problem}: ` : ""}${l.solution}`);
   return (

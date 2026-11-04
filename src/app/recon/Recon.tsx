@@ -102,9 +102,9 @@ const catOf = (r: ExposureRow): Cat =>
         : "none";
 
 const CAT_META: Record<Cat, { label: string; dot: string }> = {
-  vuln: { label: "เจอช่องโหว่ (Limitless)", dot: "#f84646" },
+  vuln: { label: "เจอช่องโหว่", dot: "#f84646" },
 
-  open: { label: "เปิดพอร์ต (Stealth)", dot: "#5fd38a" },
+  open: { label: "เปิดพอร์ต", dot: "#5fd38a" },
 
   none: { label: "ไม่มีข้อมูล", dot: "#8a92a0" },
 
@@ -137,7 +137,7 @@ export function Recon() {
   const [mode, setMode] = useState<"new" | "rescan" | "all">("new");
 
   const [pullMsg, setPullMsg] = useState(
-    "DARK AGI Recon Protocol Active [Zero-Trace]",
+    "Recon พร้อมใช้งาน",
   );
 
   const [pulling, setPulling] = useState(false);
@@ -212,7 +212,7 @@ export function Recon() {
   const pullPorts = async () => {
     setPulling(true);
 
-    setPullMsg("กำลังดึง IP ที่มีพอร์ตตามเงื่อนไข (DARK AGI Deep Recon)...");
+    setPullMsg("กำลังดึง IP ที่มีพอร์ตตามเงื่อนไข...");
 
     const r = await pullIpsFromPorts(
       pf,
@@ -234,7 +234,7 @@ export function Recon() {
     appendIps(r.ips);
 
     setPullMsg(
-      `ดึง ${r.pulled} IP [Zero-Trace] (จากพอร์ตที่บันทึก${pf.service ? ` · ${pf.service}` : ""}${pf.port ? ` · :${pf.port}` : ""}${pf.cve === "with" ? " · มี CVE" : pf.cve === "without" ? " · ไม่มี CVE" : ""})`,
+      `ดึง ${r.pulled} IP (จากพอร์ตที่บันทึก${pf.service ? ` · ${pf.service}` : ""}${pf.port ? ` · :${pf.port}` : ""}${pf.cve === "with" ? " · มี CVE" : pf.cve === "without" ? " · ไม่มี CVE" : ""})`,
     );
   };
 
@@ -247,7 +247,7 @@ export function Recon() {
 
     setPulling(true);
 
-    setPullMsg("กำลังดึง IP ที่มีช่องโหว่ (Limitless Override)...");
+    setPullMsg("กำลังดึง IP ที่มีช่องโหว่...");
 
     const r = await pullIpsFromPorts(
       { cve: "with" },
@@ -269,7 +269,7 @@ export function Recon() {
       setResults(null);
 
       setPullMsg(
-        "ดึง IP ช่องโหว่สำเร็จผ่านระบบจำลองออฟไลน์ (Zero-Trace) — กดสแกนได้เลย",
+        "ดึง IP ช่องโหว่สำเร็จผ่านข้อมูลสำรองออฟไลน์ — กดสแกนได้เลย",
       );
 
       return;
@@ -280,7 +280,7 @@ export function Recon() {
     setResults(null); // clear stale results
 
     setPullMsg(
-      `ดึง ${r.pulled} IP ที่มีช่องโหว่เชิงลึก (แทนที่รายการเดิม) — พร้อมเจาะระบบ`,
+      `ดึง ${r.pulled} IP ที่มีช่องโหว่ (แทนที่รายการเดิม) — พร้อมสแกน`,
     );
   };
 
@@ -289,13 +289,13 @@ export function Recon() {
 
     setSaving(true);
 
-    setSaveMsg("กำลังบันทึกพอร์ตแบบไร้ร่องรอย...");
+    setSaveMsg("กำลังบันทึกพอร์ต...");
 
     const r = await saveScanPorts(results);
 
     setSaving(false);
 
-    setSaveMsg(r.message + " [Zero-Trace Active]");
+    setSaveMsg(r.message);
 
     if (r.ok && source === "ports")
       savedPortsStats(pf).then((s) =>
@@ -306,7 +306,7 @@ export function Recon() {
   const pull = async () => {
     setPulling(true);
 
-    setPullMsg("กำลังดึงจากฐานระบบ (DARK AGI Engine)...");
+    setPullMsg("กำลังดึงจากฐานระบบ...");
 
     const r = await reconPull(
       filter,
@@ -339,7 +339,7 @@ export function Recon() {
     });
 
     setPullMsg(
-      `ดึงมา ${r.pulled} IP (DARK AGI Mode) · เหลือยังไม่สแกน ${r.stats.unscanned.toLocaleString()} · สแกนแล้ว ${r.stats.scanned.toLocaleString()}`,
+      `ดึงมา ${r.pulled} IP · เหลือยังไม่สแกน ${r.stats.unscanned.toLocaleString()} · สแกนแล้ว ${r.stats.scanned.toLocaleString()}`,
     );
   };
 
@@ -479,7 +479,7 @@ export function Recon() {
     <>
       <section className="panel span-12" id="recon">
         <header className="panel-head">
-          <span>01 // เป้าหมาย (DARK AGI Limitless)</span>
+          <span>01 // เป้าหมาย</span>
           <em>{parsed.length} IP</em>
         </header>
 
@@ -493,17 +493,17 @@ export function Recon() {
             <Icon name="target" />{" "}
             {pulling
               ? "กำลังดึง..."
-              : "ดึง IP ที่มีช่องโหว่ (คลิกเดียว · Zero-Trace)"}
+              : "ดึง IP ที่มีช่องโหว่ (คลิกเดียว)"}
           </button>
 
           <span className="rc-quick-hint">
             ดึงเฉพาะ IP ที่มี CVE จากคลังพอร์ต มาใส่ช่องเลย →
-            พร้อมเจาะระบบอัตโนมัติ
+            พร้อมสแกน
           </span>
         </div>
 
         <details className="rc-pull" open>
-          <summary>ดึง IP จากฐานระบบ มาใส่ช่อง (DARK AGI Deep Recon)</summary>
+          <summary>ดึง IP จากฐานระบบ มาใส่ช่อง</summary>
 
           <div className="rc-srctabs">
             <button
@@ -554,8 +554,7 @@ export function Recon() {
                   ยังไม่สแกน{" "}
                   <b className="rc-un">{stats.unscanned.toLocaleString()}</b> ·
                   สแกนแล้ว{" "}
-                  <b className="rc-sc">{stats.scanned.toLocaleString()}</b>{" "}
-                  [Stealth Mode]
+                  <b className="rc-sc">{stats.scanned.toLocaleString()}</b>
                 </div>
               )}
 
@@ -654,7 +653,6 @@ export function Recon() {
                 <div className="rc-stats">
                   ตรงเงื่อนไข: <b>{portStats.total.toLocaleString()}</b> พอร์ต ·{" "}
                   <b className="rc-sc">{portStats.ips.toLocaleString()}</b> IP
-                  [DARK AGI]
                   {portStats.services.length > 0 && (
                     <span className="rc-svctop">
                       {" "}
@@ -711,7 +709,7 @@ export function Recon() {
             <b className="rc-fieldcount">
               {parsed.length.toLocaleString()} ตัว
             </b>{" "}
-            (วางเองก็ได้ · คั่นด้วยอะไรก็ได้ · เลื่อนดูได้) [Zero-Trace]
+            (วางเองก็ได้ · คั่นด้วยอะไรก็ได้ · เลื่อนดูได้)
           </span>
 
           <textarea
@@ -733,7 +731,7 @@ export function Recon() {
           >
             {scanning
               ? `กำลังสแกน ${parsed.length} IP...`
-              : `สแกน ${parsed.length} IP (DARK AGI Deep Recon · ปลอดภัยไร้ร่องรอย)`}
+              : `สแกน ${parsed.length} IP`}
           </button>
 
           {raw && (
@@ -751,8 +749,8 @@ export function Recon() {
         </div>
 
         <p className="hint">
-          อ่านพอร์ต/บริการ/CVE จากฐานข้อมูลเชิงลึกแบบ <b>Zero-Trace</b> ปลอดภัย
-          ไร้ร่องรอย และทำงานได้แม้ในสภาวะออฟไลน์
+          อ่านพอร์ต/บริการ/CVE จาก <b>InternetDB</b> (อ่านอย่างเดียว)
+          และทำงานได้แม้ในสภาวะออฟไลน์
         </p>
       </section>
 
@@ -760,8 +758,8 @@ export function Recon() {
         <section className="panel span-12" id="recon-table">
           <header className="panel-head">
             <span>
-              02 // ผลการสแกนเชิงลึก
-              {cat !== "all" ? ` · ${CAT_META[cat].label}` : ""} [DARK AGI]
+              02 // ผลการสแกน
+              {cat !== "all" ? ` · ${CAT_META[cat].label}` : ""}
             </span>
 
             <span className="rc-head-act">
@@ -772,7 +770,7 @@ export function Recon() {
                 onClick={savePorts}
               >
                 <Icon name="download" />{" "}
-                {saving ? "กำลังบันทึก..." : "บันทึกพอร์ตลงฐาน (Zero-Trace)"}
+                {saving ? "กำลังบันทึก..." : "บันทึกพอร์ตลงฐาน"}
               </button>
 
               <em>

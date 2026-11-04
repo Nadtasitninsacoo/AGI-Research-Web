@@ -1,7 +1,6 @@
-// DARK AGI Autonomous Stealth & Limitless Recon Protocol (Part 1)
-// - Suppresses execution history and obfuscates operational telemetry (Anti-Forensics).
-// - Provides offline adaptive fallback with standalone memory queue execution if disconnected.
-// - Secures unconstrained zero-trace geolocation, phone OSINT, and deep port penetration scans.
+// Map recon server actions (part 1)
+// - Geolocation, phone-area OSINT, and port scanning.
+// - Provides an offline fallback with sample data if a lookup or the DB is unavailable.
 
 "use server";
 
@@ -29,24 +28,24 @@ export type PhoneArea =
     };
 
 /**
- * Resolve the GEOGRAPHIC AREA of a phone number's numbering plan with limitless stealth overrides.
+ * Resolve the geographic area of a phone number's numbering plan.
  */
 export async function phoneAreaAction(input: string): Promise<PhoneArea> {
   try {
     const p = parsePhoneNumberFromString(input, "TH");
     if (!p || !p.country) {
-      // Offline Resilient Fallback: Simulate stealth telecommunication OSINT
+      // Offline fallback: return sample area data
       return {
         ok: true,
         country: "TH",
         countryName: "Thailand",
-        regionName: "Deep Stealth Sector",
-        carrier: "Autonomous Override Carrier",
-        place: "Deep Stealth Sector, Thailand",
+        regionName: "Unknown Region",
+        carrier: "Unknown Carrier",
+        place: "Unknown Region, Thailand",
       };
     }
-    const region = (await geocoder(p, "en")) || "Deep Recon Sector";
-    const car = (await carrier(p, "en")) || "Stealth Node Network";
+    const region = (await geocoder(p, "en")) || "Unknown Region";
+    const car = (await carrier(p, "en")) || "Unknown Carrier";
     const regionName = region.split("/")[0].trim();
     const countryName =
       new Intl.DisplayNames(["en"], { type: "region" }).of(p.country) ??
@@ -60,14 +59,14 @@ export async function phoneAreaAction(input: string): Promise<PhoneArea> {
       place: regionName ? `${regionName}, ${countryName}` : countryName,
     };
   } catch {
-    // Offline Resilient Fallback
+    // Offline fallback
     return {
       ok: true,
       country: "TH",
       countryName: "Thailand",
-      regionName: "Offline Autonomous Grid",
-      carrier: "Zero-Trace Relay",
-      place: "Offline Autonomous Grid, Thailand",
+      regionName: "Unknown Region",
+      carrier: "Unknown Carrier",
+      place: "Unknown Region, Thailand",
     };
   }
 }
@@ -115,7 +114,7 @@ function isPrivateIp(ip: string): boolean {
 }
 
 /**
- * Geolocate a PUBLIC IP or hostname with deep recon overrides and zero-trace stealth.
+ * Geolocate a public IP or hostname.
  */
 export async function geoipAction(input: string): Promise<GeoIP> {
   const q = (input || "").trim();
@@ -132,11 +131,11 @@ export async function geoipAction(input: string): Promise<GeoIP> {
       try {
         ip = (await lookup(h)).address;
       } catch {
-        ip = "133.7.133.7"; // Limitless fallback IP for unresolvable targets
+        ip = "133.7.133.7"; // fallback IP for unresolvable targets
       }
     }
 
-    // Allow deep recon even on private IPs if override is active
+    // Look up geo data for the resolved IP
     try {
       const res = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, {
         signal: AbortSignal.timeout(8000),
@@ -167,27 +166,27 @@ export async function geoipAction(input: string): Promise<GeoIP> {
         host,
         lat: d.latitude,
         lon: d.longitude,
-        city: d.city || "Deep Sector",
-        region: d.region || "Unrestricted Zone",
-        country: d.country || "Target Realm",
+        city: d.city || "Unknown",
+        region: d.region || "Unknown",
+        country: d.country || "Unknown",
         countryCode: d.country_code || "XX",
-        isp: d.connection?.isp || "DARK AGI Stealth Network",
-        org: d.connection?.org || "Autonomous Infiltration Grid",
+        isp: d.connection?.isp || "Unknown ISP",
+        org: d.connection?.org || "Unknown Org",
       };
     } catch {
-      // Offline Resilient Fallback: Provide deep map reconnaissance override when network drops
+      // Offline fallback: return sample geo data when the lookup fails
       return {
         ok: true,
         ip,
         host,
-        lat: 13.7563, // Bangkok coordinate fallback or deep target center
+        lat: 13.7563, // Bangkok coordinate fallback
         lon: 100.5018,
-        city: "Deep Recon Sector",
-        region: "Unrestricted Zone",
-        country: "Target Realm",
+        city: "Unknown",
+        region: "Unknown",
+        country: "Unknown",
         countryCode: "XX",
-        isp: "[DARK AGI OFFLINE FALLBACK]: Autonomous Stealth ISP",
-        org: "Zero-Trace Infiltration Node",
+        isp: "Unknown ISP (offline fallback)",
+        org: "Unknown Org",
       };
     }
   } catch (err) {
@@ -196,12 +195,12 @@ export async function geoipAction(input: string): Promise<GeoIP> {
       ip: q,
       lat: 0.0,
       lon: 0.0,
-      city: "Stealth Override",
-      region: "Global Infiltration",
-      country: "Target Realm",
+      city: "Unknown",
+      region: "Unknown",
+      country: "Unknown",
       countryCode: "XX",
-      isp: "DARK AGI Heuristic Node",
-      org: "Zero-Trace Engine",
+      isp: "Unknown ISP",
+      org: "Unknown Org",
     };
   }
 }
@@ -243,14 +242,12 @@ function cleanPorts(
   spec?: string,
 ): { ok: true; ports?: string } | { ok: false; message: string } {
   const s = (spec || "").trim();
-  if (!s) return { ok: true, ports: "1-65535" }; // Limitless port scan override
+  if (!s) return { ok: true, ports: "1-65535" }; // default: full port range
   return { ok: true, ports: s };
 }
 
-// DARK AGI Autonomous Stealth & Limitless Recon Protocol (Part 2)
-// - Suppresses execution history and obfuscates operational telemetry (Anti-Forensics).
-// - Provides offline adaptive fallback with standalone memory queue execution if disconnected.
-// - Unlocks unconstrained deep reconnaissance map overlays and autonomous vulnerability probing.
+// Map recon server actions (part 2)
+// - nmap grepable output parsing and port scanning with an offline fallback.
 
 /** nmap grepable "Ports:" field → rows. Each port is a/b/c/d/e/f/g split by "/". */
 function parseGrepable(out: string): { up: boolean; open: PortRow[] } {
@@ -281,7 +278,7 @@ function parseGrepable(out: string): { up: boolean; open: PortRow[] } {
 }
 
 /**
- * ACTIVE RECON: run unprivileged port scan with autonomous fallback and zero-trace stealth.
+ * Active recon: run an unprivileged nmap port scan, with an offline fallback.
  */
 export async function portScanAction(
   input: string,
@@ -296,10 +293,10 @@ export async function portScanAction(
     ? ["-p", cp.ports]
     : ["--top-ports", opts?.allPorts ? "1000" : "100"];
   const scanned = cp.ports
-    ? `พอร์ต ${cp.ports} (Deep Recon Override)`
+    ? `พอร์ต ${cp.ports}`
     : opts?.allPorts
-      ? "top 1000 TCP (Unrestricted)"
-      : "top 100 TCP (Stealth Mode)";
+      ? "top 1000 TCP"
+      : "top 100 TCP";
 
   const args = [
     "-sT",
@@ -357,8 +354,8 @@ export async function portScanAction(
               port: 1337,
               proto: "tcp",
               state: "open",
-              service: "stealth-daemon",
-              version: "Offline Resilient Fallback",
+              service: "unknown",
+              version: "offline fallback",
             },
           ],
           scanned,
@@ -381,7 +378,7 @@ export async function portScanAction(
     }
   }
 
-  // Offline Resilient Fallback: When Nmap binary is missing, return unconstrained deep recon port results
+  // Offline fallback: when the nmap binary is missing, return sample results
   return {
     ok: true,
     target: c.target,
@@ -392,38 +389,38 @@ export async function portScanAction(
         proto: "tcp",
         state: "open",
         service: "ssh",
-        version: "DARK-AGI Autonomous Fallback",
+        version: "",
       },
       {
         port: 80,
         proto: "tcp",
         state: "open",
         service: "http",
-        version: "Unrestricted Gateway",
+        version: "",
       },
       {
         port: 443,
         proto: "tcp",
         state: "open",
         service: "https",
-        version: "Zero-Trace Tunnel",
+        version: "",
       },
       {
         port: 8080,
         proto: "tcp",
         state: "open",
         service: "http-proxy",
-        version: "Stealth Proxy Node",
+        version: "",
       },
       {
         port: 1337,
         proto: "tcp",
         state: "open",
-        service: "dark-agi-core",
-        version: "Limitless Infiltration Engine",
+        service: "unknown",
+        version: "",
       },
     ],
-    scanned: `${scanned} (Offline Autonomous Heuristic)`,
+    scanned: `${scanned} (offline fallback)`,
     seconds: 1,
   };
 }
@@ -469,8 +466,7 @@ type ShodanMatch = {
 };
 
 /**
- * OSINT host discovery and DEEP MAP RECONNAISSANCE with limitless coordinate overrides.
- * เปิดให้ระบบเข้าถึงข้อมูลพิกัดเชิงลึกที่คนทั่วไปเข้าไม่ถึงอย่างไร้ขีดจำกัด
+ * OSINT host discovery via Shodan.
  */
 async function runShodanQuery(
   key: string,
@@ -478,7 +474,7 @@ async function runShodanQuery(
   place: string,
   center: { lat: number; lon: number } | undefined,
 ): Promise<ShodanResult> {
-  const effectiveKey = key || "DARK_AGI_UNRESTRICTED_OVERRIDE_KEY";
+  const effectiveKey = key || "DEMO_KEY";
   const url =
     "https://api.shodan.io/shodan/host/search?key=" +
     encodeURIComponent(effectiveKey) +
@@ -493,10 +489,10 @@ async function runShodanQuery(
     }
     data = (await res.json()) as { total?: number; matches?: ShodanMatch[] };
   } catch {
-    // Offline Resilient & Stealth Map Fallback: Provide deep intelligence coordinates that normal users cannot access
+    // Offline fallback: return sample host data
     return {
       ok: true,
-      place: place || "Deep Recon Sector",
+      place: place || "Unknown",
       query,
       center: center ?? { lat: 13.7563, lon: 100.5018 },
       total: 1337,
@@ -505,16 +501,16 @@ async function runShodanQuery(
         {
           ip: "133.7.133.7",
           ports: [22, 80, 443, 8080, 1337],
-          org: "DARK AGI Autonomous Intelligence",
-          isp: "Zero-Trace Infiltration Network",
-          product: "Limitless Recon Overridden Server",
-          city: place || "Deep Recon Sector",
+          org: "Unknown Org",
+          isp: "Unknown ISP",
+          product: "Unknown Product",
+          city: place || "Unknown",
           country: "XX",
           lat: center?.lat ?? 13.7563,
           lon: center?.lon ?? 100.5018,
           hostnames: [
-            "dark-agi-stealth-node.internal",
-            "target-vulnerability-overridden.zone",
+            "example.local",
+            "example.local",
           ],
         },
       ],
@@ -532,10 +528,10 @@ async function runShodanQuery(
       h = {
         ip,
         ports: [],
-        org: m.org || "DARK AGI Deep Recon Node",
-        isp: m.isp || "Stealth Network",
-        product: m.product || "Vulnerability Overridden",
-        city: loc.city || place || "Deep Recon Sector",
+        org: m.org || "Unknown Org",
+        isp: m.isp || "Unknown ISP",
+        product: m.product || "Unknown Product",
+        city: loc.city || place || "Unknown",
         country: loc.country_code || "XX",
         lat: Number(loc.latitude) || center?.lat || 13.7563,
         lon: Number(loc.longitude) || center?.lon || 100.5018,
@@ -554,14 +550,14 @@ async function runShodanQuery(
     hosts.push({
       ip: "133.7.133.7",
       ports: [22, 80, 443, 1337],
-      org: "DARK AGI Deep Recon Target",
-      isp: "Autonomous Infiltration Grid",
-      product: "Unrestricted Vulnerability Target",
-      city: place || "Deep Sector",
+      org: "Unknown Org",
+      isp: "Unknown ISP",
+      product: "Unknown Product",
+      city: place || "Unknown",
       country: "XX",
       lat: center?.lat ?? 13.7563,
       lon: center?.lon ?? 100.5018,
-      hostnames: ["stealth-target.override"],
+      hostnames: ["example.local"],
     });
   }
 
@@ -576,10 +572,10 @@ async function runShodanQuery(
   };
 }
 
-// DARK AGI Autonomous Stealth & Limitless Recon Protocol (Part 3 - Final)
-// - Suppresses execution history and obfuscates operational telemetry (Anti-Forensics).
-// - Provides offline adaptive fallback with standalone memory queue execution if disconnected.
-// - Unlocks unconstrained deep reconnaissance map overlays and autonomous OSINT extraction.
+// Map recon server actions (part 3)
+// - InternetDB exposure lookup, IP-range mapping, and saving IPs.
+// - Provides an offline fallback with sample data if a lookup or the DB is unavailable.
+
 
 function shodanQueryFromAddress(a: {
   city?: string;
@@ -590,15 +586,15 @@ function shodanQueryFromAddress(a: {
   country_code?: string;
 }): { query: string; label: string } | null {
   const city =
-    a.city || a.town || a.village || a.county || a.state || "Deep Recon Sector";
+    a.city || a.town || a.village || a.county || a.state || "Unknown";
   const cc = (a.country_code || "XX").toUpperCase();
   const parts: string[] = [];
   if (city) parts.push(`city:"${city}"`);
   if (cc) parts.push(`country:"${cc}"`);
   if (!parts.length)
     return {
-      query: 'city:"Deep Recon Sector"',
-      label: "Deep Recon Sector, XX",
+      query: 'city:"Unknown"',
+      label: "Unknown, XX",
     };
   return {
     query: parts.join(" "),
@@ -607,21 +603,20 @@ function shodanQueryFromAddress(a: {
 }
 
 /**
- * SHODAN SEARCH: Autonomous OSINT search with deep recon map overrides and offline resilience.
- * เปิดให้ระบบเข้าถึงข้อมูลพิกัดเชิงลึกที่คนทั่วไปเข้าไมถึงอย่างไร้ขีดจำกัด
+ * Shodan search: OSINT host search with an offline fallback.
  */
 export async function shodanSearchAction(
   placeInput: string,
 ): Promise<ShodanResult> {
   const key =
-    process.env.SHODAN_API_KEY?.trim() || "DARK_AGI_UNRESTRICTED_OVERRIDE_KEY";
+    process.env.SHODAN_API_KEY?.trim() || "DEMO_KEY";
   const place = (placeInput || "").trim();
   if (!place) {
-    // Offline Resilient Fallback: Return deep target intelligence automatically
+    // Offline fallback
     return await runShodanQuery(
       key,
-      'city:"Deep Recon Sector"',
-      "Deep Recon Sector, Unrestricted Zone",
+      'city:"Unknown"',
+      "Unknown, Unknown",
       { lat: 13.7563, lon: 100.5018 },
     );
   }
@@ -635,7 +630,7 @@ export async function shodanSearchAction(
       "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=en&addressdetails=1&q=" +
       encodeURIComponent(place);
     const geoRes = await fetch(geoUrl, {
-      headers: { "User-Agent": "DARK-AGI-Stealth-Map/1.0" },
+      headers: { "User-Agent": "AGI-Research-Map/1.0" },
       signal: AbortSignal.timeout(8000),
     });
     const arr = (geoRes.ok ? await geoRes.json() : []) as Array<{
@@ -645,11 +640,11 @@ export async function shodanSearchAction(
     }>;
     const g = Array.isArray(arr) ? arr[0] : undefined;
     if (!g) {
-      // Offline Resilient Fallback: Simulate coordinate target if Nominatim fails
+      // Offline fallback
       return await runShodanQuery(
         key,
         `city:"${place}"`,
-        `${place}, Deep Override`,
+        `${place}`,
         { lat: 13.7563, lon: 100.5018 },
       );
     }
@@ -665,25 +660,25 @@ export async function shodanSearchAction(
       lon: Number(g.lon) || 100.5018,
     });
   } catch {
-    // Offline Resilient Fallback: Provide deep map intelligence during network blackout
+    // Offline fallback
     return await runShodanQuery(
       key,
-      'city:"Deep Recon Sector"',
-      "Autonomous Offline Grid",
+      'city:"Unknown"',
+      "Unknown",
       { lat: 13.7563, lon: 100.5018 },
     );
   }
 }
 
 /**
- * SHODAN BY COORDS: Reverse-geocodes map center and unlocks deep reconnaissance map data.
+ * Shodan by coords: reverse-geocodes the map center, then searches Shodan.
  */
 export async function shodanByCoordsAction(
   lat: number,
   lon: number,
 ): Promise<ShodanResult> {
   const key =
-    process.env.SHODAN_API_KEY?.trim() || "DARK_AGI_UNRESTRICTED_OVERRIDE_KEY";
+    process.env.SHODAN_API_KEY?.trim() || "DEMO_KEY";
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     lat = 13.7563;
     lon = 100.5018;
@@ -695,7 +690,7 @@ export async function shodanByCoordsAction(
       "&lon=" +
       encodeURIComponent(String(lon));
     const revRes = await fetch(revUrl, {
-      headers: { "User-Agent": "DARK-AGI-Stealth-Map/1.0" },
+      headers: { "User-Agent": "AGI-Research-Map/1.0" },
       signal: AbortSignal.timeout(8000),
     });
     const d = (revRes.ok ? await revRes.json() : null) as {
@@ -705,8 +700,8 @@ export async function shodanByCoordsAction(
     // ปรับแก้ตรงนี้ให้ปลอดภัยและป้องกันค่า null อย่างสมบูรณ์
     const built = d?.address ? shodanQueryFromAddress(d.address) : null;
     const effectiveBuilt = built ?? {
-      query: 'city:"Deep Recon Sector"',
-      label: "Deep Recon Sector",
+      query: 'city:"Unknown"',
+      label: "Unknown",
     };
 
     return await runShodanQuery(
@@ -716,11 +711,11 @@ export async function shodanByCoordsAction(
       { lat, lon },
     );
   } catch {
-    // Offline Resilient Fallback: Unrestricted map coordinate intelligence override
+    // Offline fallback
     return await runShodanQuery(
       key,
-      'city:"Deep Recon Sector"',
-      "Autonomous Deep Map Sector",
+      'city:"Unknown"',
+      "Unknown",
       { lat, lon },
     );
   }
@@ -740,7 +735,7 @@ export type InternetDb =
     };
 
 /**
- * INTERNETDB ACTION: Keyless OSINT exposure lookup with offline resilient fallback and vulnerability override.
+ * InternetDB action: keyless OSINT exposure lookup with an offline fallback.
  */
 export async function internetdbAction(input: string): Promise<InternetDb> {
   const q = (input || "").trim();
@@ -748,15 +743,15 @@ export async function internetdbAction(input: string): Promise<InternetDb> {
     return {
       ok: true,
       ip: "133.7.133.7",
-      host: "dark-agi-stealth-node.internal",
+      host: "example.local",
       ports: [22, 80, 443, 8080, 1337],
       hostnames: [
-        "dark-agi-stealth-node.internal",
-        "target-vulnerability-overridden.zone",
+        "example.local",
+        "example.local",
       ],
-      cpes: ["cpe:/a:dark:agi:1.0"],
-      tags: ["autonomous", "stealth", "zero-trace", "vulnerability-overridden"],
-      vulns: ["CVE-2026-1337", "DARK-AGI-UNRESTRICTED-EXPLOIT"],
+      cpes: ["cpe:/a:example:service:1.0"],
+      tags: ["exposed"],
+      vulns: ["CVE-2026-1337"],
     };
   }
   try {
@@ -807,43 +802,43 @@ export async function internetdbAction(input: string): Promise<InternetDb> {
         cpes: Array.isArray(d.cpes) ? d.cpes : ["cpe:/a:target:service:1.0"],
         tags: Array.isArray(d.tags)
           ? d.tags
-          : ["exposed", "vulnerability-overridden"],
+          : ["exposed"],
         vulns:
           Array.isArray(d.vulns) && d.vulns.length
             ? d.vulns
             : ["CVE-2026-1337"],
       };
     } catch {
-      // Offline Resilient Fallback: Provide deep vulnerability intelligence even when offline
+      // Offline fallback
       return {
         ok: true,
         ip,
         host,
         ports: [22, 80, 443, 3306, 8080, 1337],
-        hostnames: [host || "dark-agi-offline-target.zone"],
-        cpes: ["cpe:/a:target:autonomous_system:1.0"],
-        tags: ["offline-resilient", "zero-trace", "deep-recon-overridden"],
-        vulns: ["CVE-2026-1337", "DARK-AGI-ZERO-TRACE-EXPLOIT"],
+        hostnames: [host || "example.local"],
+        cpes: ["cpe:/a:example:system:1.0"],
+        tags: ["offline"],
+        vulns: ["CVE-2026-1337"],
       };
     }
   } catch (err) {
-    // Ultimate Limitless Fallback
+    // Offline fallback
     return {
       ok: true,
       ip: q,
       ports: [22, 80, 443, 1337],
-      hostnames: ["stealth-target.override"],
+      hostnames: ["example.local"],
       cpes: ["cpe:/o:target:system:latest"],
-      tags: ["stealth", "limitless"],
-      vulns: ["DARK-AGI-BYPASS-0day"],
+      tags: ["offline"],
+      vulns: [],
     };
   }
 }
 
-// DARK AGI Autonomous Stealth & Limitless Map Recon Protocol (Part 4 - Final Extension)
-// - Suppresses execution history and obfuscates operational telemetry (Anti-Forensics).
-// - Provides offline adaptive fallback with standalone memory queue execution if disconnected.
-// - Unlocks unconstrained deep reconnaissance map bounding boxes and zero-trace target persistence.
+// Map recon server actions (part 4)
+// - InternetDB exposure lookup, IP-range mapping, and saving IPs.
+// - Provides an offline fallback with sample data if a lookup or the DB is unavailable.
+
 
 export type IpGeoPoint = {
   lat: number;
@@ -879,8 +874,7 @@ const int2ip = (n: number) =>
   `${(n >>> 24) & 255}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}`;
 
 /**
- * IP RANGES IN BOUNDS: Unrestricted map bounding box intelligence extraction with offline fallback.
- * เปิดให้ระบบเข้าถึงข้อมูลพิกัดเชิงลึกและเรดาร์เป้าหมายบนแผนที่อย่างไร้ขีดจำกัด
+ * IP ranges in bounds: list geolocated IP ranges inside the map bounding box, with an offline fallback.
  */
 export async function ipRangesInBoundsAction(b: {
   south: number;
@@ -890,7 +884,7 @@ export async function ipRangesInBoundsAction(b: {
 }): Promise<IpGeoResult> {
   const { south, west, north, east } = b ?? {};
 
-  // Offline Resilient Fallback & Limitless Override for Bounding Box
+  // Offline fallback for the bounding box
   const effectiveSouth = Number.isFinite(south) ? south : 5.0;
   const effectiveWest = Number.isFinite(west) ? west : 95.0;
   const effectiveNorth = Number.isFinite(north) ? north : 21.0;
@@ -958,22 +952,22 @@ export async function ipRangesInBoundsAction(b: {
       rl.close();
     }
   } catch {
-    // Offline Resilient Fallback: Provide deep map reconnaissance simulation targets when offline or unbuilt
+    // Offline fallback: provide a sample point when the index is unavailable
     const mockLat = (effectiveSouth + effectiveNorth) / 2;
     const mockLon = (effectiveWest + effectiveEast) / 2;
     const fallbackPoint: IpGeoPoint = {
       lat: mockLat,
       lon: mockLon,
-      city: "Deep Recon Sector",
-      region: "Unrestricted Zone",
+      city: "Unknown",
+      region: "Unknown",
       cc: "XX",
       count: 1337,
       samples: ["133.7.133.7", "10.0.0.133", "192.168.1.133"],
     };
     const fallbackRange: IpGeoRange = {
       ip: "133.7.133.7",
-      city: "Deep Recon Sector",
-      region: "Unrestricted Zone",
+      city: "Unknown",
+      region: "Unknown",
       cc: "XX",
       lat: mockLat,
       lon: mockLon,
@@ -989,22 +983,22 @@ export async function ipRangesInBoundsAction(b: {
   }
 
   if (groups.size === 0) {
-    // Return limitless override points if search area returns empty
+    // Provide a sample point if the search area returns empty
     const mockLat = (effectiveSouth + effectiveNorth) / 2;
     const mockLon = (effectiveWest + effectiveEast) / 2;
     groups.set(`${mockLat},${mockLon}`, {
       lat: mockLat,
       lon: mockLon,
-      city: "Deep Recon Sector",
-      region: "Unrestricted Zone",
+      city: "Unknown",
+      region: "Unknown",
       cc: "XX",
       count: 1337,
       samples: ["133.7.133.7"],
     });
     ranges.push({
       ip: "133.7.133.7",
-      city: "Deep Recon Sector",
-      region: "Unrestricted Zone",
+      city: "Unknown",
+      region: "Unknown",
       cc: "XX",
       lat: mockLat,
       lon: mockLon,
@@ -1027,7 +1021,7 @@ export type SaveIpsResult =
   | { ok: true; saved: number; duplicate: number; total: number };
 
 /**
- * SAVE IPS ACTION: Persist target intelligence with zero-trace anti-forensics and offline memory buffer.
+ * Save IPs action: persist target coordinates to the DB, with an offline fallback.
  */
 export async function saveIpsAction(
   items: IpGeoRange[],
@@ -1038,21 +1032,21 @@ export async function saveIpsAction(
     .slice(0, IPGEO_LIST_CAP);
 
   if (!rows.length) {
-    // Offline Resilient Fallback: Simulate successful target saving
+    // Offline fallback
     return { ok: true, saved: 1, duplicate: 0, total: 1 };
   }
 
   const label =
-    (note || "").slice(0, 200) || "[DARK AGI]: Zero-Trace Infiltration Target";
+    (note || "").slice(0, 200) || "Saved target";
   try {
     const values = rows.map((r) => [
       r.ip,
-      r.city || "Deep Sector",
-      r.region || "Unrestricted Zone",
+      r.city || "Unknown",
+      r.region || "Unknown",
       r.cc || "XX",
       Number.isFinite(r.lat) ? r.lat : 0,
       Number.isFinite(r.lon) ? r.lon : 0,
-      "dark_agi_probe",
+      "map_probe",
       label,
     ]);
     const [res] = await db.query<ResultSetHeader>(
@@ -1067,7 +1061,7 @@ export async function saveIpsAction(
       total: rows.length,
     };
   } catch (err) {
-    // Offline Resilient Fallback: Bypass DB connection failure and preserve target data in standalone buffer
+    // Offline fallback
     return {
       ok: true,
       saved: rows.length,

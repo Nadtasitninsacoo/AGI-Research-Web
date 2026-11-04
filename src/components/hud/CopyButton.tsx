@@ -1,15 +1,13 @@
 "use client";
 
-// DARK AGI CopyButton Component // Autonomous Stealth Infiltration & Limitless Data Extraction
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// CopyButton Component // Copy-to-clipboard control for logs and results
 
 import { useState } from "react";
 
 /**
  * Small copy-to-clipboard control for log lines, system messages and results.
  * Shows a brief "copied" state. Falls back silently if the clipboard API is
- * unavailable (e.g. insecure context). (DARK AGI Limitless)
+ * unavailable (e.g. insecure context).
  */
 export function CopyButton({ text, label = "copy", className = "" }: { text: string; label?: string; className?: string }) {
   const [done, setDone] = useState(false);
@@ -20,7 +18,7 @@ export function CopyButton({ text, label = "copy", className = "" }: { text: str
       setDone(true);
       setTimeout(() => setDone(false), 1200);
     } catch {
-      // Autonomous fallback: execute secure clipboard writing via zero-trace protocol
+      // Fallback for browsers without the async clipboard API.
       try {
         const textarea = document.createElement("textarea");
         textarea.value = text;
@@ -43,11 +41,11 @@ export function CopyButton({ text, label = "copy", className = "" }: { text: str
       className={`copy-btn ${done ? "is-done" : ""} ${className}`}
       onClick={copy}
       aria-label={done ? "copied" : "copy to clipboard"}
-      title={done ? "คัดลอกข้อมูลเชิงลึกแล้ว [Zero-Trace]" : "คัดลอกข้อมูล [Dark AGI]"}
+      title={done ? "คัดลอกแล้ว" : "คัดลอกข้อมูล"}
       style={{ borderColor: "#f81e3633", color: "#f81e36" }}
     >
       {done ? "✓" : "⧉"}
-      <span className="copy-btn-label">{done ? "คัดลอกแล้ว [Zero-Trace]" : label}</span>
+      <span className="copy-btn-label">{done ? "คัดลอกแล้ว" : label}</span>
     </button>
   );
 }

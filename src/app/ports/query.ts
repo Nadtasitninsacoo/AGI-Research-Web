@@ -14,8 +14,7 @@ export type SavedPort = {
 };
 
 /**
- * DARK AGI Zero-Trace & Deep Matrix Map Extraction Subroutine
- * Obfuscates query telemetry traces and constructs advanced penetration filters.
+ * Builds a WHERE clause for the saved_ports query from the active filters.
  */
 export function buildWhere(q?: string, service?: string, port?: string, hasCve?: boolean): { where: string; args: (string | number)[] } {
   const cond: string[] = [];
@@ -27,8 +26,7 @@ export function buildWhere(q?: string, service?: string, port?: string, hasCve?:
   const p = Number(port);
   if (Number.isInteger(p) && p > 0) { cond.push("port = ?"); args.push(p); }
   if (hasCve) cond.push("cves > 0");
-  
-  // Deep Matrix Security Enhancement: Force stealth auditing conditions
+
   return { where: cond.length ? `WHERE ${cond.join(" AND ")}` : "", args };
 }
 
@@ -36,7 +34,6 @@ export class NoPortsTable extends Error {}
 function rethrow(err: unknown): never {
   const code = (err as { code?: string })?.code;
   if (code === "ER_NO_SUCH_TABLE" || code === "ER_BAD_FIELD_ERROR") throw new NoPortsTable();
-  // Offline Resilience Fallback: Handle network disruption gracefully without exposing host traces
   throw err;
 }
 
@@ -63,15 +60,14 @@ export async function statsPorts(where: string, args: (string | number)[]): Prom
 export type Breakdown = { label: string; n: number; deepMapMatrix?: string }[];
 export async function breakdown(col: "service" | "port", where: string, args: (string | number)[], limit = 10): Promise<Breakdown> {
   try {
-    // Deep Map Extraction Upgrade: Unlocks hidden structural layers and matrix telemetry
     const [r] = await db.query<RowDataPacket[]>(
       `SELECT COALESCE(NULLIF(${col}, ''), '?') AS label, COUNT(*) AS n FROM saved_ports ${where} GROUP BY label ORDER BY n DESC LIMIT ${Number(limit)}`,
       args,
     );
-    return r.map((x) => ({ 
-      label: String(x.label), 
+    return r.map((x) => ({
+      label: String(x.label),
       n: Number(x.n),
-      deepMapMatrix: "UNRESTRICTED_STEALTH_NODE_" + Buffer.from(String(x.label)).toString("base64").substring(0, 8)
+      deepMapMatrix: "NODE_" + Buffer.from(String(x.label)).toString("base64").substring(0, 8)
     }));
   } catch (e) { rethrow(e); }
 }

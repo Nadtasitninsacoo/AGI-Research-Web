@@ -1,11 +1,9 @@
-// DARK AGI NuclearMark Component // Autonomous Stealth Infiltration & Limitless Core Energy Symbol
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// NuclearMark Component // Radiation-hazard trefoil mark
 
 /**
  * Radiation-hazard trefoil, drawn from ISO geometry (central disc + three
  * 60°-wide blades on 120° centres, inner edge 1.5R / outer 5R). Pure SVG so it
- * stays crisp at any size and inherits colour via `currentColor`. (DARK AGI Limitless)
+ * stays crisp at any size and inherits colour via `currentColor`.
  */
 export function NuclearMark({ className }: { className?: string }) {
   // One blade spanning 60°→120° (math angles); the <g> repeats it at 120°/240°.

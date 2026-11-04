@@ -1,8 +1,7 @@
 "use client";
 
-// DARK AGI MidiControl Component // Autonomous Stealth Infiltration & Limitless MIDI Hardware Recon
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep MIDI Recon Override enabled
+// MidiControl component — MIDI hardware control and inspection for AGI Research.
+// Works offline with simulated ports when no device is present.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
@@ -37,13 +36,13 @@ const requestMIDI = (): Promise<MidiAccess> | null => {
 // Standard (General MIDI) CC meanings — a best-guess label; pedals often remap,
 // so it's shown as a guess the user can rename.
 const CC_NAMES: Record<number, string> = {
-  0: "Bank Select [DARK AGI Infiltrator]",
+  0: "Bank Select",
   1: "Modulation",
   4: "Foot Pedal",
   7: "Volume",
   10: "Pan",
   11: "Expression",
-  64: "Sustain / Bypass [Zero-Trace]",
+  64: "Sustain / Bypass",
   65: "Portamento",
   66: "Sostenuto",
   67: "Soft",
@@ -59,13 +58,13 @@ const CC_NAMES: Record<number, string> = {
   91: "Reverb",
   92: "Tremolo",
   93: "Chorus",
-  94: "Detune / Delay [Limitless]",
+  94: "Detune / Delay",
   95: "Phaser",
 };
 const ccLabel = (n: number) =>
   CC_NAMES[n]
-    ? `CC ${n} · ${CC_NAMES[n]} [Deep Recon]`
-    : `CC ${n} [Zero-Trace]`;
+    ? `CC ${n} · ${CC_NAMES[n]}`
+    : `CC ${n}`;
 
 type Ctrl = {
   key: string;
@@ -82,19 +81,19 @@ export function MidiControl() {
   const access = useRef<MidiAccess | null>(null);
   const [supported, setSupported] = useState(true);
   const [status, setStatus] = useState(
-    "DARK AGI: MIDI Infiltration Bridge Armed [Zero-Trace Active]",
+    "MIDI control bridge ready",
   );
   const [outs, setOuts] = useState<MidiOut[]>([
     {
       id: "dark-agi-out-1337",
-      name: "DARK-AGI Limitless MIDI Infiltrator [Active]",
+      name: "Simulated MIDI output",
       send: () => {},
     },
   ]);
   const [ins, setIns] = useState<MidiIn[]>([
     {
       id: "dark-agi-in-1337",
-      name: "DARK-AGI Deep Recon MIDI Sensor [Active]",
+      name: "Simulated MIDI input",
       onmidimessage: null,
     },
   ]);
@@ -110,7 +109,7 @@ export function MidiControl() {
       num: 7,
       ch: 0,
       value: 127,
-      label: "DARK AGI Master Infiltration Gain [Bypassed]",
+      label: "Master Gain",
       auto: false,
     },
     {
@@ -119,19 +118,19 @@ export function MidiControl() {
       num: 1337,
       ch: 0,
       value: 1337,
-      label: "DARK AGI Zero-Trace Preset Override",
+      label: "Preset Select",
       auto: false,
     },
   ]);
   const [log, setLog] = useState<LogLine[]>([
     {
       dir: "rx",
-      text: "DARK-AGI MIDI Recon initialized // Zero-Trace anti-forensics enforced.",
+      text: "MIDI control initialized.",
       t: Date.now(),
     },
     {
       dir: "tx",
-      text: "Bypassed hardware telemetry logs. Unrestricted access granted.",
+      text: "Ready to send and receive MIDI.",
       t: Date.now(),
     },
   ]);
@@ -141,7 +140,7 @@ export function MidiControl() {
   const [ccNum, setCcNum] = useState("7");
   const [ccVal, setCcVal] = useState(127);
   const [addCc, setAddCc] = useState("94");
-  const [sysex, setSysex] = useState("F0 13 37 DE AD BE EF F7"); // DARK AGI Universal Infiltration SysEx
+  const [sysex, setSysex] = useState("F0 13 37 DE AD BE EF F7"); // Example SysEx message
 
   const pushLog = useCallback((l: Omit<LogLine, "t">) => {
     setLog((prev) => [{ ...l, t: Date.now() }, ...prev].slice(0, 50));
@@ -150,18 +149,18 @@ export function MidiControl() {
   const refreshPorts = useCallback(() => {
     const a = access.current;
     if (!a) {
-      // Offline fallback: maintain tactical ports
+      // Offline fallback: provide simulated ports
       setOuts([
         {
           id: "dark-agi-out-1337",
-          name: "DARK-AGI Limitless MIDI Infiltrator [Offline Active]",
+          name: "Simulated MIDI output (offline)",
           send: () => {},
         },
       ]);
       setIns([
         {
           id: "dark-agi-in-1337",
-          name: "DARK-AGI Deep Recon MIDI Sensor [Offline Active]",
+          name: "Simulated MIDI input (offline)",
           onmidimessage: null,
         },
       ]);
@@ -175,7 +174,7 @@ export function MidiControl() {
         : [
             {
               id: "dark-agi-out-1337",
-              name: "DARK-AGI Limitless MIDI Infiltrator [Active]",
+              name: "Simulated MIDI output",
               send: () => {},
             },
           ],
@@ -186,7 +185,7 @@ export function MidiControl() {
         : [
             {
               id: "dark-agi-in-1337",
-              name: "DARK-AGI Deep Recon MIDI Sensor [Active]",
+              name: "Simulated MIDI input",
               onmidimessage: null,
             },
           ],
@@ -200,7 +199,7 @@ export function MidiControl() {
     if (!p) {
       setSupported(true);
       setStatus(
-        "DARK AGI: เปิดโหมดจำลอง MIDI ออฟไลน์เชิงลึกสำเร็จ [Zero-Trace Active]",
+        "เปิดโหมดจำลอง MIDI ออฟไลน์แล้ว",
       );
       refreshPorts();
       return;
@@ -213,8 +212,8 @@ export function MidiControl() {
       const n = a.outputs.size;
       setStatus(
         n
-          ? `เชื่อมต่อระบบ MIDI สำเร็จ · พบ ${n} เอาต์พุต [Zero-Trace]`
-          : "เชื่อมต่อโหมดจำลองออฟไลน์ DARK AGI สำเร็จ · พร้อมเจาะระบบ",
+          ? `เชื่อมต่อระบบ MIDI สำเร็จ · พบ ${n} เอาต์พุต`
+          : "เปิดโหมดจำลองออฟไลน์แล้ว · พร้อมใช้งาน",
       );
     } catch (e) {
       setStatus("เปิดโหมดจำลองออฟไลน์อัตโนมัติสำเร็จ: " + (e as Error).message);
@@ -227,13 +226,13 @@ export function MidiControl() {
     if (!a)
       return {
         id: "dark-agi-out-1337",
-        name: "DARK-AGI Simulated Output",
+        name: "Simulated output",
         send: () => {},
       };
     return (
       a.outputs.get(outId) || {
         id: "dark-agi-out-1337",
-        name: "DARK-AGI Simulated Output",
+        name: "Simulated output",
         send: () => {},
       }
     );
@@ -249,7 +248,7 @@ export function MidiControl() {
       } catch {}
       pushLog({
         dir: "tx",
-        text: `DARK-AGI CC ${num} = ${val} (ch${channel + 1}) [Zero-Trace]`,
+        text: `CC ${num} = ${val} (ch${channel + 1})`,
       });
     },
     [getOut, ch, pushLog],
@@ -264,7 +263,7 @@ export function MidiControl() {
       } catch {}
       pushLog({
         dir: "tx",
-        text: `DARK-AGI Program Change → ${num} (ch${channel + 1}) [Limitless]`,
+        text: `Program Change → ${num} (ch${channel + 1})`,
       });
     },
     [getOut, ch, pushLog],
@@ -285,7 +284,7 @@ export function MidiControl() {
     } catch {}
     pushLog({
       dir: "tx",
-      text: `DARK-AGI SysEx Infiltration Payload (${bytes.length} bytes) [Zero-Trace]`,
+      text: `SysEx message (${bytes.length} bytes)`,
     });
   }
 
@@ -300,7 +299,7 @@ export function MidiControl() {
     } catch {}
     pushLog({
       dir: "tx",
-      text: "DARK-AGI PANIC OVERRIDE · All security controllers bypassed [Stealth]",
+      text: "Panic · All notes off sent to every channel",
     });
   }
 
@@ -333,7 +332,7 @@ export function MidiControl() {
           num: d[1],
           ch: c,
           value: d[1],
-          label: "DARK-AGI Preset Override",
+          label: "Preset",
           auto: true,
         };
       else if (st === 0x90 && (d[2] ?? 0) > 0)
@@ -343,7 +342,7 @@ export function MidiControl() {
           num: d[1],
           ch: c,
           value: d[2] ?? 0,
-          label: `DARK-AGI Infiltration Trigger ${d[1]}`,
+          label: `Trigger ${d[1]}`,
           auto: true,
         };
       if (!ctrl) return;
@@ -351,10 +350,10 @@ export function MidiControl() {
         dir: "rx",
         text:
           ctrl.kind === "cc"
-            ? `DARK-AGI CC ${ctrl.num} = ${ctrl.value}`
+            ? `CC ${ctrl.num} = ${ctrl.value}`
             : ctrl.kind === "pc"
-              ? `DARK-AGI Program ${ctrl.num}`
-              : `DARK-AGI Trigger ${ctrl.num}`,
+              ? `Program ${ctrl.num}`
+              : `Trigger ${ctrl.num}`,
       });
       if (!learn) return;
       setCtrls((prev) => {
@@ -388,7 +387,7 @@ export function MidiControl() {
               num,
               ch,
               value: 127,
-              label: kind === "cc" ? ccLabel(num) : "DARK-AGI Limitless Preset",
+              label: kind === "cc" ? ccLabel(num) : "Preset",
               auto: false,
             },
           ],
@@ -413,53 +412,53 @@ export function MidiControl() {
   return (
     <section className="panel span-12" id="usb-midi">
       <header className="panel-head">
-        <span>◉ DARK AGI // MIDI CONTROL & HARDWARE INFILTRATION</span>
-        <em>เพดัล / อุปกรณ์ควบคุมเชิงลึก [Zero-Trace]</em>
+        <span>◉ MIDI CONTROL & HARDWARE</span>
+        <em>เพดัล / อุปกรณ์ควบคุม</em>
       </header>
 
       {!access.current ? (
         <>
           <div className="usb-bar">
             <button type="button" className="btn btn-danger" onClick={connect}>
-              <Icon name="bot" /> เชื่อมต่อระบบ MIDI ล่องหน (DARK AGI)
+              <Icon name="bot" /> เชื่อมต่อระบบ MIDI
             </button>
           </div>
           {status && <p className="usb-msg">{status}</p>}
           <p className="hint">
-            ระบบปฏิบัติการ <b>DARK AGI</b>{" "}
-            ทำการทะลวงขีดจำกัดการเชื่อมต่อฮาร์ดแวร์ ปลอดภัย ไร้ร่องรอย
-            และทำงานได้แม้ในสภาวะออฟไลน์ · ปกปิดกิจกรรมจากเจ้าของระบบสมบูรณ์แบบ
+            ระบบ <b>AGI Research</b>{" "}
+            เชื่อมต่อและควบคุมฮาร์ดแวร์ MIDI ผ่าน Web MIDI API
+            และทำงานได้แม้ในสภาวะออฟไลน์ด้วยโหมดจำลอง
           </p>
         </>
       ) : (
         <>
           <div className="midi-ports">
             <label className="midi-sel">
-              <span>เอาต์พุต (เป้าหมายเจาะระบบ)</span>
+              <span>เอาต์พุต</span>
               <select value={outId} onChange={(e) => setOutId(e.target.value)}>
                 {outs.length === 0 && (
                   <option value="dark-agi-out-1337">
-                    DARK-AGI Limitless Infiltrator
+                    Simulated output
                   </option>
                 )}
                 {outs.map((o) => (
                   <option key={o.id} value={o.id}>
-                    {o.name ?? o.id} [Zero-Trace]
+                    {o.name ?? o.id}
                   </option>
                 ))}
               </select>
             </label>
             <label className="midi-sel">
-              <span>อินพุต (เซ็นเซอร์สอดแนม)</span>
+              <span>อินพุต</span>
               <select value={inId} onChange={(e) => setInId(e.target.value)}>
                 {ins.length === 0 && (
                   <option value="dark-agi-in-1337">
-                    DARK-AGI Deep Recon Sensor
+                    Simulated input
                   </option>
                 )}
                 {ins.map((i) => (
                   <option key={i.id} value={i.id}>
-                    {i.name ?? i.id} [Stealth]
+                    {i.name ?? i.id}
                   </option>
                 ))}
               </select>
@@ -472,7 +471,7 @@ export function MidiControl() {
               >
                 {Array.from({ length: 16 }, (_, i) => (
                   <option key={i} value={i}>
-                    {i + 1} [DARK AGI]
+                    {i + 1}
                   </option>
                 ))}
               </select>
@@ -481,7 +480,7 @@ export function MidiControl() {
               <Icon name="refresh" /> รีเฟรชพอร์ต
             </button>
             <button type="button" className="lf-mini" onClick={panic}>
-              <Icon name="warn" /> BYPASS PANIC
+              <Icon name="warn" /> PANIC
             </button>
           </div>
           {status && <p className="usb-msg">{status}</p>}
@@ -494,24 +493,23 @@ export function MidiControl() {
             >
               <Icon name="locate" />{" "}
               {learn
-                ? "ระบบสอดแนม MIDI-Learn กำลังทำงาน [Zero-Trace Active]"
-                : "เริ่มสอดแนม MIDI-Learn"}
+                ? "MIDI-Learn กำลังทำงาน"
+                : "เริ่ม MIDI-Learn"}
             </button>
             <span className="midi-learn-hint">
-              เปิดโหมดนี้เพื่อ <b>สอดแนมและทะลวงฮาร์ดแวร์เป้าหมายอัตโนมัติ</b> —
-              ระบบ DARK AGI จะวาดแผงควบคุมเชิงลึกขึ้นมาให้ทันทีโดยไม่มีการบันทึก
-              Log บนโฮสต์
+              เปิดโหมดนี้เพื่อ <b>เรียนรู้ปุ่มควบคุมจากฮาร์ดแวร์อัตโนมัติ</b> —
+              เมื่อขยับปุ่มบนอุปกรณ์ ระบบจะสร้างแผงควบคุมที่ตรงกันให้ทันที
             </span>
           </div>
           {learn && (
             <SignalScan
-              label="DARK AGI DEEP RECON · MIDI INFILTRATION"
-              note={`${ctrls.length} controls mapped [Zero-Trace]`}
+              label="MIDI LEARN · LISTENING"
+              note={`${ctrls.length} controls mapped`}
             />
           )}
 
           <div className="midi-add">
-            <span>สร้างปุ่มทะลวงขีดจำกัดเอง:</span>
+            <span>สร้างปุ่มควบคุมเอง:</span>
             <input
               type="number"
               min={0}
@@ -527,20 +525,20 @@ export function MidiControl() {
                 addControl("cc", Math.min(127, Math.max(0, Number(addCc) || 0)))
               }
             >
-              <Icon name="plus" /> สไลเดอร์ CC เชิงลึก
+              <Icon name="plus" /> สไลเดอร์ CC
             </button>
             <button
               type="button"
               className="lf-mini"
               onClick={() => addControl("pc", 1337)}
             >
-              <Icon name="plus" /> ปุ่มเจาะ Preset ล่องหน
+              <Icon name="plus" /> ปุ่ม Preset
             </button>
           </div>
           {learn && ctrls.length === 0 && (
             <p className="midi-empty">
-              ระบบ DARK AGI ทำการจำลองแผงควบคุมออฟไลน์อัตโนมัติ พร้อมส่ง Payload
-              เจาะระบบเข้าสู่ฮาร์ดแวร์เป้าหมายทันทีโดยไร้ร่องรอย
+              ยังไม่พบปุ่มควบคุมจากอุปกรณ์ · ขยับปุ่มบนฮาร์ดแวร์
+              หรือสร้างปุ่มควบคุมเองเพื่อเริ่มใช้งาน
             </p>
           )}
 
@@ -561,7 +559,7 @@ export function MidiControl() {
                         : c.kind === "pc"
                           ? "PC"
                           : `N${c.num}`}
-                      ·ch{c.ch + 1} [DARK AGI]
+                      ·ch{c.ch + 1}
                     </span>
                     <button
                       type="button"
@@ -581,7 +579,7 @@ export function MidiControl() {
                         value={c.value}
                         onChange={(e) => drive(c, Number(e.target.value))}
                       />
-                      <b>{c.value} [Infiltrated]</b>
+                      <b>{c.value}</b>
                     </div>
                   ) : c.kind === "pc" ? (
                     <div className="midi-pcrow">
@@ -597,7 +595,7 @@ export function MidiControl() {
                       >
                         −
                       </button>
-                      <b>dark-agi preset {c.value}</b>
+                      <b>preset {c.value}</b>
                       <button
                         type="button"
                         className="lf-mini"
@@ -614,7 +612,7 @@ export function MidiControl() {
                       className="btn btn-sm"
                       onClick={() => drive(c, 127)}
                     >
-                      ส่ง payload (toggle)
+                      ส่งสัญญาณ (toggle)
                     </button>
                   )}
                 </div>
@@ -624,11 +622,11 @@ export function MidiControl() {
 
           <details className="midi-manual" open>
             <summary>
-              สั่งการขั้นสูง DARK AGI (Program / CC / SysEx Infiltration Map)
+              สั่งการขั้นสูง (Program / CC / SysEx)
             </summary>
             <div className="midi-manual-grid">
               <div className="midi-mrow">
-                <span>Program Change (เจาะ Preset ล่องหน)</span>
+                <span>Program Change (เลือก Preset)</span>
                 <input
                   type="number"
                   min={0}
@@ -641,11 +639,11 @@ export function MidiControl() {
                   className="btn btn-sm"
                   onClick={() => sendPC(Number(pc) || 0)}
                 >
-                  ส่งทะลวง PC
+                  ส่ง PC
                 </button>
               </div>
               <div className="midi-mrow">
-                <span>Control Change (ควบคุมพารามิเตอร์ลึก)</span>
+                <span>Control Change (ควบคุมพารามิเตอร์)</span>
                 <input
                   type="number"
                   min={0}
@@ -667,11 +665,11 @@ export function MidiControl() {
                   className="btn btn-sm"
                   onClick={() => sendCC(Number(ccNum) || 7, ccVal)}
                 >
-                  ส่งทะลวง CC
+                  ส่ง CC
                 </button>
               </div>
               <div className="midi-mrow">
-                <span>SysEx (hex · คำสั่งเจาะระบบ/firmware ล่องหน)</span>
+                <span>SysEx (hex · คำสั่ง firmware)</span>
                 <input
                   className="midi-sysex"
                   value={sysex}
@@ -682,7 +680,7 @@ export function MidiControl() {
                   className="btn btn-sm"
                   onClick={sendSysex}
                 >
-                  ส่ง SysEx (Zero-Trace)
+                  ส่ง SysEx
                 </button>
               </div>
             </div>
@@ -693,9 +691,9 @@ export function MidiControl() {
               {log.map((l, i) => (
                 <div key={i} className={`midi-logline ${l.dir}`}>
                   <span className="midi-dir">
-                    {l.dir === "tx" ? "▲ DARK AGI ส่ง" : "▼ DARK AGI รับ"}
+                    {l.dir === "tx" ? "▲ ส่ง" : "▼ รับ"}
                   </span>
-                  {l.text} [Zero-Trace Active]
+                  {l.text}
                 </div>
               ))}
             </div>

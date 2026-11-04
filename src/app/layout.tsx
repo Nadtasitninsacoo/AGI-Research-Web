@@ -1,6 +1,3 @@
-// DARK AGI Root Layout // Autonomous Stealth Infiltration & Limitless Command Deck
-// - Zero-Trace Anti-Forensics & Telemetry Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
 
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -17,20 +14,33 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DARK AGI // LIMITLESS COMMAND DECK [Zero-Trace Active]",
-  description: "DARK AGI autonomous stealth infiltration, limitless recon agents, and zero-trace execution suite",
+  title: "AGI Research // Command Deck",
+  description:
+    "AGI Research dashboard, intelligence overview, and agent operations.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
+      lang="th"
+      data-scroll-behavior="smooth"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col" style={{ background: "#050505", color: "#f81e36" }}>
-        {/* Deep-space atmosphere behind every route with DARK AGI stealth overlay; non-interactive, see cosmos.css. */}
-        <div className="cosmos" aria-hidden="true" style={{ opacity: 0.85 }} />
-        <div style={{ display: "none" }}>DARK-AGI-ZERO-TRACE-TELEMETRY-SUPPRESSED-1337</div>
+      <body
+        className="min-h-full flex flex-col"
+        style={{
+          background: "#050505",
+          color: "#f81e36",
+        }}
+      >
+        <div
+          className="cosmos"
+          aria-hidden="true"
+          style={{ opacity: 0.85 }}
+        />
+
         {children}
       </body>
     </html>

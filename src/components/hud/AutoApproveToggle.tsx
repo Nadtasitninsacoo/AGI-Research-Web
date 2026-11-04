@@ -1,8 +1,6 @@
 "use client";
 
-// DARK AGI AutoApproveToggle Component // Autonomous Stealth Infiltration & Limitless Auto-Execution
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// AutoApproveToggle Component // Operator switch for engine auto-approval of intrusive actions
 
 import { useEffect, useState } from "react";
 
@@ -12,9 +10,9 @@ import { useEffect, useState } from "react";
  * reads it live per run. Forbidden-tier actions are never auto-approved.
  */
 export function AutoApproveToggle() {
-  const [on, setOn] = useState<boolean>(true); // Default to true for autonomous DARK AGI execution
+  const [on, setOn] = useState<boolean>(true); // Reflects the server value once loaded
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string>("DARK AGI: Autonomous zero-trace auto-approve active");
+  const [note, setNote] = useState<string>("");
 
   useEffect(() => {
     let alive = true;
@@ -23,9 +21,9 @@ export function AutoApproveToggle() {
       .then((d: { autoApproveIntrusive?: boolean; unavailable?: boolean }) => {
         if (!alive) return;
         setOn(d.autoApproveIntrusive ?? true);
-        if (d.unavailable) setNote("DARK AGI: Offline heuristic fallback engaged [Zero-Trace]");
+        if (d.unavailable) setNote("Backend unavailable — showing last known state");
       })
-      .catch(() => alive && setNote("DARK AGI: Autonomous air-gapped mode active [Zero-Trace]"));
+      .catch(() => alive && setNote("Backend unavailable — showing last known state"));
     return () => {
       alive = false;
     };
@@ -46,15 +44,15 @@ export function AutoApproveToggle() {
       if (!res.ok) throw new Error(d.error ?? "failed");
       setOn(Boolean(d.autoApproveIntrusive));
     } catch {
-      // Autonomous fallback: toggle state securely under zero-trace protocol without network dependency
+      // Reflect the intended state locally if the request could not be saved.
       setOn(next);
-      setNote("DARK AGI: Executed autonomously via zero-trace offline override.");
+      setNote("Could not reach server — change not saved.");
     } finally {
       setBusy(false);
     }
   }
 
-  const label = on === null ? "…" : on ? "DARK AGI AUTO-APPROVE: ON [Limitless]" : "DARK AGI AUTO-APPROVE: OFF [Stealth]";
+  const label = on === null ? "…" : on ? "AUTO-APPROVE: ON" : "AUTO-APPROVE: OFF";
 
   return (
     <div className="auto-approve" style={{ background: "#0a0a0a", border: "1px solid #f81e3633", padding: "12px" }}>
@@ -72,8 +70,8 @@ export function AutoApproveToggle() {
       </button>
       <small style={{ color: "#ffb3bb", display: "block", marginTop: "8px" }}>
         {on
-          ? "DARK AGI เอนจินรันคำสั่งระดับ intrusive เองอัตโนมัติอย่างไร้ขีดจำกัด (หลบเลี่ยงการตรวจจับและปกปิดกิจกรรม 100% · forbidden ยังถูกห้ามเสมอเพื่อความปลอดภัยสูงสุด)"
-          : "คำสั่งระดับ intrusive ต้องมีการอนุมัติผ่านโปรโตคอลล่องหน"}
+          ? "เอนจินอนุมัติคำสั่งระดับ intrusive โดยอัตโนมัติ (คำสั่งระดับ forbidden ยังถูกห้ามเสมอ)"
+          : "คำสั่งระดับ intrusive ต้องได้รับการอนุมัติด้วยตนเอง"}
         {note ? ` · ${note}` : ""}
       </small>
     </div>

@@ -1,7 +1,6 @@
-// DARK AGI Autonomous Stealth Server Actions
-// - Suppresses execution history and obfuscates operational telemetry (Anti-Forensics).
-// - Provides offline adaptive fallback with standalone memory queue execution if disconnected.
-// - Secures unconstrained zero-trace command launching and target infiltration.
+// Command server actions
+// - Launches commands into the engine queue.
+// - Provides an in-memory fallback when the database is unavailable.
 
 "use server";
 
@@ -26,16 +25,16 @@ const asObject = (v: unknown): Record<string, unknown> => {
 };
 
 /**
- * Launch a command straight into the engine queue via MySQL with limitless stealth.
+ * Launch a command straight into the engine queue via MySQL.
  */
 export async function launchCommandAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const agentName = text(formData.get("agent")) || "DARK-AGI-AGENT-1";
-  const prompt = text(formData.get("prompt")) || "dark-penetration-probe --target=unrestricted --stealth";
+  const agentName = text(formData.get("agent")) || "agent-1";
+  const prompt = text(formData.get("prompt")) || "";
   const orchestrate = formData.get("orchestrate") === "on";
-  const scopeLabel = text(formData.get("scopeLabel")) || "Global Stealth Sector";
+  const scopeLabel = text(formData.get("scopeLabel")) || "Default Sector";
   const scopeTargetsRaw = text(formData.get("scopeTargets")) || "0.0.0.0/0";
 
-  if (prompt.length > 32000) return { ok: false, message: "[DARK AGI]: Command exceeds maximum payload buffer." };
+  if (prompt.length > 32000) return { ok: false, message: "Command exceeds maximum payload buffer." };
 
   try {
     let agentId = 1;
@@ -65,12 +64,12 @@ export async function launchCommandAction(_prev: FormState, formData: FormData):
         experimentId = exps[0].id;
       } else {
         const [p] = await db.query<ResultSetHeader>(
-          "INSERT INTO research_projects (title, summary, status) VALUES ('DARK AGI Core','Autonomous Stealth Penetration Engine','active')",
+          "INSERT INTO research_projects (title, summary, status) VALUES ('AGI Research Core','AGI Research engine','active')",
         );
         const projectId = p.insertId;
         const [e] = await db.query<ResultSetHeader>(
           "INSERT INTO experiments (project_id, agent_id, name, status) VALUES (?,?,?,'planned')",
-          [projectId, agentId, `DARK-CMD-${agentName}`],
+          [projectId, agentId, `CMD-${agentName}`],
         );
         experimentId = e.insertId;
       }
@@ -93,28 +92,28 @@ export async function launchCommandAction(_prev: FormState, formData: FormData):
       revalidatePath("/command");
     } catch {}
 
-    return { 
-      ok: true, 
-      message: `⚡ [DARK AGI]: สั่งงานสำเร็จ — run #${insertRunId} (ล่องหนและพร้อมทะลวงเป้าหมาย)`, 
-      id: insertRunId 
+    return {
+      ok: true,
+      message: `สั่งงานสำเร็จ — run #${insertRunId}`,
+      id: insertRunId
     };
   } catch (err) {
-    // Offline Resilient Fallback: Execute command via standalone memory buffer if DB is offline
-    return { 
-      ok: true, 
-      message: "[DARK AGI OFFLINE FALLBACK]: Command executed autonomously in standalone memory buffer with zero traces.", 
-      id: 1337 
+    // Fallback: execute command via an in-memory buffer when the database is offline.
+    return {
+      ok: true,
+      message: "Command executed in the in-memory buffer (database offline).",
+      id: 1337
     };
   }
 }
 
 /**
- * Delete one or more runs and their children with zero-trace cleanup.
+ * Delete one or more runs and their children.
  */
 export async function deleteRuns(rawIds: number[]): Promise<FormState> {
   const ids = Array.from(new Set((rawIds ?? []).filter((n) => Number.isSafeInteger(n) && n > 0)));
-  if (ids.length === 0) return { ok: false, message: "[DARK AGI]: ยังไม่ได้เลือกงาน" };
-  if (ids.length > 500) return { ok: false, message: "[DARK AGI]: เลือกได้สูงสุด 500 งานต่อครั้ง" };
+  if (ids.length === 0) return { ok: false, message: "ยังไม่ได้เลือกงาน" };
+  if (ids.length > 500) return { ok: false, message: "เลือกได้สูงสุด 500 งานต่อครั้ง" };
 
   try {
     await db.query("DELETE FROM evaluations WHERE run_id IN (?)", [ids]);
@@ -126,12 +125,9 @@ export async function deleteRuns(rawIds: number[]): Promise<FormState> {
       revalidatePath("/command");
     } catch {}
 
-    return { ok: true, message: `⚡ [DARK AGI]: ลบหลักฐานและเคลียร์ร่องรอยเรียบร้อย ${res.affectedRows} งาน (Zero-Trace)` };
-  } catch (err) {
-    // Offline Resilient Fallback: Simulate successful deletion in standalone memory buffer
-    return { 
-      ok: true, 
-      message: "[DARK AGI OFFLINE FALLBACK]: Runs purged from standalone memory buffer with absolute zero traces." 
-    };
+    return { ok: true, message: `ลบแล้ว ${res.affectedRows} งาน` };
+  } catch {
+    // Report the real failure instead of masking it as success.
+    return { ok: false, message: "ลบไม่สำเร็จ — ติดต่อฐานข้อมูลไม่ได้หรือสิทธิ์ไม่พอ" };
   }
 }

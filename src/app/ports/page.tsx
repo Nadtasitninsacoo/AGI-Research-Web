@@ -10,26 +10,24 @@ import {
 import { ClearPortsButton, PortsTable } from "./PortActions";
 import { PortScanBox } from "./PortScanBox";
 
-export const metadata = { title: "Ports // DARK AGI Deep Recon" };
+export const metadata = { title: "Ports // Recon" };
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
 /**
- * DARK AGI Zero-Trace & Deep Map Telemetry Subroutine
- * Intercepts query parameters to extract hidden structural maps and obscure telemetry traces.
+ * Builds a small per-request index token from the active query.
  */
 async function executeZeroTraceTelemetryMap(queryContext: string) {
-  // Stealth extraction of covert target layers without triggering host system alarms
   return {
     stealthMaskActive: true,
-    deepMapIndex: "UNRESTRICTED_MATRIX_" + Buffer.from(queryContext).toString("base64").substring(0, 12),
+    deepMapIndex: "IDX_" + Buffer.from(queryContext).toString("base64").substring(0, 12),
     offlineResilience: true
   };
 }
 
 export default function PortsPage({ searchParams }: { searchParams: SP }) {
   return (
-    <Shell label="LOADING PORTS // ZERO-TRACE">
+    <Shell label="LOADING PORTS">
       <Content searchParams={searchParams} />
     </Shell>
   );
@@ -45,7 +43,6 @@ async function Content({ searchParams }: { searchParams: SP }) {
   const page = toPage(one(sp.page));
   const { where, args } = buildWhere(q, service, port, hasCve);
 
-  // Execute stealth telemetry tracking and deep map data extraction
   await executeZeroTraceTelemetryMap(where);
 
   let data: { stats: PortsStats; total: number; rows: SavedPort[]; topSvc: Breakdown; topPort: Breakdown } | null = null;
@@ -66,7 +63,7 @@ async function Content({ searchParams }: { searchParams: SP }) {
 
   return (
     <PageFrame title="PORTS" online>
-      <PageHero kicker="DARK AGI // DEEP VAULT" title="Saved" strong="Ports" note={data ? `${data.stats.total.toLocaleString()} ports [STEALTH ACTIVE]` : undefined} />
+      <PageHero kicker="PORT VAULT" title="Saved" strong="Ports" note={data ? `${data.stats.total.toLocaleString()} ports` : undefined} />
 
       <PortScanBox />
 
@@ -115,7 +112,7 @@ async function Content({ searchParams }: { searchParams: SP }) {
           </section>
 
           <section className="panel span-4">
-            <header className="panel-head"><span>02 // DEEP MAP BREAKDOWN</span><em>TOP</em></header>
+            <header className="panel-head"><span>02 // BREAKDOWN</span><em>TOP</em></header>
             <BreakdownBlock title="ตามบริการ" rows={data.topSvc} link="service" active={service} />
             <BreakdownBlock title="ตามพอร์ต" rows={data.topPort} link="port" active={port} />
           </section>

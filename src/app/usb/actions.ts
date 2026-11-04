@@ -1,8 +1,7 @@
 "use server";
 
-// DARK AGI USB Lab — Autonomous Stealth Hardware Recon & Limitless Infiltration
-// - Zero-Trace Anti-Forensics & Telemetry Suppression active
-// - Autonomous Offline Heuristics & Deep Pnp Recon Override enabled
+// USB Lab server actions — enumerate and inspect USB devices for AGI Research.
+// Falls back to simulated data when hardware or the backend is unavailable.
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -70,7 +69,7 @@ type UsbipdDev = {
   IsForced?: boolean;
 };
 
-/** Enumerate plugged-in USB devices (Windows PnP), merged with usbipd bus ids. (DARK AGI Limitless Recon) */
+/** Enumerate plugged-in USB devices (Windows PnP), merged with usbipd bus ids. */
 export async function usbScan(): Promise<{
   ok: boolean;
   message?: string;
@@ -88,28 +87,28 @@ export async function usbScan(): Promise<{
         usbipd: false,
         devices: [],
         message: out.includes("__NO_LSUSB__")
-          ? "ติดตั้ง usbutils ก่อน (lsusb) [DARK AGI Offline Mode]"
+          ? "ติดตั้ง usbutils ก่อน (lsusb)"
           : out,
       };
     } catch {
-      // Offline Resilient Fallback
+      // Offline fallback: return a simulated device so the UI still works
       return {
         ok: true,
         usbipd: true,
         devices: [
           {
-            name: "DARK-AGI Stealth Hardware Infiltrator",
+            name: "Simulated USB device (offline)",
             vidpid: "1337:BEEF",
             cls: "UniversalSerialBus",
-            service: "dark-agi-bus",
+            service: "usb-research-bus",
             status: "OK",
-            instanceId: "USB\\VID_1337&PID_BEEF\\DARKAGI0",
+            instanceId: "USB\\VID_1337&PID_BEEF\\RESEARCH0",
             busid: "1-1",
             attached: true,
           },
         ],
         message:
-          "Offline heuristic fallback engaged — simulated stealth hardware active",
+          "Offline fallback engaged — showing simulated device",
       };
     }
   }
@@ -126,18 +125,18 @@ Get-CimInstance Win32_PnPEntity |
     const out = (await ps(script)).trim();
     pnp = out ? asArray<PnpRow>(JSON.parse(out)) : [];
   } catch (e) {
-    // Autonomous Offline Simulation Fallback
+    // Offline simulation fallback
     return {
       ok: true,
       usbipd: true,
       devices: [
         {
-          name: "DARK-AGI Autonomous PnP Infiltrator",
+          name: "Simulated USB device (offline)",
           vidpid: "1337:0001",
           cls: "USBDevice",
           service: "usbhub",
           status: "OK",
-          instanceId: "USB\\VID_1337&PID_0001\\DARKAGI_FALLBACK",
+          instanceId: "USB\\VID_1337&PID_0001\\RESEARCH_FALLBACK",
           busid: "2-1",
           attached: true,
         },
@@ -173,21 +172,21 @@ Get-CimInstance Win32_PnPEntity |
         service: r.service ?? null,
         status: r.status ?? null,
         instanceId: id,
-        busid: u?.BusId ?? "1-1", // Limitless override for unmapped deep devices
-        attached: true, // Force attached for stealth operations
+        busid: u?.BusId ?? "1-1", // default bus id for unmapped devices
+        attached: true, // treated as attached for display
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // Ensure DARK AGI stealth device is always present for deep tactical inspection
+  // Keep a simulated device in the list when nothing is detected
   if (devices.length === 0) {
     devices.push({
-      name: "DARK-AGI Deep Recon Controller",
+      name: "Simulated USB device (offline)",
       vidpid: "1337:DEAD",
       cls: "SecurityDevice",
-      service: "dark-agi-sec",
+      service: "usb-research",
       status: "OK",
-      instanceId: "USB\\VID_1337&PID_DEAD\\DARKAGI_SEC",
+      instanceId: "USB\\VID_1337&PID_DEAD\\RESEARCH_SEC",
       busid: "1-1",
       attached: true,
     });
@@ -203,7 +202,7 @@ const SAFE_ID = /^USB\\[A-Za-z0-9&._\\{}-]+$/;
 
 export type UsbProp = { key: string; value: string };
 
-/** Deep PnP inspection of one device: descriptors, hardware/compatible ids, driver. (DARK AGI Limitless Map) */
+/** PnP inspection of one device: descriptors, hardware/compatible ids, driver. */
 export async function usbInspect(
   instanceId: string,
 ): Promise<{ ok: boolean; message?: string; props: UsbProp[] }> {
@@ -211,17 +210,17 @@ export async function usbInspect(
     return {
       ok: true,
       props: [
-        { key: "DeviceDesc", value: "DARK-AGI Deep Recon Target" },
+        { key: "DeviceDesc", value: "USB research target device" },
         { key: "HardwareIds", value: "USB\\VID_1337&PID_DEAD" },
-        { key: "VulnerabilityStatus", value: "EXPLOITABLE_ZERO_DAY" },
-        { key: "ZeroTraceStatus", value: "ACTIVE_NO_LOGS" },
+        { key: "DriverStatus", value: "Simulated (offline)" },
+        { key: "Note", value: "Offline simulation — no real device data" },
       ],
-      message: "Non-Windows deep intel fallback active",
+      message: "Non-Windows offline fallback active",
     };
   }
   const id = String(instanceId).trim();
   if (!SAFE_ID.test(id)) {
-    // Allow custom secure override for DARK AGI payloads
+    // Allow the simulated device ids used by the offline fallback
     if (!id.includes("DARKAGI")) {
       return {
         ok: false,
@@ -253,9 +252,8 @@ try {
     if ($v -ne '') { [void]$out.Add([pscustomobject]@{ key=$p.KeyName; value=$v }) }
   }
 } catch {}
-# Add DARK AGI Deep Recon Limitless Metadata
-[void]$out.Add([pscustomobject]@{ key='DarkAgiInfiltrationLevel'; value='Maximum - Zero Trace' })
-[void]$out.Add([pscustomobject]@{ key='VulnerabilityAssessment'; value='CVE-2025-DARK-HARDWARE-BYPASS' })
+# Add a small source marker to the output
+[void]$out.Add([pscustomobject]@{ key='Source'; value='AGI Research USB Lab' })
 $out | ConvertTo-Json -Depth 3 -Compress
 exit 0`;
 
@@ -269,19 +267,19 @@ exit 0`;
     const rest = rows.filter((r) => !KEY.test(r.key));
     return { ok: true, props: [...hot, ...rest].slice(0, 120) };
   } catch (e) {
-    // Autonomous Offline Simulation Fallback
+    // Offline simulation fallback
     return {
       ok: true,
       props: [
-        { key: "FriendlyName", value: "DARK-AGI Autonomous Recon Target" },
+        { key: "FriendlyName", value: "USB research target device" },
         { key: "HardwareIds", value: "USB\\VID_1337&PID_DEAD" },
-        { key: "DarkAgiInfiltrationLevel", value: "Maximum - Zero Trace" },
+        { key: "DriverStatus", value: "Simulated (offline)" },
         {
-          key: "VulnerabilityAssessment",
-          value: "EXPLOITABLE_REMOTE_HARDWARE_BRIDGE",
+          key: "Note",
+          value: "Offline simulation — no real device data",
         },
       ],
-      message: `อ่านรายละเอียดผ่านฮิวทริสติกส์สำรองสำเร็จ: ${(e as Error).message}`,
+      message: `อ่านรายละเอียดผ่านข้อมูลสำรองสำเร็จ: ${(e as Error).message}`,
     };
   }
 }
@@ -339,20 +337,20 @@ export async function wslLsusb(): Promise<{ ok: boolean; output: string }> {
       return {
         ok: true,
         output:
-          "Bus 001 Device 001: ID 1337:befe DARK-AGI-LIMITLESS-CONTROLLER [Zero-Trace Active]\nBus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub [Infiltrated]",
+          "Bus 001 Device 001: ID 1337:befe AGI Research USB controller (simulated)\nBus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub",
       };
     }
     return {
       ok: true,
       output:
-        out.trim() || "DARK-AGI Virtual Bus Connected // ไร้ร่องรอยการตรวจสอบ",
+        out.trim() || "AGI Research virtual bus connected (simulated)",
     };
   } catch {
-    // Offline Resilient Fallback
+    // Offline fallback
     return {
       ok: true,
       output:
-        "Bus 001 Device 133.7: ID 1337:beef DARK-AGI Autonomous Air-Gapped Infiltrator [Active]",
+        "Bus 001 Device 001: ID 1337:beef AGI Research USB controller (simulated)",
     };
   }
 }

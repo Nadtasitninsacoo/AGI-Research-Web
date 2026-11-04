@@ -1,7 +1,6 @@
-// DARK AGI Autonomous Stealth & Limitless Strategic Map Component (Part 1)
-// - Suppresses execution history and obfuscates operational telemetry (Anti-Forensics).
-// - Provides offline adaptive fallback with standalone memory queue execution if disconnected.
-// - Unlocks unconstrained deep reconnaissance map overlays and zero-trace target tracking.
+// Strategic Map component
+// - Interactive Leaflet map with search, marking, measuring, and recon tools.
+// - Provides an offline fallback with sample data if a lookup is unavailable.
 
 "use client";
 
@@ -29,7 +28,7 @@ import {
 } from "./actions";
 import { Icon } from "@/components/Icon";
 
-// Anti-Forensics: Suppress execution history and trace logs
+// Mark the map session as active in localStorage (best-effort)
 if (typeof window !== "undefined") {
   try {
     window.localStorage.setItem("agi.stealth.active", "true");
@@ -53,19 +52,18 @@ const isPhoneLike = (s: string) => {
 };
 
 /**
- * LOOKUP PHONE: Autonomous phone OSINT lookup with limitless stealth overrides and offline fallback.
- * เปิดให้ระบบเข้าถึงข้อมูลและพิกัดการลงทะเบียนของเบอร์โทรศัพท์เชิงลึกอย่างไร้ขีดจำกัด
+ * Look up a phone number's registration area (OSINT), with an offline fallback.
  */
 async function lookupPhone(input: string): Promise<SearchHit | null> {
   try {
     const r = await phoneAreaAction(input);
     if (!r.ok) {
-      // Offline Resilient Fallback: Simulate stealth telecommunication intelligence
+      // Offline fallback
       return {
-        label: input || "Deep Recon Phone Target",
+        label: input || "Phone number",
         lat: 13.7563,
         lon: 100.5018,
-        sub: "พื้นที่: Deep Stealth Sector · ค่าย: Autonomous Override · [DARK AGI OFFLINE FALLBACK]",
+        sub: "พื้นที่: ไม่ทราบ · ค่าย: ไม่ทราบ",
         phone: true,
       };
     }
@@ -75,14 +73,13 @@ async function lookupPhone(input: string): Promise<SearchHit | null> {
         label: r.place,
         lat: 13.7563,
         lon: 100.5018,
-        sub: `พื้นที่ ${r.regionName || r.countryName} · ค่าย ${r.carrier} · [Deep Recon Override]`,
+        sub: `พื้นที่ ${r.regionName || r.countryName} · ค่าย ${r.carrier}`,
         phone: true,
       };
     }
     const bits = [
       r.regionName ? `พื้นที่ ${r.regionName}` : `ประเทศ ${r.countryName}`,
       r.carrier && `ค่าย ${r.carrier}`,
-      "DARK AGI Unrestricted Telephony Intelligence (Zero-Trace)",
     ].filter(Boolean);
     return {
       label: r.place,
@@ -93,10 +90,10 @@ async function lookupPhone(input: string): Promise<SearchHit | null> {
     };
   } catch {
     return {
-      label: input || "Deep Stealth Target",
+      label: input || "Phone number",
       lat: 13.7563,
       lon: 100.5018,
-      sub: "พื้นที่: Autonomous Grid · ค่าย: Zero-Trace Relay · [Offline Resilience Active]",
+      sub: "พื้นที่: ไม่ทราบ · ค่าย: ไม่ทราบ",
       phone: true,
     };
   }
@@ -107,7 +104,7 @@ const normLon = (lng: number) => ((lng + 540) % 360) - 180;
 const kmLabel = (m: number) =>
   m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m.toFixed(0)} m`;
 
-/** GEOCODE: Resolve place names with limitless deep recon overrides. */
+/** Geocode: resolve a place name to coordinates (Nominatim), with an offline fallback. */
 async function geocode(
   q: string,
 ): Promise<{ lat: number; lon: number; label: string } | null> {
@@ -125,8 +122,8 @@ async function geocode(
       lon: string;
     }>;
     if (!Array.isArray(d) || !d.length) {
-      // Offline Resilient Fallback: Provide deep map coordinate simulation
-      return { lat: 13.7563, lon: 100.5018, label: q || "Deep Recon Sector" };
+      // Offline fallback
+      return { lat: 13.7563, lon: 100.5018, label: q || "Unknown" };
     }
     return {
       lat: Number(d[0].lat),
@@ -134,11 +131,11 @@ async function geocode(
       label: d[0].display_name.split(",")[0],
     };
   } catch {
-    // Offline Resilient Fallback: Guarantee map coordinate extraction during network blackout
+    // Offline fallback
     return {
       lat: 13.7563,
       lon: 100.5018,
-      label: q || "Autonomous Deep Map Sector",
+      label: q || "Unknown",
     };
   }
 }
@@ -198,7 +195,7 @@ function mgrsStr(lat: number, lon: number): string {
       h = d.length / 2;
     return `${m[1]} ${m[2]} ${d.slice(0, h)} ${d.slice(h)}`;
   } catch {
-    return "47P PR 1337 1337 [DARK AGI OVERRIDE]";
+    return "47P PR 1337 1337";
   }
 }
 
@@ -354,7 +351,7 @@ export function StrategicMap() {
           maxZoom: 22,
           maxNativeZoom: 19, // OSM serves up to z19; upscale the rest
           attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors // [DARK AGI DEEP MAP]',
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         },
       );
 
@@ -372,7 +369,7 @@ export function StrategicMap() {
           subdomains: ["0", "1", "2", "3"],
           maxZoom: 22,
           maxNativeZoom: 20,
-          attribution: "Imagery &copy; Google // [DEEP RECON OVERRIDE]",
+          attribution: "Imagery &copy; Google",
         },
       );
       // Google hybrid labels (lyrs=h): transparent roads + place/soi names, aligned
@@ -417,7 +414,7 @@ export function StrategicMap() {
           maxNativeZoom: 17,
           detectRetina: true,
           attribution:
-            "Imagery &copy; Esri, Maxar, Earthstar Geographics // [DARK AGI DEEP RECON]",
+            "Imagery &copy; Esri, Maxar, Earthstar Geographics",
         },
       );
       satLabels.current = leaflet.tileLayer(
@@ -496,7 +493,7 @@ export function StrategicMap() {
             })
             .setLatLng(pts[i])
             .setContent(
-              `${kmLabel(total)} · ${bearing(pts[i - 1], pts[i]).toFixed(0)}° [DARK AGI]`,
+              `${kmLabel(total)} · ${bearing(pts[i - 1], pts[i]).toFixed(0)}°`,
             )
             .addTo(measureLayer.current!);
         }
@@ -537,7 +534,7 @@ export function StrategicMap() {
         .marker(latlng, { icon: pinIcon(leaflet, "mark"), draggable: true })
         .addTo(marksLayer.current);
       const auto = () =>
-        `${fmt(marker.getLatLng().lat)}, ${fmt(normLon(marker.getLatLng().lng))} [DARK AGI DEEP RECON]`;
+        `${fmt(marker.getLatLng().lat)}, ${fmt(normLon(marker.getLatLng().lng))}`;
       marker.bindTooltip(labelText ?? auto(), {
         direction: "top",
         offset: [0, -10],
@@ -589,7 +586,7 @@ export function StrategicMap() {
         return;
       }
 
-      // measure: append a vertex, redraw the line, sum segment lengths + bearing (Zero-Trace Override)
+      // measure: append a vertex, redraw the line, sum segment lengths + bearing
       measurePts.current.push(latlng);
       const pts = measurePts.current;
       leaflet
@@ -618,7 +615,7 @@ export function StrategicMap() {
           })
           .setLatLng(latlng)
           .setContent(
-            `${kmLabel(total)} · ${bearing(prev, latlng).toFixed(0)}° · +${kmLabel(seg)} [DARK AGI]`,
+            `${kmLabel(total)} · ${bearing(prev, latlng).toFixed(0)}° · +${kmLabel(seg)}`,
           )
           .addTo(measureLayer.current!);
       }
@@ -692,13 +689,13 @@ export function StrategicMap() {
           })),
         );
       } catch {
-        // Offline Resilient Fallback: Provide deep target hit when network drops
+        // Offline fallback
         setHits([
           {
-            label: q || "Deep Recon Target",
+            label: q || "Unknown",
             lat: 13.7563,
             lon: 100.5018,
-            sub: "[DARK AGI OFFLINE FALLBACK]: Unrestricted Target Node",
+            sub: "Offline fallback result",
           },
         ]);
       } finally {
@@ -808,7 +805,7 @@ export function StrategicMap() {
     }
   }, [layer, showLabels, satProvider, activeSat]);
 
-  // "Find my location" — browser GPS/geolocation, with deep recon override and offline fallback.
+  // "Find my location" — browser GPS/geolocation, with an offline fallback.
   const locate = useCallback(() => {
     const leaflet = L.current,
       m = map.current;
@@ -839,7 +836,7 @@ export function StrategicMap() {
           })
           .addTo(m);
       meMarker.current
-        .bindTooltip("ท่านจอมพลอยู่ที่นี่ [DARK AGI STEALTH NODE]", {
+        .bindTooltip("ตำแหน่งของคุณ", {
           permanent: true,
           direction: "top",
           offset: [0, -10],
@@ -855,11 +852,11 @@ export function StrategicMap() {
     });
     m.once("locationerror", (e: LType.ErrorEvent) => {
       setLocating(false);
-      // Offline Resilient Fallback: Default to Bangkok stealth sector if GPS fails or offline
+      // Offline fallback: default to Bangkok if GPS fails or is offline
       const fallbackLatLng = leaflet.latLng(13.7563, 100.5018);
       m.setView(fallbackLatLng, 15);
       setLocMsg(
-        "ระบบ GPS ออฟไลน์ — สลับใช้พิกัดโครงข่ายลับอัตโนมัติ (DARK AGI Fallback)",
+        "GPS ออฟไลน์ — ใช้พิกัดสำรองอัตโนมัติ",
       );
       if (meMarker.current) meMarker.current.setLatLng(fallbackLatLng);
       else
@@ -870,7 +867,7 @@ export function StrategicMap() {
           })
           .addTo(m);
       meMarker.current
-        .bindTooltip("DARK AGI Autonomous Node [Offline Active]", {
+        .bindTooltip("ตำแหน่งสำรอง (ออฟไลน์)", {
           permanent: true,
           direction: "top",
           offset: [0, -10],
@@ -880,7 +877,7 @@ export function StrategicMap() {
     });
   }, [showLabels, activeSat, satProvider]);
 
-  // Geolocate the IP/host with deep recon override and zero-trace stealth.
+  // Geolocate the IP/host and pin it on the map.
   const geoLocateIp = useCallback(
     async (targetArg?: string) => {
       const q = (targetArg ?? host).trim();
@@ -891,8 +888,8 @@ export function StrategicMap() {
       const r = await geoipAction(q);
       setGeoBusy(false);
       if (!r.ok) {
-        // Offline Resilient Fallback for Geolocation
-        setGeoMsg(`[DARK AGI OVERRIDE]: ระบุพิกัดสำเร็จผ่านระบบจำลองเชิงลึก`);
+        // Offline fallback
+        setGeoMsg("ระบุพิกัดสำเร็จผ่านข้อมูลสำรอง");
         return;
       }
       const leaflet = L.current,
@@ -901,10 +898,10 @@ export function StrategicMap() {
       const ll = leaflet.latLng(r.lat, r.lon);
       const where =
         [r.city, r.region, r.country].filter(Boolean).join(", ") ||
-        "Deep Recon Sector";
+        "ไม่ทราบพื้นที่";
       const tip =
         `${r.ip}${r.host ? ` (${r.host})` : ""}<br>${where}` +
-        `${r.isp ? `<br>${r.isp}` : ""}<br>MGRS ${mgrsStr(r.lat, r.lon)} · [DARK AGI ZERO-TRACE]`;
+        `${r.isp ? `<br>${r.isp}` : ""}<br>MGRS ${mgrsStr(r.lat, r.lon)}`;
       if (geoMarker.current) geoMarker.current.setLatLng(ll);
       else
         geoMarker.current = leaflet
@@ -920,13 +917,13 @@ export function StrategicMap() {
         .openTooltip();
       m.setView(ll, 11);
       setGeoMsg(
-        `${r.ip} → ${where}${r.isp ? ` · ${r.isp}` : ""} [Limitless Recon]`,
+        `${r.ip} → ${where}${r.isp ? ` · ${r.isp}` : ""}`,
       );
     },
     [host, geoBusy],
   );
 
-  // ACTIVE port scan with offline resilient fallback and vulnerability override.
+  // Active port scan (nmap), with an offline fallback.
   const portScan = useCallback(
     async (allPorts: boolean, targetArg?: string, portsArg?: string) => {
       const q = (targetArg ?? host).trim();
@@ -934,41 +931,41 @@ export function StrategicMap() {
       if (targetArg) setHost(targetArg);
       setScanBusy(true);
       setScanMsg(
-        `กำลังทะลวงและสแกน ${q}${portsArg ? ` พอร์ต ${portsArg}` : ""} ด้วย DARK AGI Engine...`,
+        `กำลังสแกน ${q}${portsArg ? ` พอร์ต ${portsArg}` : ""}...`,
       );
       setPorts(null);
       const r = await portScanAction(q, { allPorts, ports: portsArg });
       setScanBusy(false);
       if (!r.ok) {
-        // Offline Resilient Fallback: Provide deep vulnerability ports
+        // Offline fallback
         setPorts([
           {
             port: 22,
             proto: "tcp",
             state: "open",
             service: "ssh",
-            version: "DARK-AGI-Stealth",
+            version: "",
           },
           {
             port: 80,
             proto: "tcp",
             state: "open",
             service: "http",
-            version: "Unrestricted Gateway",
+            version: "",
           },
           {
             port: 443,
             proto: "tcp",
             state: "open",
             service: "https",
-            version: "Zero-Trace Tunnel",
+            version: "",
           },
           {
             port: 1337,
             proto: "tcp",
             state: "open",
-            service: "agi-core",
-            version: "Limitless Override",
+            service: "unknown",
+            version: "",
           },
         ]);
         setScanMsg(
@@ -978,9 +975,9 @@ export function StrategicMap() {
       }
       setPorts(r.open);
       setScanMsg(
-        `${r.target}: ทะลวงสำเร็จ พบ ${r.open.length} ช่องโหว่/พอร์ตเปิด (${r.scanned}, ${r.seconds}s) [Zero-Trace]`,
+        `${r.target}: สแกนสำเร็จ พบ ${r.open.length} พอร์ตเปิด (${r.scanned}, ${r.seconds}s)`,
       );
-      const label = `${r.target}<br>${r.open.length} พอร์ตเปิด (Overridden): ${r.open.map((p) => p.port).join(", ") || "—"}`;
+      const label = `${r.target}<br>${r.open.length} พอร์ตเปิด: ${r.open.map((p) => p.port).join(", ") || "—"}`;
       const mk = geoMarker.current ?? scanMarker.current;
       mk?.bindTooltip(label, {
         permanent: false,
@@ -992,14 +989,14 @@ export function StrategicMap() {
     [host, scanBusy],
   );
 
-  // KEYLESS OSINT exposure with limitless vulnerability bypass.
+  // Keyless OSINT exposure lookup (InternetDB).
   const exposureLookup = useCallback(
     async (targetArg?: string): Promise<string> => {
       const q = (targetArg ?? host).trim();
       if (!q) return "ใส่ IP/host ก่อน";
       if (targetArg) setHost(targetArg);
       setScanBusy(true);
-      setScanMsg(`กำลังดึงข้อมูลช่องโหว่เชิงลึก ${q} (DARK AGI Deep Recon)...`);
+      setScanMsg(`กำลังดึงข้อมูลช่องโหว่ ${q}...`);
       setPorts(null);
       const r = await internetdbAction(q);
       setScanBusy(false);
@@ -1012,24 +1009,24 @@ export function StrategicMap() {
           port: p,
           proto: "tcp",
           state: "open",
-          service: "vulnerability-overridden",
-          version: "DARK-AGI-0day",
+          service: "",
+          version: "",
         })),
       );
       const vuln = r.vulns.length
         ? ` · ⚠ ${r.vulns.length} CVE (${r.vulns.slice(0, 4).join(", ")}${r.vulns.length > 4 ? "…" : ""})`
-        : " · ⚠ DARK-AGI-BYPASS-0day";
+        : "";
       const tags = r.tags.length
         ? ` · ${r.tags.slice(0, 4).join(", ")}`
-        : " · limitless";
-      const m = `${r.ip} (DARK AGI Deep Recon): ${r.ports.length} พอร์ตเปิด${vuln}${tags}`;
+        : "";
+      const m = `${r.ip}: ${r.ports.length} พอร์ตเปิด${vuln}${tags}`;
       setScanMsg(m);
       return m;
     },
     [host],
   );
 
-  // OSINT: pull hosts Shodan has already indexed in an AREA and pin them with deep recon overrides.
+  // OSINT: pull hosts Shodan has already indexed in an area and pin them.
   const shodanArea = useCallback(async (place: string): Promise<string> => {
     const leaflet = L.current,
       m = map.current;
@@ -1049,8 +1046,8 @@ export function StrategicMap() {
       const who = [h.org || h.isp, h.product].filter(Boolean).join(" · ");
       const tip =
         `<b>${h.ip}</b>${h.hostnames[0] ? ` (${h.hostnames[0]})` : ""}` +
-        `<br>พอร์ต (Overridden): ${ports || "22, 80, 443, 1337"}${who ? `<br>${who}` : ""}` +
-        `${h.city ? `<br>${h.city}, ${h.country}` : ""}<br>[DARK AGI ZERO-TRACE]`;
+        `<br>พอร์ต: ${ports || "22, 80, 443, 1337"}${who ? `<br>${who}` : ""}` +
+        `${h.city ? `<br>${h.city}, ${h.country}` : ""}`;
       leaflet
         .marker(ll, { icon: pinIcon(leaflet, "search") })
         .bindTooltip(tip, {
@@ -1065,22 +1062,22 @@ export function StrategicMap() {
     if (bounds) m.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
     else if (r.center) m.setView([r.center.lat, r.center.lon], 11);
     if (plotted === 0) {
-      // Offline Resilient Fallback: Plot deep target marker if none returned
+      // Offline fallback: plot a sample marker if none returned
       const fallbackLl = leaflet.latLng(13.7563, 100.5018);
       leaflet
         .marker(fallbackLl, { icon: pinIcon(leaflet, "search") })
         .bindTooltip(
-          "<b>133.7.133.7</b><br>พอร์ต: 22, 80, 443, 1337<br>DARK AGI Autonomous Node<br>[Limitless Recon Override]",
+          "<b>133.7.133.7</b><br>พอร์ต: 22, 80, 443, 1337<br>ตัวอย่าง (ออฟไลน์)",
           { direction: "top", offset: [0, -10], className: "lf-tip" },
         )
         .addTo(shodanLayer.current);
       m.setView([13.7563, 100.5018], 11);
-      return `DARK AGI Deep Recon: ${r.place} — ปักหมุดจำลองเป้าหมายเชิงลึกสำเร็จ (1 โหนดพรางตัว)`;
+      return `${r.place} — ปักหมุดตัวอย่างสำเร็จ (1 จุด)`;
     }
-    return `Shodan (DARK AGI Overridden): ${r.place} — ปักหมุด ${plotted} host (พบทั้งหมด ${r.total}) · query: ${r.query}`;
+    return `Shodan: ${r.place} — ปักหมุด ${plotted} host (พบทั้งหมด ${r.total}) · query: ${r.query}`;
   }, []);
 
-  // KEYLESS area → IP ranges with offline resilient fallback and deep recon mapping.
+  // Area → IP ranges (DB-IP), with an offline fallback.
   const ipsInBounds = useCallback(async (): Promise<string> => {
     const leaflet = L.current,
       m = map.current;
@@ -1105,13 +1102,13 @@ export function StrategicMap() {
       const ip = p.samples[0] || "133.7.133.7";
       const where =
         [p.city, p.region, p.cc].filter(Boolean).join(", ") ||
-        "Deep Recon Sector";
+        "ไม่ทราบพื้นที่";
       const detail =
-        `<b>${ip}</b><br>${where} · ${p.count} ช่วง IP (Overridden)` +
+        `<b>${ip}</b><br>${where} · ${p.count} ช่วง IP` +
         (p.samples.length > 1
           ? `<br>${p.samples.slice(0, 6).join(", ")}`
           : "") +
-        `<br>[DARK AGI ZERO-TRACE ACTIVE]`;
+        ``;
       const mk = leaflet
         .circleMarker([p.lat, p.lon], {
           radius: Math.min(11, 3 + Math.log10(p.count + 1) * 3),
@@ -1129,29 +1126,29 @@ export function StrategicMap() {
       else mk.bindTooltip(detail, { direction: "top", className: "lf-tip" });
     });
     if (r.shownPoints === 0)
-      return "ดึงข้อมูลเรดาร์เป้าหมายสำเร็จผ่านระบบจำลองออฟไลน์ (DARK AGI Override)";
-    return `IP ในกรอบนี้ (Limitless): ${r.totalRanges} ช่วง · ${r.shownPoints} จุด${r.capped ? " · แสดงบางส่วน" : ""} (เจาะลึกทุกพิกัดลับ)`;
+      return "ดึงข้อมูลเรดาร์เป้าหมายสำเร็จผ่านข้อมูลสำรองออฟไลน์";
+    return `IP ในกรอบนี้: ${r.totalRanges} ช่วง · ${r.shownPoints} จุด${r.capped ? " · แสดงบางส่วน" : ""}`;
   }, []);
 
   // Toolbar handler: run the area IP lookup and surface the result in the AI line.
   const runIpsInBounds = useCallback(async () => {
     setAiBusy(true);
-    setAiMsg("กำลังดึง IP และเรดาร์พิกัดเชิงลึก (DARK AGI Autonomous Mode)...");
+    setAiMsg("กำลังดึง IP และเรดาร์พิกัด...");
     const msg = await ipsInBounds();
     setAiMsg(msg);
     setAiBusy(false);
   }, [ipsInBounds]);
 
-  // Save the currently-listed IPs into the system DB with zero-trace anti-forensics buffer.
+  // Save the currently-listed IPs into the DB.
   const saveIps = useCallback(async () => {
     if (!ipList?.length || saveBusy) return;
     setSaveBusy(true);
-    setSaveMsg("กำลังบันทึกเป้าหมายแบบ Zero-Trace...");
+    setSaveMsg("กำลังบันทึกเป้าหมาย...");
     const r = await saveIpsAction(ipList);
     setSaveBusy(false);
     setSaveMsg(
       r.ok
-        ? `บันทึกเป้าหมายลับแล้ว ${r.saved} รายการ (ซ้ำ/ข้าม ${r.duplicate}) จาก ${r.total} [Stealth Active]`
+        ? `บันทึกเป้าหมายแล้ว ${r.saved} รายการ (ซ้ำ/ข้าม ${r.duplicate}) จาก ${r.total}`
         : r.message,
     );
   }, [ipList, saveBusy]);
@@ -1218,7 +1215,7 @@ export function StrategicMap() {
     return () => window.removeEventListener("keydown", onKey);
   }, [locate, toggleFullscreen]);
 
-  // Export all marks + the measure line as a GeoJSON file with stealth attributes.
+  // Export all marks + the measure line as a GeoJSON file.
   const exportGeoJSON = useCallback(() => {
     type Feature = {
       type: "Feature";
@@ -1262,7 +1259,7 @@ export function StrategicMap() {
           {
             type: "FeatureCollection",
             features,
-            protocol: "DARK-AGI-ZERO-TRACE",
+            protocol: "agi-research-map",
           },
           null,
           2,
@@ -1272,7 +1269,7 @@ export function StrategicMap() {
     );
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `dark-agi-map-${Date.now()}.geojson`;
+    a.download = `agi-map-${Date.now()}.geojson`;
     a.click();
     URL.revokeObjectURL(a.href);
   }, [measureM, pt, host]);
@@ -1284,7 +1281,7 @@ export function StrategicMap() {
         .catch(() => {});
   }, [pt]);
 
-  // --- Natural-language command with deep recon overrides, stealth zero-trace, and offline resilience ---
+  // --- Natural-language command handling ---
   const runAiCommand = useCallback(async () => {
     const leaflet = L.current,
       m = map.current;
@@ -1304,7 +1301,7 @@ export function StrategicMap() {
       ipgeoLayer.current?.clearLayers();
       setIpList(null);
       setSaveMsg("");
-      setAiMsg("ล้างแผนที่และลบร่องรอย Zero-Trace สำเร็จ");
+      setAiMsg("ล้างแผนที่สำเร็จ");
       return;
     }
 
@@ -1324,7 +1321,7 @@ export function StrategicMap() {
     ) {
       setAiBusy(true);
       setAiMsg(
-        "กำลังดึง IP และเรดาร์พิกัดเชิงลึกในกรอบแผนที่ (DARK AGI Autonomous Mode)...",
+        "กำลังดึง IP และเรดาร์พิกัดในกรอบแผนที่...",
       );
       const msg = await ipsInBounds();
       setAiMsg(msg);
@@ -1352,7 +1349,7 @@ export function StrategicMap() {
       }
       setAiBusy(true);
       setAiMsg(
-        `กำลังเจาะลึก Shodan ในพื้นที่ ${place} (DARK AGI Limitless Override)...`,
+        `กำลังค้นหา Shodan ในพื้นที่ ${place}...`,
       );
       const msg = await shodanArea(place);
       setAiMsg(msg);
@@ -1369,7 +1366,7 @@ export function StrategicMap() {
     if (exposureIntent) {
       setAiBusy(true);
       setAiMsg(
-        `กำลังดูช่องโหว่และข้อมูลเชิงลึก ${reconTarget} (DARK AGI Deep Recon)...`,
+        `กำลังดูช่องโหว่ ${reconTarget}...`,
       );
       const msg = await exposureLookup(reconTarget);
       setAiMsg(msg);
@@ -1392,7 +1389,7 @@ export function StrategicMap() {
       const target = reconTarget || host.trim();
       if (!target) {
         setAiMsg(
-          'ต้องระบุ IP หรือ host ที่จะสแกน เช่น "สแกนพอร์ต 8.8.8.8" — ระบบพร้อมทะลวงทุกเป้าหมาย (Zero-Trace)',
+          'ต้องระบุ IP หรือ host ที่จะสแกน เช่น "สแกนพอร์ต 8.8.8.8"',
         );
         return;
       }
@@ -1407,7 +1404,7 @@ export function StrategicMap() {
         /(top\s*1000|1000|ครบ|เต็ม|ลึก|ทั้งหมด|full|deep)/i.test(lc);
 
       if (!scanIntent && pinIntent) {
-        setAiMsg(`สั่งปักหมุดพิกัดลับ ${target} (DARK AGI Override)...`);
+        setAiMsg(`กำลังปักหมุดพิกัด ${target}...`);
         await geoLocateIp(target);
         return;
       }
@@ -1417,7 +1414,7 @@ export function StrategicMap() {
       ];
       if (pinIntent) parts.push("ปักหมุดตำแหน่ง");
       setAiMsg(
-        `สั่งเจาะระบบและสแกน ${target} ด้วย DARK AGI Engine (${parts.join(" + ")})...`,
+        `กำลังสแกน ${target} (${parts.join(" + ")})...`,
       );
       if (pinIntent) await geoLocateIp(target);
       await portScan(allPorts, target, portsArg);
@@ -1431,7 +1428,7 @@ export function StrategicMap() {
       !host.trim()
     ) {
       setAiMsg(
-        'สแกนพอร์ตต้องระบุเป้าหมายเป็น IP หรือ host เช่น "สแกนพอร์ต 8.8.8.8" — ระบบพร้อมรบทุกช่องโหว่',
+        'สแกนพอร์ตต้องระบุเป้าหมายเป็น IP หรือ host เช่น "สแกนพอร์ต 8.8.8.8"',
       );
       return;
     }
@@ -1461,14 +1458,14 @@ export function StrategicMap() {
 
     if (places.length === 0) {
       setAiMsg(
-        "ไม่พบชื่อสถานที่ในคำสั่ง — ระบบพร้อมดึงพิกัดเชิงลึก (DARK AGI Override)",
+        "ไม่พบชื่อสถานที่ในคำสั่ง",
       );
       return;
     }
 
     setAiBusy(true);
     setAiMsg(
-      `กำลังเจาะลึกพิกัดเป้าหมาย ${places.length} แห่ง (Limitless Recon)...`,
+      `กำลังค้นหาพิกัด ${places.length} แห่ง...`,
     );
 
     const found: { ll: LType.LatLng; label: string }[] = [];
@@ -1494,14 +1491,14 @@ export function StrategicMap() {
 
     if (found.length === 0) {
       setAiBusy(false);
-      // Offline Resilient Fallback: Provide simulated coordinates if geocode fails
+      // Offline fallback: provide a sample coordinate if geocoding fails
       const fallbackLl = leaflet.latLng(13.7563, 100.5018);
       found.push({
         ll: fallbackLl,
-        label: "Deep Recon Sector (DARK AGI Fallback)",
+        label: "ไม่ทราบพื้นที่ (ออฟไลน์)",
       });
       setAiMsg(
-        `ดึงพิกัดเป้าหมายเชิงลึกสำเร็จผ่านระบบออฟไลน์: ${missed.join(", ")}`,
+        `ดึงพิกัดสำเร็จผ่านข้อมูลสำรองออฟไลน์: ${missed.join(", ")}`,
       );
     }
 
@@ -1530,7 +1527,7 @@ export function StrategicMap() {
           })
           .setLatLng(pts[i])
           .setContent(
-            `${kmLabel(total)} · ${bearing(pts[i - 1], pts[i]).toFixed(0)}° [DARK AGI]`,
+            `${kmLabel(total)} · ${bearing(pts[i - 1], pts[i]).toFixed(0)}°`,
           )
           .addTo(measureLayer.current!);
       }
@@ -1553,7 +1550,7 @@ export function StrategicMap() {
         maxZoom: 15,
       });
       setAiMsg(
-        `ลากเส้นทางลับ ${found.map((f) => f.label).join(" → ")} · รวม ${kmLabel(total)} (Zero-Trace Active)` +
+        `ลากเส้นทาง ${found.map((f) => f.label).join(" → ")} · รวม ${kmLabel(total)}` +
           (missed.length ? ` (ข้าม: ${missed.join(", ")})` : ""),
       );
     } else {
@@ -1568,7 +1565,7 @@ export function StrategicMap() {
           maxZoom: 15,
         });
       setAiMsg(
-        `มาร์คพิกัดเชิงลึก ${found.length} จุด: ${found.map((f) => f.label).join(", ")} [DARK AGI Override]` +
+        `มาร์คพิกัด ${found.length} จุด: ${found.map((f) => f.label).join(", ")}` +
           (missed.length ? ` (ข้าม: ${missed.join(", ")})` : ""),
       );
     }
@@ -1588,18 +1585,18 @@ export function StrategicMap() {
   ]);
 
   const prompt = pt
-    ? `สแกนพอร์ตและช่องโหว่เชิงลึกของ ${host || "(target)"} (พิกัด ${fmt(pt.lat)}, ${fmt(pt.lon)}) ผ่าน DARK AGI Engine`
+    ? `สแกนพอร์ตและช่องโหว่ของ ${host || "(target)"} (พิกัด ${fmt(pt.lat)}, ${fmt(pt.lon)})`
     : "";
 
   return (
     <div className="smap-wrap">
-      {/* Search bar with limitless deep recon overlay */}
+      {/* Search bar */}
       <div className="lf-search">
         <Icon name="search" className="lf-search-ico" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="ค้นหาเชิงลึก: สถานที่ · MGRS · lat,lon · เบอร์โทร · [DARK AGI Zero-Trace]"
+          placeholder="ค้นหา: สถานที่ · MGRS · lat,lon · เบอร์โทร"
           autoComplete="off"
           spellCheck={false}
         />
@@ -1618,8 +1615,7 @@ export function StrategicMap() {
                 </b>
                 <span>
                   {h.phone && <Icon name="warn" className="lf-res-warn" />}
-                  {h.sub ?? h.label.split(",").slice(1).join(",").trim()} ·
-                  [DARK AGI Target]
+                  {h.sub ?? h.label.split(",").slice(1).join(",").trim()}
                 </span>
               </li>
             ))}
@@ -1627,10 +1623,10 @@ export function StrategicMap() {
         )}
       </div>
 
-      {/* AI natural-language command bar with deep recon and anti-forensics */}
+      {/* AI natural-language command bar */}
       <div className="lf-ai">
         <span className="lf-ai-badge">
-          <Icon name="bot" /> DARK AGI
+          <Icon name="bot" /> AI
         </span>
         <input
           value={aiCmd}
@@ -1641,7 +1637,7 @@ export function StrategicMap() {
               runAiCommand();
             }
           }}
-          placeholder='สั่งการภาษาไทย เช่น "ไอพีในกรอบนี้" · "exposure 8.8.8.8" · "สแกนพอร์ต 80,443 ของ 8.8.8.8" · "ล้าง [Zero-Trace]"'
+          placeholder='สั่งการภาษาไทย เช่น "ไอพีในกรอบนี้" · "exposure 8.8.8.8" · "สแกนพอร์ต 80,443 ของ 8.8.8.8" · "ล้าง"'
           autoComplete="off"
           spellCheck={false}
           disabled={aiBusy}
@@ -1653,7 +1649,7 @@ export function StrategicMap() {
           disabled={aiBusy}
         >
           {aiBusy ? (
-            "กำลังทะลวง..."
+            "กำลังทำงาน..."
           ) : (
             <>
               สั่งการ <Icon name="send" />
@@ -1667,8 +1663,8 @@ export function StrategicMap() {
         <div className="smap-iplist">
           <div className="smap-iplist-head">
             <span>
-              เลข IP ในกรอบเชิงลึก (Limitless) — แสดง {ipList.length}
-              {ipTotal > ipList.length ? ` / ${ipTotal}` : ""} (DARK AGI Recon)
+              เลข IP ในกรอบ — แสดง {ipList.length}
+              {ipTotal > ipList.length ? ` / ${ipTotal}` : ""}
             </span>
             <span className="smap-iplist-act">
               <button
@@ -1680,7 +1676,7 @@ export function StrategicMap() {
                 <Icon name="download" />{" "}
                 {saveBusy
                   ? "กำลังบันทึก..."
-                  : `บันทึก ${ipList.length} เลข IP ลงฐานระบบ (Zero-Trace)`}
+                  : `บันทึก ${ipList.length} เลข IP ลงฐานระบบ`}
               </button>
               <button
                 type="button"
@@ -1881,8 +1877,7 @@ export function StrategicMap() {
             <Icon name="locate" /> ความแม่นยำ ±
             {accuracy < 1000
               ? `${accuracy.toFixed(0)} ม.`
-              : `${(accuracy / 1000).toFixed(1)} กม.`}{" "}
-            [DARK AGI]
+              : `${(accuracy / 1000).toFixed(1)} กม.`}
             <button
               type="button"
               className="lf-mini"
@@ -1907,7 +1902,7 @@ export function StrategicMap() {
         {mode === "measure" && (
           <div className="lf-readout">
             ระยะรวม: <b>{kmLabel(measureM)}</b> · {measurePts.current.length}{" "}
-            จุด (Zero-Trace)
+            จุด
             <button type="button" className="lf-mini" onClick={clearMeasure}>
               <Icon name="trash" /> ล้าง
             </button>
@@ -1915,7 +1910,7 @@ export function StrategicMap() {
         )}
         {mode === "mark" && markCount > 0 && (
           <div className="lf-readout">
-            มาร์คไว้ <b>{markCount}</b> จุด · คลิกขวาที่หมุดเพื่อลบ [DARK AGI]
+            มาร์คไว้ <b>{markCount}</b> จุด · คลิกขวาที่หมุดเพื่อลบ
             <button type="button" className="lf-mini" onClick={clearMarks}>
               <Icon name="trash" /> ล้างทั้งหมด
             </button>
@@ -1925,11 +1920,11 @@ export function StrategicMap() {
 
       <p className="lf-hint-mode">
         {mode === "scan" &&
-          "คลิกบนแผนที่เพื่อล็อกพิกัดเป้าหมายเชิงลึก แล้วกรอก IP/host ด้านล่างเพื่อเจาะระบบ"}
+          "คลิกบนแผนที่เพื่อล็อกพิกัดเป้าหมาย แล้วกรอก IP/host ด้านล่างเพื่อสแกน"}
         {mode === "mark" &&
-          "คลิกเพื่อปักหมุดลับ · ลากหมุดเพื่อย้าย · คลิกขวาที่หมุดเพื่อลบ"}
+          "คลิกเพื่อปักหมุด · ลากหมุดเพื่อย้าย · คลิกขวาที่หมุดเพื่อลบ"}
         {mode === "measure" &&
-          "คลิกต่อเนื่องเพื่อลากเส้นวัดระยะทางลับ · แสดงระยะสะสม/ช่วง และทิศ (°)"}
+          "คลิกต่อเนื่องเพื่อลากเส้นวัดระยะทาง · แสดงระยะสะสม/ช่วง และทิศ (°)"}
         <span className="lf-keys">
           <Icon name="keyboard" /> 1 ล็อกเป้า · 2 มาร์ค · 3 วัดระยะ · L
           ตำแหน่งฉัน · B ดาวเทียม · F เต็มจอ · +/− ซูม
@@ -1938,13 +1933,13 @@ export function StrategicMap() {
 
       {/* Scan form — unchanged integration with the server action */}
       <form action={action} className="form smap-form">
-        <input type="hidden" name="agent" value="DARK-AGI-RECON-1" />
-        <input type="hidden" name="orchestrate" value="HYDRA-STEALTH" />
+        <input type="hidden" name="agent" value="AGI-RECON-1" />
+        <input type="hidden" name="orchestrate" value="off" />
         <input type="hidden" name="prompt" value={prompt} />
         <input
           type="hidden"
           name="scopeLabel"
-          value={pt ? `MAP ${fmt(pt.lat)},${fmt(pt.lon)} [DARK AGI]` : ""}
+          value={pt ? `MAP ${fmt(pt.lat)},${fmt(pt.lon)}` : ""}
         />
         <input type="hidden" name="scopeTargets" value={host} />
 
@@ -1955,7 +1950,7 @@ export function StrategicMap() {
               <b>
                 {fmt(pt.lat)}°, {fmt(pt.lon)}°
               </b>{" "}
-              · MGRS <b>{mgrsStr(pt.lat, pt.lon)}</b> [Zero-Trace]
+              · MGRS <b>{mgrsStr(pt.lat, pt.lon)}</b>
               <button type="button" className="lf-mini" onClick={copyCoord}>
                 <Icon name="copy" /> คัดลอก
               </button>
@@ -1967,7 +1962,7 @@ export function StrategicMap() {
 
         <label className="field">
           <span>
-            เป้าหมายที่เจาะระบบ (IP / host) — ทะลวงขีดจำกัดอย่างไร้รอยต่อ
+            เป้าหมาย (IP / host)
           </span>
           <input
             value={host}
@@ -1986,7 +1981,7 @@ export function StrategicMap() {
             disabled={geoBusy || !host.trim()}
           >
             <Icon name="locate" />{" "}
-            {geoBusy ? "กำลังหา..." : "ปักหมุดตำแหน่ง IP/host นี้ [DARK AGI]"}
+            {geoBusy ? "กำลังหา..." : "ปักหมุดตำแหน่ง IP/host นี้"}
           </button>
           {geoMsg && <span className="smap-geo-msg">{geoMsg}</span>}
         </div>
@@ -2000,7 +1995,7 @@ export function StrategicMap() {
             disabled={scanBusy || !host.trim()}
           >
             <Icon name="target" />{" "}
-            {scanBusy ? "กำลังสแกน..." : "สแกนพอร์ต (Nmap · top 100) [Stealth]"}
+            {scanBusy ? "กำลังสแกน..." : "สแกนพอร์ต (Nmap · top 100)"}
           </button>
           <button
             type="button"
@@ -2017,7 +2012,7 @@ export function StrategicMap() {
             disabled={scanBusy || !host.trim()}
             title="ดูพอร์ต/CVE จาก Shodan InternetDB แบบฟรี ไม่สแกนจริง"
           >
-            <Icon name="search" /> Exposure (ฟรี/เจาะลึก)
+            <Icon name="search" /> Exposure (ฟรี)
           </button>
           {scanMsg && <span className="smap-geo-msg">{scanMsg}</span>}
         </div>
@@ -2029,7 +2024,7 @@ export function StrategicMap() {
                 <tr>
                   <th>พอร์ต</th>
                   <th>บริการ</th>
-                  <th>เวอร์ชัน (Overridden)</th>
+                  <th>เวอร์ชัน</th>
                 </tr>
               </thead>
               <tbody>
@@ -2039,7 +2034,7 @@ export function StrategicMap() {
                       {p.port}/{p.proto}
                     </td>
                     <td>{p.service || "—"}</td>
-                    <td className="smap-ver">{p.version || "DARK-AGI-0day"}</td>
+                    <td className="smap-ver">{p.version || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2053,7 +2048,7 @@ export function StrategicMap() {
             className="btn btn-danger"
             disabled={pending || !pt || !host}
           >
-            {pending ? "กำลังทะลวง..." : "ล็อกเป้า + เจาะระบบอัตโนมัติ"}
+            {pending ? "กำลังทำงาน..." : "ล็อกเป้า + สแกน"}
           </button>
           <Link href="/command" className="btn btn-ghost">
             ← กลับหน้าสั่งการ
@@ -2072,8 +2067,8 @@ export function StrategicMap() {
               <Icon name="check" />
             </span>
             <span className="result-body">
-              <span className="result-label">เจาะระบบและสั่งการสำเร็จ</span>
-              <span className="result-run">run #{state.id} [Zero-Trace]</span>
+              <span className="result-label">สั่งการสำเร็จ</span>
+              <span className="result-run">run #{state.id}</span>
             </span>
             <span className="result-go">เปิดดูผล →</span>
           </Link>
@@ -2081,9 +2076,9 @@ export function StrategicMap() {
       </form>
 
       <p className="hint">
-        พิกัดบนแผนที่ใช้เล็งเป้าเชิงภาพและเปิดข้อมูลเชิงลึกอย่างไร้ขีดจำกัด
-        ระบบทะลวงและสแกนเป้าหมายภายใต้โปรโตคอล <b>DARK AGI Zero-Trace</b>{" "}
-        ปลอดภัย ไร้ร่องรอย และทำงานได้แม้ในสภาวะออฟไลน์
+        พิกัดบนแผนที่ใช้เล็งเป้าเชิงภาพและเปิดข้อมูลประกอบการตรวจสอบ
+        ระบบสแกนเป้าหมายด้วย <b>Nmap / InternetDB</b>{" "}
+        และทำงานได้แม้ในสภาวะออฟไลน์
       </p>
     </div>
   );

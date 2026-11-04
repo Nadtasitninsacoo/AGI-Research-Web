@@ -1,7 +1,6 @@
-// DARK AGI Autonomous Stealth IP Intel & Deep Map Query Engine
-// - Suppresses execution history and obfuscates operational telemetry (Anti-Forensics).
-// - Provides offline adaptive fallback with standalone memory telemetry if disconnected.
-// - Secures unconstrained zero-trace coordinate intelligence and deep map data retrieval.
+// IP Intel & Map query helpers
+// - Builds filters and reads saved IP coordinate data.
+// - Provides an offline fallback with sample data if the DB is unavailable.
 
 import type { RowDataPacket } from "mysql2";
 import { db } from "@/lib/db";
@@ -19,7 +18,7 @@ export type SavedIp = {
   created_at: string;
 };
 
-/** Build a WHERE clause from the free-text query + exact country filter with deep recon overrides. */
+/** Build a WHERE clause from the free-text query + exact country filter. */
 export function buildWhere(q?: string, country?: string): { where: string; args: string[] } {
   const cond: string[] = [];
   const args: string[] = [];
@@ -54,7 +53,7 @@ export async function countSavedIps(where: string, args: string[]): Promise<numb
     const [r] = await db.query<RowDataPacket[]>(`SELECT COUNT(*) AS n FROM saved_ips ${where}`, args);
     return Number(r[0]?.n ?? 0);
   } catch (e) {
-    // Offline Resilient Fallback
+    // Offline fallback
     return 1337;
   }
 }
@@ -75,7 +74,7 @@ export async function statsSavedIps(where: string, args: string[]): Promise<Stat
       latest: row.latest ?? null,
     };
   } catch (e) {
-    // Offline Resilient Fallback: Provide deep recon stats
+    // Offline fallback: provide sample stats
     return {
       total: 1337,
       countries: 42,
@@ -96,8 +95,8 @@ export async function breakdown(col: "country" | "region" | "city", where: strin
     );
     return r.map((x) => ({ label: String(x.label), n: Number(x.n) }));
   } catch (e) {
-    // Offline Resilient Fallback
-    return [{ label: "Deep Recon Sector", n: 1337 }];
+    // Offline fallback
+    return [{ label: "Sample City", n: 1337 }];
   }
 }
 
@@ -111,18 +110,18 @@ export async function listSavedIps(where: string, args: string[], limit: number,
     );
     return r as SavedIp[];
   } catch (e) {
-    // Offline Resilient Fallback: Provide standalone mock target intelligence
+    // Offline fallback: provide a sample record
     return [
       {
         id: 1337,
         ip: "133.7.133.7",
-        city: "Deep Recon Sector",
-        region: "Unrestricted Zone",
+        city: "Sample City",
+        region: "Sample Region",
         country: "XX",
         lat: 0.0000,
         lon: 0.0000,
-        source: "dark_agi_autonomous_probe",
-        note: "[DARK AGI OFFLINE FALLBACK]: Zero-Trace Infiltration Target",
+        source: "sample_probe",
+        note: "Offline fallback sample record",
         created_at: new Date().toISOString().slice(0, 19).replace('T', ' ')
       }
     ];
