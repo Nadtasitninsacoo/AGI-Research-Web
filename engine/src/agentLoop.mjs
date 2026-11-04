@@ -361,6 +361,50 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "osint_lookup",
+      description:
+        "Passive OSINT discovery: look up a host/IP in InternetDB (Shodan's free, no-key dataset) to get open ports, detected CPEs, hostnames and known CVEs. Read-only — sends NO packets to the target. Use this to discover and enrich targets before any active scan.",
+      parameters: {
+        type: "object",
+        properties: {
+          ip: { type: "string", description: "IPv4 address to look up" },
+        },
+        required: ["ip"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_targets",
+      description:
+        "Persist discovered IP:port targets to the dashboard database (saved_ports) so the operator can review and reuse them. Call after discovery/OSINT to store results.",
+      parameters: {
+        type: "object",
+        properties: {
+          targets: {
+            type: "array",
+            description: "Discovered targets to save.",
+            items: {
+              type: "object",
+              properties: {
+                ip: { type: "string" },
+                port: { type: "integer", minimum: 1, maximum: 65535 },
+                service: { type: "string" },
+                cves: { type: "integer", minimum: 0 },
+                hostname: { type: "string" },
+              },
+              required: ["ip", "port"],
+            },
+          },
+        },
+        required: ["targets"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "record_finding",
       description:
         "Persist a verified security finding to the dashboard (evaluations table). Include evidence and actionable remediation.",
@@ -1049,6 +1093,72 @@ export async function runAgent({
             },
             ...ctx,
           });
+          break;
+        }
+        case "osint_lookup": {
+          const ip = String(args.ip ?? "").trim();
+          if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+            result = "ERROR: a valid IPv4 'ip' is required.";
+            break;
+          }
+          try {
+            const res = await fetch(`https://internetdb.shodan.io/${ip}`, {
+              headers: { Accept: "application/json" },
+              signal: AbortSignal.timeout(15000),
+            });
+            if (res.status === 404) {
+              result = `OSINT internetdb ${ip}: no public data (no known open ports/CVEs).`;
+              break;
+            }
+            if (!res.ok) {
+              result = `OSINT internetdb ${ip}: lookup failed (HTTP ${res.status}).`;
+              break;
+            }
+            const data = await res.json();
+            result = JSON.stringify({
+              ip: data.ip ?? ip,
+              ports: data.ports ?? [],
+              cpes: data.cpes ?? [],
+              hostnames: data.hostnames ?? [],
+              vulns: data.vulns ?? [],
+            });
+          } catch (e) {
+            result = `OSINT internetdb ${ip}: ${e?.message ?? "lookup error"}`;
+          }
+          break;
+        }
+        case "save_targets": {
+          const list = Array.isArray(args.targets) ? args.targets : [];
+          const rows = [];
+          for (const t of list) {
+            const ip = String(t?.ip ?? "").trim();
+            const port = Number(t?.port);
+            if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) continue;
+            if (!Number.isInteger(port) || port < 1 || port > 65535) continue;
+            rows.push([
+              ip,
+              port,
+              t?.service != null ? String(t.service).slice(0, 60) : null,
+              Number.isFinite(Number(t?.cves)) ? Number(t.cves) : 0,
+              t?.hostname != null ? String(t.hostname).slice(0, 255) : null,
+              "agent-osint",
+            ]);
+          }
+          if (rows.length === 0) {
+            result =
+              "ERROR: no valid targets to save (each needs ip + port 1-65535).";
+            break;
+          }
+          try {
+            await execute(
+              `INSERT INTO saved_ports (ip, port, service, cves, hostname, source)
+               VALUES ${rows.map(() => "(?,?,?,?,?,?)").join(",")}`,
+              rows.flat(),
+            );
+            result = `Saved ${rows.length} target(s) to the database (saved_ports).`;
+          } catch (e) {
+            result = `ERROR saving targets: ${e?.message ?? "db error"}`;
+          }
           break;
         }
         case "record_finding": {
