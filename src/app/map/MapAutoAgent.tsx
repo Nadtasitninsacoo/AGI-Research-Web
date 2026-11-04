@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import {
   Bot,
@@ -168,6 +169,19 @@ export function MapAutoAgent() {
   const output = snap?.run?.metrics?.output;
   const logs = snap?.logs ?? [];
   const pctFindings = snap?.evaluations?.length ?? 0;
+
+  const pill: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "3px 9px",
+    borderRadius: 6,
+    border: "1px solid rgba(45,226,230,0.35)",
+    background: "rgba(45,226,230,0.08)",
+    color: "#2de2e6",
+    fontSize: 10.5,
+    textDecoration: "none",
+  };
 
   return (
     <section
@@ -419,97 +433,134 @@ export function MapAutoAgent() {
             </span>
           </div>
 
-          {/* live log feed */}
-          <ul
-            ref={logBoxRef}
-            style={{
-              listStyle: "none",
-              margin: 0,
-              padding: "8px 10px",
-              maxHeight: 180,
-              overflowY: "auto",
-              background: "#070810",
-              borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.06)",
-              fontFamily: "var(--font-mono), monospace",
-              fontSize: 11,
-            }}
-          >
-            {logs.length === 0 ? (
-              <li style={{ color: "var(--dim, #8a8f99)" }}>
-                {running ? "เอเจนต์กำลังเริ่มทำงาน..." : "ยังไม่มี log"}
-              </li>
-            ) : (
-              logs.map((l) => (
-                <li
-                  key={l.id}
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    padding: "2px 0",
-                    color:
-                      l.level === "error"
-                        ? "#f87171"
-                        : l.level === "warn"
-                          ? "#e0a33e"
-                          : "#c9ccd3",
-                  }}
-                >
-                  <span style={{ color: "#55606e", flex: "none" }}>
-                    {l.createdAt ? l.createdAt.slice(11, 19) : ""}
-                  </span>
-                  <span style={{ minWidth: 0, wordBreak: "break-word" }}>
-                    {l.message}
-                  </span>
+          {/* While running: compact live log. When done: tidy result card. */}
+          {!FINAL.has(String(status)) ? (
+            <ul
+              ref={logBoxRef}
+              style={{
+                listStyle: "none",
+                margin: 0,
+                padding: "7px 10px",
+                maxHeight: 140,
+                overflowY: "auto",
+                background: "#070810",
+                borderRadius: 8,
+                border: "1px solid rgba(255,255,255,0.06)",
+                fontFamily: "var(--font-mono), monospace",
+                fontSize: 10.5,
+              }}
+            >
+              {logs.length === 0 ? (
+                <li style={{ color: "var(--dim, #8a8f99)" }}>
+                  เอเจนต์กำลังเริ่มทำงาน...
                 </li>
-              ))
-            )}
-          </ul>
-
-          {/* final output + recommendations */}
-          {FINAL.has(String(status)) && (
-            <div style={{ marginTop: 10 }}>
+              ) : (
+                logs.map((l) => (
+                  <li
+                    key={l.id}
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      padding: "2px 0",
+                      color:
+                        l.level === "error"
+                          ? "#f87171"
+                          : l.level === "warn"
+                            ? "#e0a33e"
+                            : "#c9ccd3",
+                    }}
+                  >
+                    <span style={{ color: "#55606e", flex: "none" }}>
+                      {l.createdAt ? l.createdAt.slice(11, 19) : ""}
+                    </span>
+                    <span style={{ minWidth: 0, wordBreak: "break-word" }}>
+                      {l.message}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {output ? (
-                <pre
+                <div
                   style={{
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
                     background: "#070810",
                     border: "1px solid rgba(255,255,255,0.06)",
                     borderRadius: 8,
-                    padding: "10px 12px",
-                    fontSize: 12,
-                    color: "#eaeaea",
-                    margin: 0,
+                    overflow: "hidden",
                   }}
                 >
-                  {output}
-                </pre>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "5px 10px",
+                      borderBottom: "1px solid rgba(255,255,255,0.06)",
+                      fontSize: 9,
+                      letterSpacing: "0.14em",
+                      color: "var(--dim, #8a8f99)",
+                      fontFamily: "var(--font-mono), monospace",
+                    }}
+                  >
+                    <span>OUTPUT</span>
+                    <span>
+                      {logs.length} log · {pctFindings} findings
+                    </span>
+                  </div>
+                  <pre
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      margin: 0,
+                      padding: "8px 11px",
+                      maxHeight: 132,
+                      overflow: "auto",
+                      fontSize: 11,
+                      lineHeight: 1.55,
+                      color: "#d7dae0",
+                    }}
+                  >
+                    {output}
+                  </pre>
+                </div>
               ) : (
-                <p style={{ fontSize: 12, color: "var(--dim, #8a8f99)" }}>
-                  เอเจนต์ทำงานเสร็จ — ดูรายละเอียด/ผลการประเมินในหน้ารันเต็ม
+                <p style={{ fontSize: 12, color: "var(--dim, #8a8f99)", margin: 0 }}>
+                  เอเจนต์ทำงานเสร็จ — ดูรายละเอียดในหน้ารันเต็ม
                 </p>
               )}
-              <p
+
+              {/* tidy footer: saved note + thin pill buttons */}
+              <div
                 style={{
-                  fontSize: 11,
-                  color: "#3ad29f",
-                  marginTop: 8,
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
+                  gap: 8,
+                  flexWrap: "wrap",
                 }}
               >
-                <CheckCircle2 size={13} />
-                เป้าหมายที่เอเจนต์พบถูกบันทึกลงฐานข้อมูลอัตโนมัติ —{" "}
-                <Link href="/ports" style={{ color: "#2de2e6" }}>
-                  <Database
-                    size={12}
-                    style={{ verticalAlign: "-2px", marginRight: 2 }}
-                  />
-                  ดูที่หน้า Ports
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    color: "#3ad29f",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  <CheckCircle2 size={12} />
+                  บันทึกเป้าหมายลง DB อัตโนมัติ
+                </span>
+                <Link href="/ports" style={pill}>
+                  <Database size={11} />
+                  Ports
                 </Link>
-              </p>
+                <Link href="/recon" style={pill}>
+                  <Database size={11} />
+                  Recon
+                </Link>
+              </div>
             </div>
           )}
         </div>
