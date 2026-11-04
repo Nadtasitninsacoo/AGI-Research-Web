@@ -69,6 +69,8 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
   // Live assessment progress (ATTACK button). Stays on the panel; no navigation.
   const [running, setRunning] = useState(false);
   const cancelRef = useRef(false);
+  const autoFirstRef = useRef(true); // first AUTO cycle is a full (visible) run
+  const autoBusyRef = useRef(false); // prevents overlapping AUTO cycles
   const [progItems, setProgItems] = useState<
     (QueueItemUi & { reason?: string })[]
   >([]);
@@ -129,32 +131,44 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
   // assessment, repeating on an interval. Guards prevent overlap; still requires
   // target authorization and performs no network operation.
   useEffect(() => {
-    if (!autoMode) return;
+    if (!autoMode) {
+      autoFirstRef.current = true;
+      return;
+    }
 
     let cancelled = false;
 
     async function tick() {
-      if (cancelled || running || submitting || disabled) return;
+      if (cancelled || autoBusyRef.current || submitting || disabled) return;
       if (!selectedPlan) return;
-      if (queueId === null) {
-        await handleCreateQueue();
-        return;
-      }
-      if (queueAuthorized) {
-        await handleRunAssessment();
+      autoBusyRef.current = true;
+      try {
+        if (queueId === null) {
+          await handleCreateQueue();
+          return;
+        }
+        if (queueAuthorized) {
+          // First cycle: full visible run. Later cycles: silent in-place refresh
+          // (no progress reset / flash) so the card stays smooth.
+          await handleRunAssessment(!autoFirstRef.current);
+          autoFirstRef.current = false;
+        }
+      } finally {
+        autoBusyRef.current = false;
       }
     }
 
     void tick();
-    const timer = setInterval(() => void tick(), 9000);
+    const timer = setInterval(() => void tick(), 12000);
 
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-    // handlers are hoisted; re-subscribe when the gating state changes.
+    // handlers are hoisted; `running` is intentionally NOT a dep (the busy ref
+    // guards overlap) so the interval is not torn down every cycle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoMode, queueId, queueAuthorized, selectedPlan, running, submitting, disabled]);
+  }, [autoMode, queueId, queueAuthorized, selectedPlan, submitting, disabled]);
 
   // Map each saved target to its matching plan target (if any).
   const displayTargets = useMemo<QueueDisplayTarget[]>(() => {
@@ -326,20 +340,34 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
     setAutoMode(false);
   }
 
-  async function handleRunAssessment() {
+  // silent = AUTO re-cycle: refresh item statuses in place, no reset/flash.
+  async function handleRunAssessment(silent = false) {
     if (queueId === null || running || submitting || disabled) return;
     if (!queueAuthorized) return;
 
     cancelRef.current = false;
-    setError("");
-    setMessage("");
-    setAssessment(null);
-    setRunning(true);
-    setProgDone(0);
+    if (!silent) {
+      setError("");
+      setMessage("");
+      setAssessment(null);
+      setRunning(true);
+      setProgDone(0);
+    }
 
     try {
       const items = await getQueueItemsForUi(queueId);
-      setProgItems(items.map((it) => ({ ...it, status: "PENDING" })));
+      // On a fresh run show PENDING→done progress; on a silent AUTO refresh keep
+      // the existing rows and just update them in place (no 0% flash).
+      if (!silent) {
+        setProgItems(items.map((it) => ({ ...it, status: "PENDING" })));
+      } else {
+        setProgItems((cur) =>
+          items.map(
+            (it) =>
+              cur.find((x) => x.id === it.id) ?? { ...it, status: "PENDING" },
+          ),
+        );
+      }
 
       let done = 0;
       let cancelled = false;
@@ -367,8 +395,9 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
           );
         }
         done += 1;
-        setProgDone(done);
+        if (!silent) setProgDone(done);
       }
+      if (silent) setProgDone(items.length);
 
       if (cancelled) {
         setMessage(`ยกเลิกการประเมินคิว #${queueId} แล้ว (${done}/${items.length})`);
@@ -378,17 +407,19 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
       const result = await assessQueue(queueId);
       setAssessment(result);
       setMessage(
-        `ประเมินคิว #${queueId} เสร็จ — ${result.successfulCount ?? 0} สำเร็จ / ${
+        `ประเมินคิว #${queueId}${silent ? " (ออโต้)" : ""} — ${result.successfulCount ?? 0} สำเร็จ / ${
           result.failedCount ?? 0
         } ล้มเหลว จาก ${result.totalItems ?? items.length} รายการ`,
       );
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "ไม่สามารถประเมินคิวได้",
-      );
+      if (!silent) {
+        setError(
+          err instanceof Error ? err.message : "ไม่สามารถประเมินคิวได้",
+        );
+      }
     } finally {
       cancelRef.current = false;
-      setRunning(false);
+      if (!silent) setRunning(false);
     }
   }
 
@@ -608,7 +639,11 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
           <div className={s.box}>
             <div className={s.subHead}>
               <span className={s.label}>
-                {running ? "กำลังประเมิน..." : "ผลการประเมิน"}
+                {running
+                  ? "กำลังประเมิน..."
+                  : autoMode
+                    ? "ออโต้ · เฝ้าติดตาม"
+                    : "ผลการประเมิน"}
               </span>
               <span className={s.count}>
                 {progDone} / {progItems.length}
@@ -628,8 +663,8 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
               />
             </div>
 
-            {/* cinematic running lights (only while working) */}
-            {running && (
+            {/* cinematic running lights — steady while working or AUTO is on */}
+            {(running || autoMode) && (
               <div className="tq-lights" aria-hidden>
                 {Array.from({ length: 14 }).map((_, i) => (
                   <i key={i} style={{ animationDelay: `${i * 0.08}s` }} />
