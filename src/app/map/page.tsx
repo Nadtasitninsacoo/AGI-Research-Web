@@ -3,6 +3,7 @@
 
 import { PageFrame, Shell } from "@/components/hud/Shell";
 import { StrategicMap } from "./StrategicMap";
+import { MapAutoAgent } from "./MapAutoAgent";
 
 export const metadata = { title: "Strategic Map" };
 
@@ -34,6 +35,10 @@ export default function MapPage() {
           >
             MAP RECON & OSINT · target coordinates, geolocation, exposure
           </span>
+        </div>
+
+        <div className="span-12">
+          <MapAutoAgent />
         </div>
 
         <section className="panel span-12" id="map">
