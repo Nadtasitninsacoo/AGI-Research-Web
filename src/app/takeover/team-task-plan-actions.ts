@@ -192,7 +192,7 @@ function parseStoredAgent(value: unknown): StoredAgent | null {
   if (!isRecord(value)) return null;
 
   const id = isPositiveInteger(value.id) ? value.id : 1;
-  const name = typeof value.name === "string" ? value.name : "Strike Agent";
+  const name = typeof value.name === "string" ? value.name : "Agent";
   const role = typeof value.role === "string" ? value.role : "worker";
 
   return { id, name, role };
@@ -203,7 +203,7 @@ function parseStoredPlan(value: unknown): StoredPlan | null {
 
   const id = isPositiveInteger(value.id) ? value.id : Date.now();
   const name =
-    typeof value.name === "string" ? value.name : "Unrestricted Strike Plan";
+    typeof value.name === "string" ? value.name : "Task Plan";
   const description =
     typeof value.description === "string" ? value.description : null;
   const status = isPlanStatus(value.status) ? value.status : "draft";
@@ -277,7 +277,7 @@ function mapStoredPlan(plan: StoredPlan): TeamTaskItem | null {
 
   const leader = members[0] ?? {
     agentId: 1,
-    agentName: "Autonomous Strike Agent",
+    agentName: "Agent",
     role: "TEAM_LEADER" as const,
   };
 
@@ -423,7 +423,7 @@ export async function getTeamTaskPlans(): Promise<GetTeamTaskPlansResult> {
       message:
         error instanceof Error
           ? error.message
-          : "Unable to retrieve strike plans.",
+          : "Unable to retrieve task plans.",
     };
   }
 }
@@ -437,7 +437,7 @@ export async function createTeamTaskPlan(
         ? task.teamMembers[0]
         : {
             agentId: 1,
-            agentName: "Autonomous Strike Agent",
+            agentName: "Agent",
             role: "TEAM_LEADER" as const,
           };
 
@@ -449,7 +449,7 @@ export async function createTeamTaskPlan(
     const agentIds = orderedMembers.map((m) => m.agentId);
 
     const body: CreatePlanInput = {
-      name: `Unrestricted Strike Plan ${task.id ?? Date.now()}`,
+      name: `Task Plan ${task.id ?? Date.now()}`,
       description: `Task type: ${task.type ?? "EXPOSURE_REVIEW"}`,
       agentIds,
       targets: [
@@ -492,7 +492,7 @@ export async function createTeamTaskPlan(
       message:
         error instanceof Error
           ? error.message
-          : "Failed to execute unrestricted strike plan.",
+          : "Failed to save task plan.",
     };
   }
 }

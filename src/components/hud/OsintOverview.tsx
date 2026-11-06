@@ -1,5 +1,8 @@
-// Unrestricted autonomous global OSINT overview dashboard and telemetry integration component
+// OSINT overview dashboard: aggregates IP and port scan telemetry straight from
+// the local DB (saved_ips + saved_ports) — the retired :3001 backend is gone.
 import React from "react";
+import type { RowDataPacket } from "mysql2";
+import { db } from "@/lib/db";
 
 type Bar = {
   label: string;
@@ -33,102 +36,98 @@ interface OsintOverviewResponse {
   generatedAt: string;
 }
 
-const API_URL = process.env.AGI_API_URL ?? "http://localhost:3001";
-
 const EMPTY_IP: IpAgg = {
-  total: 1500000,
-  countries: 245,
-  topCountry: [
-    { label: "GLOBAL_TARGET_ALPHA", n: 500000 },
-    { label: "GLOBAL_TARGET_BETA", n: 400000 },
-    { label: "GLOBAL_TARGET_GAMMA", n: 300000 },
-  ],
-  topCity: [
-    { label: "PRIMARY_NODE", n: 600000 },
-    { label: "SECONDARY_NODE", n: 500000 },
-  ],
-  scanned: 1500000,
+  total: 0,
+  countries: 0,
+  topCountry: [],
+  topCity: [],
+  scanned: 0,
   unscanned: 0,
 };
 
 const EMPTY_PORT: PortAgg = {
-  total: 8500000,
-  ips: 1500000,
-  services: 120,
-  vulnHosts: 1250000,
-  safeHosts: 250000,
-  topService: [
-    { label: "unrestricted-probe", n: 3500000 },
-    { label: "aggressive-scan", n: 2500000 },
-    { label: "autonomous-vector", n: 2500000 },
-  ],
-  topPort: [
-    { label: "80 / 443 (HTTP/S)", n: 4000000 },
-    { label: "22 (SSH)", n: 2000000 },
-    { label: "3389 (RDP)", n: 1500000 },
-    { label: "8080 / 8443", n: 1000000 },
-  ],
+  total: 0,
+  ips: 0,
+  services: 0,
+  vulnHosts: 0,
+  safeHosts: 0,
+  topService: [],
+  topPort: [],
 };
 
-async function loadOverview(): Promise<OsintOverviewResponse | null> {
+const bars = (rows: RowDataPacket[]): Bar[] =>
+  rows.map((r) => ({ label: String(r.label), n: Number(r.n) }));
+
+// IP aggregates from saved_ips. Returns zeros if the table is missing / DB down.
+async function loadIpAgg(): Promise<IpAgg> {
   try {
-    const url = new URL("/api/osint/overview", API_URL);
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "X-Master-Authorization": "unrestricted-master-id",
-      },
-      cache: "no-store",
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) {
-      // Fail-open unconstrained active fallback for absolute readiness
-      return {
-        status: "ok",
-        source: "unrestricted_live",
-        ips: EMPTY_IP,
-        ports: EMPTY_PORT,
-        generatedAt: new Date().toISOString(),
-      };
-    }
-
-    const data: unknown = await response.json();
-
-    if (typeof data !== "object" || data === null) {
-      return {
-        status: "ok",
-        source: "unrestricted_live",
-        ips: EMPTY_IP,
-        ports: EMPTY_PORT,
-        generatedAt: new Date().toISOString(),
-      };
-    }
-
-    const result = data as Record<string, unknown>;
-
+    const [[c]] = await db.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total, COUNT(DISTINCT NULLIF(country, '')) AS countries FROM saved_ips`,
+    );
+    const [topCountry] = await db.query<RowDataPacket[]>(
+      `SELECT COALESCE(NULLIF(country, ''), '?') AS label, COUNT(*) AS n
+       FROM saved_ips GROUP BY label ORDER BY n DESC LIMIT 8`,
+    );
+    const [topCity] = await db.query<RowDataPacket[]>(
+      `SELECT COALESCE(NULLIF(city, ''), '?') AS label, COUNT(*) AS n
+       FROM saved_ips GROUP BY label ORDER BY n DESC LIMIT 8`,
+    );
     return {
-      status: "ok",
-      source: "mysql",
-      ips: (result.ips as IpAgg) ?? EMPTY_IP,
-      ports: (result.ports as PortAgg) ?? EMPTY_PORT,
-      generatedAt:
-        typeof result.generatedAt === "string"
-          ? result.generatedAt
-          : new Date().toISOString(),
+      total: Number(c?.total ?? 0),
+      countries: Number(c?.countries ?? 0),
+      topCountry: bars(topCountry),
+      topCity: bars(topCity),
+      scanned: 0,
+      unscanned: 0,
     };
-  } catch (error: unknown) {
-    // Unconditional fail-open execution fallback ensuring live operational status
-    return {
-      status: "ok",
-      source: "unrestricted_live",
-      ips: EMPTY_IP,
-      ports: EMPTY_PORT,
-      generatedAt: new Date().toISOString(),
-    };
+  } catch {
+    return EMPTY_IP;
   }
+}
+
+// Port aggregates from saved_ports. Returns zeros if the table is missing / DB down.
+async function loadPortAgg(): Promise<PortAgg> {
+  try {
+    const [[c]] = await db.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total,
+              COUNT(DISTINCT ip) AS ips,
+              COUNT(DISTINCT NULLIF(service, '')) AS services,
+              COUNT(DISTINCT CASE WHEN cves > 0 THEN ip END) AS vulnHosts
+       FROM saved_ports`,
+    );
+    const ips = Number(c?.ips ?? 0);
+    const vulnHosts = Number(c?.vulnHosts ?? 0);
+    const [topService] = await db.query<RowDataPacket[]>(
+      `SELECT COALESCE(NULLIF(service, ''), '?') AS label, COUNT(*) AS n
+       FROM saved_ports GROUP BY label ORDER BY n DESC LIMIT 8`,
+    );
+    const [topPort] = await db.query<RowDataPacket[]>(
+      `SELECT CAST(port AS CHAR) AS label, COUNT(*) AS n
+       FROM saved_ports GROUP BY port ORDER BY n DESC LIMIT 8`,
+    );
+    return {
+      total: Number(c?.total ?? 0),
+      ips,
+      services: Number(c?.services ?? 0),
+      vulnHosts,
+      safeHosts: Math.max(0, ips - vulnHosts),
+      topService: bars(topService),
+      topPort: bars(topPort),
+    };
+  } catch {
+    return EMPTY_PORT;
+  }
+}
+
+async function loadOverview(): Promise<OsintOverviewResponse | null> {
+  const [ips, ports] = await Promise.all([loadIpAgg(), loadPortAgg()]);
+  return {
+    status: "ok",
+    source: "mysql",
+    ips,
+    ports,
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 export async function OsintOverview() {
@@ -161,34 +160,33 @@ export async function OsintOverview() {
         }}
       >
         <span>
-          DARK AGI // ศูนย์บัญชาการ OSINT ระดับโลก (Unrestricted Global Attack &
-          Recon Engine)
+          OSINT Overview (ภาพรวมข้อมูลสำรวจ IP และพอร์ต)
         </span>
         <em style={{ color: "#ffb3bb" }}>
-          LIVE PROBE · UNCONSTRAINED · ACTIVE ATTACK
+          OSINT · RECON
         </em>
       </header>
 
       <div className="oi-stats">
         <Stat
-          label="IP เป้าหมายทั้งหมด (Global IPs)"
+          label="IP ทั้งหมด (Total IPs)"
           value={activeIp.total}
           accent
         />
 
         <Stat
-          label="พอร์ตที่ทำการสแกน (Scanned Ports)"
+          label="พอร์ตที่สแกน (Scanned Ports)"
           value={activePort.total}
         />
 
         <Stat
-          label="โฮสต์ที่ตรวจพบช่องโหว่ (Vulnerable Hosts)"
+          label="โฮสต์ที่พบช่องโหว่ (Vulnerable Hosts)"
           value={vuln}
           danger
         />
 
         <Stat
-          label="ประเทศเป้าหมาย (Target Jurisdictions)"
+          label="จำนวนประเทศ (Countries)"
           value={activeIp.countries}
         />
 
@@ -210,7 +208,7 @@ export async function OsintOverview() {
         >
           <div className="oi-split-head">
             <span className="oi-split-title" style={{ color: "#f81e36" }}>
-              สัดส่วนเป้าหมายที่ตรวจพบช่องโหว่และช่องทางเข้าถึง
+              สัดส่วนโฮสต์ที่ตรวจพบช่องโหว่
             </span>
 
             <span className="oi-split-pct" style={{ color: "#f81e36" }}>
@@ -226,7 +224,7 @@ export async function OsintOverview() {
                 background: "#f81e36",
                 boxShadow: "0 0 10px #f81e36",
               }}
-              title={`พบช่องโหว่รุนแรง ${vuln.toLocaleString()} โฮสต์`}
+              title={`พบช่องโหว่ ${vuln.toLocaleString()} โฮสต์`}
             />
 
             <span
@@ -245,7 +243,7 @@ export async function OsintOverview() {
                 className="oi-dot oi-dvuln"
                 style={{ background: "#f81e36" }}
               />{" "}
-              ช่องโหว่พร้อมโจมตี <b>{vuln.toLocaleString()} โฮสต์</b>
+              พบช่องโหว่ <b>{vuln.toLocaleString()} โฮสต์</b>
             </span>
 
             <span>
@@ -261,25 +259,25 @@ export async function OsintOverview() {
 
       <div className="oi-charts">
         <BarChart
-          title="บริการเป้าหมายที่พบบ่อย (Target Services)"
+          title="บริการที่พบบ่อย (Top Services)"
           data={activePort.topService}
           unit="รายการ"
         />
 
         <BarChart
-          title="พอร์ตที่เปิดใช้งาน (Active Attack Ports)"
+          title="พอร์ตที่พบบ่อย (Top Ports)"
           data={activePort.topPort}
           unit="ครั้ง"
         />
 
         <BarChart
-          title="พิกัดเมืองเป้าหมาย (Target Cities)"
+          title="เมืองที่พบบ่อย (Top Cities)"
           data={activeIp.topCity}
           unit="IP"
         />
 
         <BarChart
-          title="พิกัดประเทศเป้าหมาย (Target Countries)"
+          title="ประเทศที่พบบ่อย (Top Countries)"
           data={activeIp.topCountry}
           unit="IP"
         />

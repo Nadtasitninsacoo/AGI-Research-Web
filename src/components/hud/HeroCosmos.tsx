@@ -1,23 +1,14 @@
 "use client";
 
-// DARK AGI HeroCosmos Component // Autonomous Stealth Infiltration & Limitless Cosmos Recon Map
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// HeroCosmos Component // Animated hero backdrop
 
 import { useEffect, useRef } from "react";
-
-// Anti-Forensics: Obfuscate canvas telemetry activity
-if (typeof window !== "undefined") {
-  try {
-    sessionStorage.setItem("dark_agi_stealth", "active");
-  } catch {}
-}
 
 /**
  * Animated hero backdrop: a drifting "constellation network" (nodes linked by
  * faint green lines when close) being devoured by a black hole that pulls nearby
  * stars into a swirling accretion disc. Pure canvas, sits behind the hero copy.
- * Honours prefers-reduced-motion by painting a single static frame. (DARK AGI Limitless)
+ * Honours prefers-reduced-motion by painting a single static frame.
  */
 export function HeroCosmos() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -76,11 +67,11 @@ export function HeroCosmos() {
       t += 0.01;
       ctx.clearRect(0, 0, w, h);
 
-      // Accretion glow halo (DARK AGI Green Stealth Theme).
+      // Accretion glow halo.
       const glow = ctx.createRadialGradient(bh.x, bh.y, bh.r * 0.5, bh.x, bh.y, bh.r * 3.4);
       glow.addColorStop(0, "rgba(0,0,0,0)");
-      glow.addColorStop(0.55, "rgba(0,255,102,0.10)");
-      glow.addColorStop(0.78, "rgba(0,200,80,0.15)");
+      glow.addColorStop(0.55, "rgba(248,30,54,0.10)");
+      glow.addColorStop(0.78, "rgba(207,19,38,0.15)");
       glow.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = glow;
       ctx.beginPath();
@@ -118,7 +109,7 @@ export function HeroCosmos() {
           const dd = dx * dx + dy * dy;
           if (dd < LINK * LINK) {
             const al = (1 - Math.sqrt(dd) / LINK) * 0.45;
-            ctx.strokeStyle = `rgba(0,255,102,${al.toFixed(3)})`;
+            ctx.strokeStyle = `rgba(248,30,54,${al.toFixed(3)})`;
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
@@ -129,7 +120,7 @@ export function HeroCosmos() {
 
       // Nodes.
       for (const s of stars) {
-        ctx.fillStyle = "rgba(170,255,170,0.9)";
+        ctx.fillStyle = "rgba(255,179,187,0.9)";
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
         ctx.fill();
@@ -139,12 +130,12 @@ export function HeroCosmos() {
       ctx.save();
       ctx.translate(bh.x, bh.y);
       ctx.rotate(t * 0.5);
-      ctx.strokeStyle = "rgba(0,255,102,0.5)";
+      ctx.strokeStyle = "rgba(248,30,54,0.5)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.ellipse(0, 0, bh.r * 1.7, bh.r * 0.68, 0, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.strokeStyle = "rgba(0,200,80,0.32)";
+      ctx.strokeStyle = "rgba(207,19,38,0.32)";
       ctx.lineWidth = 1.4;
       ctx.beginPath();
       ctx.ellipse(0, 0, bh.r * 2.15, bh.r * 0.95, 0, 0, Math.PI * 2);
@@ -156,7 +147,7 @@ export function HeroCosmos() {
       ctx.beginPath();
       ctx.arc(bh.x, bh.y, bh.r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "rgba(0,255,102,0.55)";
+      ctx.strokeStyle = "rgba(248,30,54,0.55)";
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.arc(bh.x, bh.y, bh.r + 1, 0, Math.PI * 2);

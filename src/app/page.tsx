@@ -5,9 +5,9 @@ import { HeroCosmos } from "@/components/hud/HeroCosmos";
 import { Navbar } from "@/components/hud/Navbar";
 import { Nexus } from "@/components/hud/Nexus";
 import { OsintOverview } from "@/components/hud/OsintOverview";
-import Link from "next/link";
 import { Sidebar } from "@/components/hud/Sidebar";
 import { getDashboardData, type DashboardData } from "@/lib/queries";
+import { agentStatusMeta } from "@/lib/agentStatus";
 
 const EMPTY: DashboardData = {
   totals: {
@@ -88,6 +88,13 @@ async function DashboardFrame() {
   const finished = t.runsSucceeded + t.runsFailed;
   const successRate = pct(t.runsSucceeded, finished);
   const maxRuns = Math.max(1, ...agents.map((agent) => agent.runs));
+
+  const workingCount = agents.filter(
+    (agent) => String(agent.status).toLowerCase() === "running",
+  ).length;
+  const readyCount = agents.filter(
+    (agent) => String(agent.status).toLowerCase() === "idle",
+  ).length;
 
   const kpis: {
     label: string;
@@ -197,31 +204,6 @@ async function DashboardFrame() {
                 {online ? "SYSTEM OPERATIONAL" : "DATABASE OFFLINE"}
               </span>
 
-              <Link
-                href="/execute"
-                aria-label="Open Run Execution"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "10px",
-                  marginTop: "22px",
-                  padding: "12px 20px",
-                  border: "1px solid rgba(255, 65, 85, 0.65)",
-                  borderRadius: "4px",
-                  background: "rgba(180, 20, 40, 0.16)",
-                  color: "#ff6677",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  letterSpacing: "1.5px",
-                  textDecoration: "none",
-                  transition: "all 180ms ease",
-                }}
-              >
-                <Icon name="send" />
-                LAUNCH RUN
-                <span aria-hidden="true">→</span>
-              </Link>
             </div>
 
             <div className="hero-tagline" aria-hidden="true">
@@ -356,15 +338,20 @@ async function DashboardFrame() {
 
                 {agents.map((agent) => {
                   const completion = pct(agent.succeeded, agent.runs);
+                  const stat = agentStatusMeta(agent.status);
 
                   return (
                     <li key={agent.id}>
-                      <i className={`dot dot-${agent.status}`} />
+                      <i className={`dot dot-${stat.tone}`} />
 
                       <div className="reg-name">
                         <b title={agent.name}>{agent.name}</b>
                         <small title={agent.model ?? "unassigned"}>
                           {agent.model ?? "UNASSIGNED"}
+                          {" · "}
+                          <span className={`reg-state s-${stat.tone}`}>
+                            {stat.label}
+                          </span>
                         </small>
                       </div>
 
@@ -386,8 +373,11 @@ async function DashboardFrame() {
               </ul>
 
               <footer className="panel-foot">
-                <span>ACTIVE AGENTS</span>
-                <b>{t.agentsRunning.toString().padStart(2, "0")}</b>
+                <span className="s-ready">READY</span>
+                <b>{readyCount.toString().padStart(2, "0")}</b>
+                <span className="foot-separator">·</span>
+                <span className="s-running">WORKING</span>
+                <b>{workingCount.toString().padStart(2, "0")}</b>
                 <span className="foot-separator">/</span>
                 <span>{t.agents.toString().padStart(2, "0")} TOTAL</span>
               </footer>

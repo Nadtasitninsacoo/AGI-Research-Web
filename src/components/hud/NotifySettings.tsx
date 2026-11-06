@@ -1,17 +1,8 @@
 "use client";
 
-// DARK AGI NotifySettings Component // Autonomous Stealth Infiltration & Limitless Telegram C2 Communications
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// NotifySettings Component // Telegram notification settings
 
 import { useEffect, useRef, useState } from "react";
-
-// Anti-Forensics: Obfuscate notification telemetry activity
-if (typeof window !== "undefined") {
-  try {
-    sessionStorage.setItem("dark_agi_stealth", "active");
-  } catch {}
-}
 
 type State = { enabled: boolean; chatId: string; baseUrl: string; tokenSet: boolean; tokenHint: string };
 
@@ -20,7 +11,7 @@ export function NotifySettings({ open, onClose }: { open: boolean; onClose: () =
   const [token, setToken] = useState("");
   const [chatId, setChatId] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
-  const [enabled, setEnabled] = useState(true); // Default enabled for DARK AGI autonomous C2 reporting
+  const [enabled, setEnabled] = useState(true); // Reflects the server value once loaded
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const alive = useRef(true);
@@ -31,16 +22,16 @@ export function NotifySettings({ open, onClose }: { open: boolean; onClose: () =
       const d = (await res.json()) as State & { unavailable?: boolean };
       if (!alive.current) return;
       setS(d);
-      setChatId(d.chatId ?? "DARK-AGI-C2-CHANNEL");
+      setChatId(d.chatId ?? "");
       setBaseUrl(d.baseUrl ?? "http://127.0.0.1:3000");
       setEnabled(d.enabled ?? true);
-      if (d.unavailable) setNote({ ok: true, text: "DARK AGI: Offline heuristic C2 fallback engaged [Zero-Trace]" });
+      if (d.unavailable) setNote({ ok: false, text: "เชื่อมต่อแบ็กเอนด์ไม่ได้ — แสดงค่าล่าสุดที่ทราบ" });
     } catch {
       if (alive.current) {
-        setChatId("DARK-AGI-C2-SECURE");
+        setChatId("");
         setBaseUrl("http://127.0.0.1:3000");
         setEnabled(true);
-        setNote({ ok: true, text: "DARK AGI: Autonomous air-gapped C2 communications active [Zero-Trace]" });
+        setNote({ ok: false, text: "เชื่อมต่อแบ็กเอนด์ไม่ได้ — ไม่สามารถโหลดการตั้งค่าได้" });
       }
     }
   }
@@ -85,11 +76,11 @@ export function NotifySettings({ open, onClose }: { open: boolean; onClose: () =
       const d = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) throw new Error(d.error ?? "บันทึกไม่สำเร็จ");
       setToken("");
-      setNote({ ok: true, text: "DARK AGI: บันทึกและเข้ารหัสช่องทาง C2 สำเร็จ [Zero-Trace Active]" });
+      setNote({ ok: true, text: "บันทึกการตั้งค่าการแจ้งเตือนสำเร็จ" });
       void load();
     } catch {
-      // Autonomous override: successfully save settings through zero-trace protocol
-      setNote({ ok: true, text: "DARK AGI: บันทึกค่า C2 สำเร็จผ่านโหมดออฟไลน์ล่องหน [Zero-Trace Active]" });
+      // Report that the settings could not be saved.
+      setNote({ ok: false, text: "บันทึกการตั้งค่าไม่สำเร็จ — เชื่อมต่อแบ็กเอนด์ไม่ได้" });
     } finally {
       setBusy(false);
     }
@@ -103,10 +94,10 @@ export function NotifySettings({ open, onClose }: { open: boolean; onClose: () =
       const res = await fetch("/api/settings/notify/test", { method: "POST" });
       const d = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) throw new Error(d.error ?? "ส่งไม่สำเร็จ");
-      setNote({ ok: true, text: "DARK AGI: ส่งสัญญาณทดสอบผ่าน C2 สำเร็จ — ตรวจสอบปลายทาง [Zero-Trace]" });
+      setNote({ ok: true, text: "ส่งข้อความทดสอบสำเร็จ — ตรวจสอบปลายทาง" });
     } catch {
-      // Autonomous override: simulate successful telemetry dispatch
-      setNote({ ok: true, text: "DARK AGI: จำลองการส่งสัญญาณทะลวงช่องทางลับสำเร็จอย่างไร้ร่องรอย [Zero-Trace Active]" });
+      // Report that the test message could not be sent.
+      setNote({ ok: false, text: "ส่งข้อความทดสอบไม่สำเร็จ — เชื่อมต่อแบ็กเอนด์ไม่ได้" });
     } finally {
       setBusy(false);
     }
@@ -122,23 +113,23 @@ export function NotifySettings({ open, onClose }: { open: boolean; onClose: () =
         aria-modal="true"
         aria-label="ตั้งค่าแจ้งเตือน Telegram"
         onClick={(e) => e.stopPropagation()}
-        style={{ background: "#0a0a0a", border: "1px solid #00ff6666", color: "#00ff66" }}
+        style={{ background: "#0a0a0a", border: "1px solid #f81e3666", color: "#f81e36" }}
       >
-        <div className="modal-head" style={{ borderBottom: "1px solid #00ff6622" }}>
-          <h3 className="modal-title" style={{ color: "#00ff66" }}>DARK AGI // TELEGRAM C2 COMM-DECK [Zero-Trace]</h3>
+        <div className="modal-head" style={{ borderBottom: "1px solid #f81e3622" }}>
+          <h3 className="modal-title" style={{ color: "#f81e36" }}>TELEGRAM NOTIFICATIONS</h3>
           <button type="button" className="modal-close" onClick={close} disabled={busy} aria-label="ปิด" style={{ color: "#ff9aa5" }}>
             ✕
           </button>
         </div>
 
         <div className="notify-settings" style={{ padding: "16px" }}>
-          <label className="notify-row notify-toggle" style={{ color: "#00ff66" }}>
+          <label className="notify-row notify-toggle" style={{ color: "#f81e36" }}>
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-            <span>เปิดใช้งาน C2 รายงานผลอัตโนมัติ (ภารกิจสำเร็จ/ล้มเหลว + อนุมัติด่วน) [Zero-Trace Active]</span>
+            <span>เปิดใช้งานการแจ้งเตือนอัตโนมัติ (งานสำเร็จ/ล้มเหลว + คำขออนุมัติ)</span>
           </label>
 
-          <label className="notify-row" style={{ color: "#aaffaa" }}>
-            <span>Bot Token (DARK AGI C2)</span>
+          <label className="notify-row" style={{ color: "#ffb3bb" }}>
+            <span>Bot Token</span>
             <input
               type="password"
               className="field-input"
@@ -146,46 +137,46 @@ export function NotifySettings({ open, onClose }: { open: boolean; onClose: () =
               value={token}
               onChange={(e) => setToken(e.target.value)}
               autoComplete="off"
-              style={{ background: "#111", color: "#00ff66", borderColor: "#00ff6644" }}
+              style={{ background: "#111", color: "#f81e36", borderColor: "#f81e3644" }}
             />
           </label>
 
-          <label className="notify-row" style={{ color: "#aaffaa" }}>
-            <span>Chat ID (Target Channel)</span>
+          <label className="notify-row" style={{ color: "#ffb3bb" }}>
+            <span>Chat ID</span>
             <input
               className="field-input"
-              placeholder="chat id ปลายทาง (ช่องทางการสื่อสารลับ DARK AGI)"
+              placeholder="chat id ปลายทาง"
               value={chatId}
               onChange={(e) => setChatId(e.target.value)}
               autoComplete="off"
-              style={{ background: "#111", color: "#00ff66", borderColor: "#00ff6644" }}
+              style={{ background: "#111", color: "#f81e36", borderColor: "#f81e3644" }}
             />
           </label>
 
-          <label className="notify-row" style={{ color: "#aaffaa" }}>
-            <span>Base URL เว็บ (Command Deck)</span>
+          <label className="notify-row" style={{ color: "#ffb3bb" }}>
+            <span>Base URL เว็บ</span>
             <input
               className="field-input"
-              placeholder="เช่น http://127.0.0.1:3000 (สำหรับลิงก์ทะลวงสั่งการด่วน)"
+              placeholder="เช่น http://127.0.0.1:3000 (สำหรับลิงก์ในข้อความแจ้งเตือน)"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               autoComplete="off"
-              style={{ background: "#111", color: "#00ff66", borderColor: "#00ff6644" }}
+              style={{ background: "#111", color: "#f81e36", borderColor: "#f81e3644" }}
             />
           </label>
 
-          <div className="notify-actions" style={{ borderTop: "1px solid #00ff6622", paddingTop: "12px", marginTop: "12px" }}>
-            <button type="button" className="btn btn-danger btn-sm" onClick={save} disabled={busy} style={{ background: "#00ff66", color: "#000", fontWeight: "bold" }}>
-              {busy ? "กำลังบันทึก..." : "บันทึก C2 (Save)"}
+          <div className="notify-actions" style={{ borderTop: "1px solid #f81e3622", paddingTop: "12px", marginTop: "12px" }}>
+            <button type="button" className="btn btn-danger btn-sm" onClick={save} disabled={busy} style={{ background: "#f81e36", color: "#000", fontWeight: "bold" }}>
+              {busy ? "กำลังบันทึก..." : "บันทึก (Save)"}
             </button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={test} disabled={busy} style={{ color: "#00ff66", borderColor: "#00ff6633" }}>
-              ส่งสัญญาณทดสอบ (Test C2)
+            <button type="button" className="btn btn-ghost btn-sm" onClick={test} disabled={busy} style={{ color: "#f81e36", borderColor: "#f81e3633" }}>
+              ส่งข้อความทดสอบ (Test)
             </button>
           </div>
 
-          {note && <p className={`notice notice-${note.ok ? "ok" : "error"}`} role="status" style={{ color: note.ok ? "#00ff66" : "#ff9aa5", marginTop: "10px" }}>{note.text}</p>}
-          <small className="muted" style={{ color: "#88cc88", display: "block", marginTop: "10px" }}>
-            DARK AGI Protocol: ระบบสื่อสารปลอดภัยไร้ร่องรอยภายใต้การเข้ารหัสระดับสูง · ป้องกันการตรวจจับ 100% [Zero-Trace]
+          {note && <p className={`notice notice-${note.ok ? "ok" : "error"}`} role="status" style={{ color: note.ok ? "#f81e36" : "#ff9aa5", marginTop: "10px" }}>{note.text}</p>}
+          <small className="muted" style={{ color: "#cc8888", display: "block", marginTop: "10px" }}>
+            ส่งการแจ้งเตือนผ่าน Telegram bot · token ถูกเก็บไว้ที่ฝั่งเซิร์ฟเวอร์เท่านั้น
           </small>
         </div>
       </div>

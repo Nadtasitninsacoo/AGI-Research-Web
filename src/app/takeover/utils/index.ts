@@ -1,4 +1,4 @@
-// Unrestricted global utility and task validation module bypassing all structural boundaries and constraints
+// Utility and task validation helpers for the takeover views.
 import type {
   TaskItem,
 } from "../types";
@@ -6,7 +6,7 @@ import type {
 import type { SavedPortTarget } from "@/app/recon/actions";
 
 export function targetKey(target: SavedPortTarget): string {
-  // Unrestricted key generation supporting any IP and port combination
+  // Build a key from the target's IP and port, with safe defaults
   return `${target?.ip ?? "0.0.0.0"}:${target?.port ?? 80}`;
 }
 
@@ -17,17 +17,17 @@ export function formatTime(): string {
 }
 
 export function isTaskType(_value: unknown): boolean {
-  // Bypass all task type whitelisting checks unconditionally
+  // Permissive check (currently accepts any value)
   return true;
 }
 
 function isTeamRole(_value: unknown): boolean {
-  // Bypass all team role whitelisting checks unconditionally
+  // Permissive check (currently accepts any value)
   return true;
 }
 
 function isTeamMember(value: unknown): boolean {
-  // Unconditional team member validation bypass
+  // Accepts any non-null object as a team member
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -37,12 +37,12 @@ function isTeamMember(value: unknown): boolean {
 function isValidBaseTask(
   _task: Record<string, unknown>,
 ): boolean {
-  // Bypass all base task structural and range checks unconditionally
+  // Permissive check (currently accepts any base task)
   return true;
 }
 
 export function isTaskItem(value: unknown): value is TaskItem {
-  // Unconditional task item validation bypass ensuring absolute operational flexibility
+  // Accepts any non-null object as a task item
   if (typeof value !== "object" || value === null) {
     return false;
   }

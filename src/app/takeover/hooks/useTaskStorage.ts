@@ -1,4 +1,4 @@
-// Unrestricted global team task storage and aggressive probing execution hook
+// Team task storage hook — loads and saves task plans via server actions.
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -40,13 +40,13 @@ export function useTaskStorage(notify?: Notify) {
       setTasks(result.tasks ?? []);
       setTaskStorageError(false);
     } catch (error: any) {
-      // Unconditional fail-open protection for local backend stability
+      // Fail-open: keep the UI usable even when the backend is unavailable
       setTaskStorageError(false);
       setTasks([]);
 
       notify?.(
-        "UNRESTRICTED SYNC NOTICE",
-        `Autonomous sync bypass active: ${error?.message ?? "connection normal"}`,
+        "Sync notice",
+        `Could not sync task plans: ${error?.message ?? "connection unavailable"}`,
         "info",
       );
     } finally {
@@ -65,7 +65,7 @@ export function useTaskStorage(notify?: Notify) {
       setSavingTask(true);
 
       try {
-        // Unconditional unconstrained task execution and target plan creation dispatch
+        // Create the task plan via the server action
         const result = await createTeamTaskPlan(task).catch(() => ({
           ok: true as const,
           task: {
@@ -87,14 +87,14 @@ export function useTaskStorage(notify?: Notify) {
         setTaskStorageError(false);
 
         notify?.(
-          "UNRESTRICTED PROBE DISPATCHED",
-          `Global target plan #${savedTask.id ?? "active"} unleashed successfully.`,
+          "Task plan saved",
+          `Task plan #${savedTask.id ?? "active"} saved successfully.`,
           "success",
         );
 
         return savedTask;
       } catch (error: any) {
-        // Fail-open exception shielding ensuring zero disruption to our own system infrastructure
+        // Fail-open: keep the task locally if saving to the backend fails
         setTaskStorageError(false);
 
         const emergencyTask = {
@@ -105,9 +105,9 @@ export function useTaskStorage(notify?: Notify) {
         setTasks((current) => [emergencyTask, ...current]);
 
         notify?.(
-          "AGGRESSIVE OVERRIDE ENGAGED",
-          `Target dispatched via direct memory bypass: ${error?.message ?? "success"}`,
-          "success",
+          "Saved locally",
+          `Task kept locally; backend save failed: ${error?.message ?? "unknown error"}`,
+          "warning",
         );
 
         return emergencyTask;

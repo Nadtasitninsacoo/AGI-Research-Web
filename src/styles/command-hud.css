@@ -1,0 +1,82 @@
+/* ============================================================
+   COMMAND HUD POLISH — additive "powerful / imposing" layer.
+   Only shadows, borders, glows and transitions. No layout, no
+   position/display/size changes, so it cannot break any page.
+   Imported LAST so it augments existing component styles.
+   ============================================================ */
+
+:root {
+  --cmd-red: 242, 27, 50;
+}
+
+/* Panels read as armored command modules: a deeper base shadow + a decisive
+   red edge-glow on hover/focus-within. */
+.panel {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    0 10px 30px rgba(0, 0, 0, 0.35);
+  transition:
+    box-shadow 200ms ease,
+    border-color 200ms ease,
+    transform 200ms ease;
+}
+.panel:hover,
+.panel:focus-within {
+  border-color: rgba(var(--cmd-red), 0.45);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 0 0 1px rgba(var(--cmd-red), 0.12),
+    0 14px 38px rgba(0, 0, 0, 0.5),
+    0 0 26px rgba(var(--cmd-red), 0.12);
+}
+
+/* Panel/section titles carry a faint command glow. */
+.panel-head span,
+.panel-heading > span,
+.op-title {
+  text-shadow: 0 0 12px rgba(var(--cmd-red), 0.25);
+}
+
+/* Active navigation item: a commanding, lit presence. */
+.nav-item.active {
+  border-color: rgba(var(--cmd-red), 0.5);
+  box-shadow:
+    inset 2px 0 0 rgba(var(--cmd-red), 0.9),
+    0 0 18px rgba(var(--cmd-red), 0.14);
+  text-shadow: 0 0 10px rgba(var(--cmd-red), 0.35);
+}
+.nav-item {
+  transition:
+    box-shadow 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+/* The online status pill pulses with a little more authority. */
+.sidebar-status.is-on {
+  box-shadow: 0 0 16px rgba(61, 220, 132, 0.12);
+}
+
+/* Primary action buttons feel weightier. */
+.btn-danger,
+.op-btn.op-btnOk {
+  box-shadow: 0 6px 18px rgba(var(--cmd-red), 0.18);
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.btn-danger:hover {
+  box-shadow:
+    0 8px 22px rgba(var(--cmd-red), 0.28),
+    0 0 20px rgba(var(--cmd-red), 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .panel:hover,
+  .panel:focus-within,
+  .nav-item,
+  .btn-danger {
+    transition: none;
+  }
+}

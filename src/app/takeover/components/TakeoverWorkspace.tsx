@@ -4,16 +4,11 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
-  Play,
   Radio,
   RefreshCw,
-  Server,
-  ShieldCheck,
   Users,
   Wifi,
-  XCircle,
 } from "lucide-react";
-import Link from "next/link";
 
 import { taskLabels, statusStyle, eventColor } from "../constants";
 
@@ -23,10 +18,8 @@ import { MiniStat } from "./MiniStat";
 import { StatusRow } from "./StatusRow";
 
 import type { useTaskStorage } from "../hooks/useTaskStorage";
-import type { useRemoteSession } from "../hooks/useRemoteSession";
 import type { useTakeoverData } from "../hooks/useTakeoverData";
 
-type RemoteSessionState = ReturnType<typeof useRemoteSession>;
 type TakeoverDataState = ReturnType<typeof useTakeoverData>;
 type TaskStorageState = ReturnType<typeof useTaskStorage>;
 
@@ -53,29 +46,10 @@ export type TakeoverWorkspaceProps = {
   taskStorageError: TaskStorageState["taskStorageError"];
   savingTask: TaskStorageState["savingTask"];
   prepareTask: () => Promise<void>;
-  cancelTask: (taskId: number) => void;
-  cancelAllTasks: () => void;
 
-  // Lab run
-  experimentId: string;
-  setExperimentId: Dispatch<SetStateAction<string>>;
-  creatingRun: boolean;
-  labRunCreated: boolean;
-  runMessage: string;
-  handleCreateLabRun: () => Promise<void>;
-
-  // Connection / remote session
+  // Connection status
   loading: TakeoverDataState["loading"];
   targetMessage: TakeoverDataState["targetMessage"];
-  remoteSession: RemoteSessionState["remoteSession"];
-  remoteLoading: RemoteSessionState["remoteLoading"];
-  remoteMessage: RemoteSessionState["remoteMessage"];
-  remoteConnected: RemoteSessionState["remoteConnected"];
-  remoteDisconnected: RemoteSessionState["remoteDisconnected"];
-  setRemoteSession: RemoteSessionState["setRemoteSession"];
-  setRemoteMessage: RemoteSessionState["setRemoteMessage"];
-  handleCreateRemoteSession: () => Promise<void>;
-  handleRefreshRemoteStatus: () => Promise<void>;
 
   // Event log
   events: EventItem[];
@@ -102,25 +76,8 @@ export function TakeoverWorkspace({
   taskStorageError,
   savingTask,
   prepareTask,
-  cancelTask,
-  cancelAllTasks,
-  experimentId,
-  setExperimentId,
-  creatingRun,
-  labRunCreated,
-  runMessage,
-  handleCreateLabRun,
   loading,
   targetMessage,
-  remoteSession,
-  remoteLoading,
-  remoteMessage,
-  remoteConnected,
-  remoteDisconnected,
-  setRemoteSession,
-  setRemoteMessage,
-  handleCreateRemoteSession,
-  handleRefreshRemoteStatus,
   events,
   setEvents,
 }: TakeoverWorkspaceProps) {
@@ -303,87 +260,6 @@ export function TakeoverWorkspace({
             </span>
           </label>
 
-          {/* Authorized Lab Run */}
-
-          <div className="mt-3 rounded border border-amber-500/30 bg-amber-500/5 p-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-amber-400" />
-
-              <span className="text-[10px] font-bold tracking-widest text-amber-300">
-                AUTHORIZED LAB RUN
-              </span>
-            </div>
-
-            <p className="mt-2 text-[9px] leading-relaxed text-slate-400">
-              Create a HEALTH_CHECK Run for a saved IP:Port pair. The Run will
-              be queued and will not directly execute commands.
-            </p>
-
-            <label className="mt-3 block text-[9px] font-bold tracking-widest text-slate-500">
-              EXPERIMENT ID
-            </label>
-
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={experimentId}
-              onChange={(event) => setExperimentId(event.target.value)}
-              placeholder="Enter Experiment ID"
-              className="mt-1 w-full rounded border border-[#303649] bg-[#090a0f] px-3 py-2.5 text-xs text-white outline-none focus:border-amber-500"
-            />
-
-            <div className="mt-2 rounded border border-[#252b3b] bg-[#090a0f] p-2">
-              <div className="text-[9px] text-slate-500">TARGET</div>
-
-              <div className="mt-1 font-mono text-xs text-cyan-300">
-                {selectedTarget
-                  ? `${selectedTarget.ip}:${selectedTarget.port}`
-                  : "No target selected"}
-              </div>
-
-              <div className="mt-2 text-[9px] text-slate-500">
-                ACTION: HEALTH_CHECK
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void handleCreateLabRun()}
-              disabled={
-                creatingRun ||
-                labRunCreated ||
-                !selectedTarget ||
-                !authorized ||
-                !experimentId.trim()
-              }
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-[10px] font-bold tracking-widest text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {creatingRun ? (
-                <>
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  CREATING LAB RUN...
-                </>
-              ) : labRunCreated ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4" />
-                  LAB RUN ALREADY QUEUED
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4" />
-                  CREATE QUEUED LAB RUN
-                </>
-              )}
-            </button>
-
-            {runMessage && (
-              <div className="mt-3 rounded border border-[#303649] bg-[#090a0f] p-2 text-[10px] leading-relaxed text-slate-300">
-                {runMessage}
-              </div>
-            )}
-          </div>
-
           <button
             type="button"
             onClick={() => void prepareTask()}
@@ -410,18 +286,6 @@ export function TakeoverWorkspace({
               </>
             )}
           </button>
-
-          <Link
-            href={
-              remoteSession
-                ? `/remote?sessionId=${encodeURIComponent(remoteSession.id)}`
-                : "/remote"
-            }
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-[10px] font-bold tracking-widest text-emerald-300 transition hover:bg-emerald-500/20"
-          >
-            <Wifi className="h-4 w-4" />
-            OPEN REMOTE PAGE
-          </Link>
         </div>
 
         {/* Saved team plans */}
@@ -456,37 +320,6 @@ export function TakeoverWorkspace({
                     ? "MYSQL DATABASE READY"
                     : "LOADING DATABASE..."}
               </span>
-
-              {tasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="rounded border border-[#252b3b] bg-[#090a0f] p-3"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      {/* ข้อมูลของ Task */}
-                      <div className="text-[10px] font-bold text-white">
-                        {taskLabels[task.type]}
-                      </div>
-
-                      <div className="mt-1 font-mono text-[10px] text-cyan-300">
-                        {task.target}:{task.port}
-                      </div>
-                    </div>
-
-                    {/* ปุ่มต้องอยู่ตรงนี้ */}
-                    <button
-                      type="button"
-                      disabled
-                      title="Cancellation API is not available"
-                      className="inline-flex cursor-not-allowed items-center gap-1.5 rounded border border-slate-500/30 bg-slate-500/5 px-3 py-2 text-[9px] font-bold text-slate-500 opacity-50"
-                    >
-                      <XCircle className="h-3.5 w-3.5" />
-                      CANCEL UNAVAILABLE
-                    </button>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
 
@@ -566,15 +399,6 @@ export function TakeoverWorkspace({
                         Created: {new Date(task.createdAt).toLocaleString()}
                       </div>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => cancelTask(task.id)}
-                      className="inline-flex items-center gap-1.5 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-[9px] font-bold text-red-400 transition hover:bg-red-500/20"
-                    >
-                      <XCircle className="h-3.5 w-3.5" />
-                      CANCEL
-                    </button>
                   </div>
                 </div>
               ))}
@@ -733,107 +557,6 @@ export function TakeoverWorkspace({
             value={agentMessage ? "ERROR" : loading ? "LOADING" : "CONNECTED"}
             good={!agentMessage && !loading}
           />
-
-          {/* Remote session */}
-
-          <div className="mt-3 rounded border border-[#303649] bg-[#090a0f] p-3">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Server className="h-3.5 w-3.5 text-cyan-400" />
-
-                <span className="text-[10px] font-bold tracking-widest text-white">
-                  REMOTE SESSION
-                </span>
-              </div>
-
-              <span
-                className={`rounded border px-2 py-1 text-[8px] font-bold ${
-                  remoteSession
-                    ? remoteConnected
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                      : remoteDisconnected
-                        ? "border-red-500/30 bg-red-500/10 text-red-400"
-                        : "border-amber-500/30 bg-amber-500/10 text-amber-400"
-                    : "border-slate-600 bg-slate-800 text-slate-400"
-                }`}
-              >
-                {remoteSession?.status ?? "NO SESSION"}
-              </span>
-            </div>
-
-            {remoteSession ? (
-              <div className="space-y-2">
-                <div>
-                  <div className="text-[8px] text-slate-500">SESSION ID</div>
-
-                  <div className="mt-1 break-all font-mono text-[9px] text-cyan-300">
-                    {remoteSession.id}
-                  </div>
-                </div>
-
-                {remoteSession.deviceName && (
-                  <div>
-                    <div className="text-[8px] text-slate-500">DEVICE NAME</div>
-
-                    <div className="mt-1 break-words text-[9px] text-slate-300">
-                      {remoteSession.deviceName}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-[9px] leading-relaxed text-slate-500">
-                No remote session has been created.
-              </p>
-            )}
-
-            {remoteMessage && (
-              <div className="mt-3 break-words rounded border border-[#303649] bg-[#0e1017] p-2 text-[9px] leading-relaxed text-amber-300">
-                {remoteMessage}
-              </div>
-            )}
-
-            {!remoteSession || remoteDisconnected ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (remoteDisconnected) {
-                    setRemoteSession(null);
-                    setRemoteMessage("");
-                    return;
-                  }
-
-                  void handleCreateRemoteSession();
-                }}
-                disabled={
-                  remoteLoading ||
-                  !authorized ||
-                  Boolean(remoteSession && !remoteDisconnected)
-                }
-                className="mt-3 w-full rounded border border-cyan-500/40 bg-cyan-500/10 px-3 py-2.5 text-[9px] font-bold tracking-widest text-cyan-300 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {remoteLoading
-                  ? "PROCESSING..."
-                  : remoteDisconnected
-                    ? "CLEAR SESSION"
-                    : "CREATE REMOTE SESSION"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void handleRefreshRemoteStatus()}
-                disabled={remoteLoading}
-                className="mt-3 w-full rounded border border-cyan-500/40 bg-cyan-500/10 px-3 py-2.5 text-[9px] font-bold tracking-widest text-cyan-300 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {remoteLoading ? "REFRESHING..." : "REFRESH SESSION STATUS"}
-              </button>
-            )}
-
-            <p className="mt-3 text-[8px] leading-relaxed text-slate-600">
-              Dashboard creates and monitors sessions. A registered Agent must
-              authenticate and connect independently.
-            </p>
-          </div>
         </section>
 
         {/* Event log */}

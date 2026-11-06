@@ -1,0 +1,307 @@
+/* ============================================================
+   THREAT INTEL — alert dock + CVE detail modal
+   ============================================================ */
+
+/* Persistent alert dock, fixed to the right edge, scrollable.
+   No container chrome — only the alert cards show (they float individually). */
+.ti-dock {
+  position: fixed;
+  top: 72px;
+  right: 14px;
+  z-index: 60;
+  width: 312px;
+  max-width: calc(100vw - 28px);
+  max-height: calc(100vh - 92px);
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: hidden;
+  animation: ti-slide-in 0.3s ease;
+}
+@keyframes ti-slide-in {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.ti-dock-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 2px 6px 10px;
+}
+.ti-dock-title {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; color: #ff9aa2;
+  text-shadow: 0 0 10px rgba(248, 70, 70, 0.4);
+}
+.ti-dock-clear {
+  font-size: 10px; color: #8a92a0; background: rgba(0,0,0,0.3); border: 0;
+  cursor: pointer; letter-spacing: 0.03em; padding: 4px 8px; border-radius: 6px;
+  backdrop-filter: blur(4px);
+}
+.ti-dock-clear:hover { color: #fff; }
+
+.ti-dock-list {
+  display: flex; flex-direction: column; gap: 11px;
+  padding: 2px; overflow-y: auto;
+}
+.ti-dock-list::-webkit-scrollbar { width: 7px; }
+.ti-dock-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12); border-radius: 6px;
+}
+
+.ti-card {
+  position: relative;
+  padding: 11px 12px 12px;
+  border-radius: 12px;
+  border-width: 1px;
+  border-style: solid;
+  background: linear-gradient(180deg, rgba(17, 20, 28, 0.92), rgba(10, 12, 18, 0.95));
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  animation: ti-card-in 0.25s ease;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.ti-card::before {
+  content: "";
+  position: absolute; top: 10px; bottom: 10px; left: 0; width: 3px;
+  border-radius: 3px; background: var(--sev, #f84646); opacity: 0.9;
+  box-shadow: 0 0 10px var(--sev, #f84646);
+}
+.ti-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+@keyframes ti-card-in {
+  from { transform: translateY(-6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.ti-card-x {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  color: #6b7686; background: transparent; border: 0; cursor: pointer;
+  padding: 2px; border-radius: 4px;
+}
+.ti-card-x:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.ti-card-top { display: flex; align-items: center; gap: 6px; padding-left: 8px; }
+.ti-card-sev { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; }
+.ti-card-time {
+  margin-left: auto; margin-right: 16px; font-size: 9px; color: #6b7686;
+  font-family: var(--font-geist-mono), monospace;
+}
+.ti-card-cve {
+  margin-top: 6px; padding-left: 8px; font-family: var(--font-geist-mono), monospace;
+  font-size: 13px; font-weight: 700; color: #fff;
+}
+.ti-card-meta { margin-top: 3px; padding-left: 8px; font-size: 10px; color: #9aa0aa; }
+.ti-card-graph {
+  margin-top: 9px;
+  height: 46px;
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px) 0 0 / 22px 100%,
+    #05070b;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.ti-card-graph-svg { display: block; width: 100%; height: 100%; }
+.ti-card-btn {
+  margin-top: 9px; width: 100%; padding: 7px 0;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: #cfe9ff;
+  background: rgba(45, 226, 230, 0.08);
+  border: 1px solid rgba(45, 226, 230, 0.26); border-radius: 7px; cursor: pointer;
+}
+.ti-card-btn:hover { background: rgba(45, 226, 230, 0.16); color: #fff; }
+
+/* ============================================================
+   THREAT INTEL — radar command panel
+   ============================================================ */
+.ti-rp {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(130% 120% at 0% 0%, rgba(45, 226, 230, 0.07), transparent 55%),
+    linear-gradient(180deg, rgba(14, 18, 26, 0.92), rgba(9, 11, 16, 0.97));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+.ti-rp.ti-rp-active { border-color: rgba(45, 226, 230, 0.35); box-shadow: inset 0 0 40px rgba(45, 226, 230, 0.06); }
+.ti-rp.ti-rp-scanning { border-color: rgba(45, 226, 230, 0.6); box-shadow: inset 0 0 50px rgba(45, 226, 230, 0.12); }
+
+.ti-rp-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr 190px;
+  gap: 20px;
+  align-items: center;
+}
+
+/* ── Radar scope ── */
+.ti-rp-scope-wrap { display: flex; justify-content: center; }
+.ti-rp-scope {
+  position: relative; width: 130px; height: 130px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(45, 226, 230, 0.05), rgba(6, 10, 14, 0.9) 72%);
+  border: 1px solid rgba(45, 226, 230, 0.25);
+  overflow: hidden;
+  box-shadow: inset 0 0 24px rgba(45, 226, 230, 0.08);
+}
+.ti-rp-ring {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  border: 1px solid rgba(45, 226, 230, 0.16); border-radius: 50%;
+}
+.ti-rp-ring.r1 { width: 34%; height: 34%; }
+.ti-rp-ring.r2 { width: 64%; height: 64%; }
+.ti-rp-ring.r3 { width: 92%; height: 92%; }
+.ti-rp-cross { position: absolute; top: 50%; left: 50%; background: rgba(45, 226, 230, 0.14); }
+.ti-rp-cross-h { width: 100%; height: 1px; transform: translate(-50%, -50%); }
+.ti-rp-cross-v { width: 1px; height: 100%; transform: translate(-50%, -50%); }
+.ti-rp-core {
+  position: absolute; top: 50%; left: 50%; width: 8px; height: 8px;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: #2de2e6; box-shadow: 0 0 10px rgba(45, 226, 230, 0.9);
+}
+.ti-rp-sweep {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(45, 226, 230, 0.45) 0deg,
+    rgba(45, 226, 230, 0.12) 24deg,
+    transparent 70deg,
+    transparent 360deg
+  );
+  animation: ti-sweep 2.6s linear infinite;
+  transform-origin: center;
+}
+@keyframes ti-sweep { to { transform: rotate(360deg); } }
+.ti-rp-blip {
+  position: absolute; width: 6px; height: 6px; border-radius: 50%;
+  background: #f84646; box-shadow: 0 0 8px rgba(248, 70, 70, 0.9);
+  opacity: 0; animation: ti-blip 2.6s ease-in-out infinite;
+}
+.ti-rp-blip.b0 { top: 30%; left: 62%; animation-delay: 0.3s; }
+.ti-rp-blip.b1 { top: 58%; left: 40%; animation-delay: 1.0s; }
+.ti-rp-blip.b2 { top: 44%; left: 68%; animation-delay: 1.7s; }
+.ti-rp-blip.b3 { top: 66%; left: 56%; animation-delay: 2.2s; background: #f5c451; box-shadow: 0 0 8px rgba(245, 196, 81, 0.9); }
+@keyframes ti-blip { 0%, 100% { opacity: 0; } 10% { opacity: 1; } 60% { opacity: 0.2; } }
+
+/* ── Status + controls ── */
+.ti-rp-statusline { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.ti-rp-light {
+  width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; background: #566;
+}
+.ti-rp-light.ti-rp-idle { background: #4a5564; }
+.ti-rp-light.ti-rp-active { background: #5fd38a; box-shadow: 0 0 10px rgba(95, 211, 138, 0.8); animation: ti-pulse 2s infinite; }
+.ti-rp-light.ti-rp-scanning { background: #2de2e6; box-shadow: 0 0 12px rgba(45, 226, 230, 0.9); animation: ti-pulse 0.9s infinite; }
+@keyframes ti-pulse {
+  0% { box-shadow: 0 0 0 0 currentColor; }
+  70% { box-shadow: 0 0 0 8px rgba(0, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+}
+.ti-rp-status { font-size: 13px; font-weight: 800; letter-spacing: 0.1em; color: #fff; }
+.ti-rp-sub { font-size: 10px; color: #6b7686; font-family: var(--font-geist-mono), monospace; margin-top: 1px; }
+
+.ti-rp-chart { margin-bottom: 12px; }
+.ti-rp-chart-label { font-size: 9px; letter-spacing: 0.08em; color: #6b7686; margin-bottom: 5px; text-transform: uppercase; }
+.ti-rp-bars {
+  display: flex; align-items: flex-end; gap: 3px; height: 46px;
+  padding: 6px 8px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.ti-rp-bars-empty { font-size: 10px; color: #4a5564; align-self: center; margin: auto; }
+.ti-rp-bar {
+  flex: 1 1 0; min-width: 3px; border-radius: 2px 2px 0 0;
+  background: rgba(45, 226, 230, 0.3); transition: height 0.4s ease;
+}
+.ti-rp-bar.hit {
+  background: linear-gradient(180deg, #f84646, #f5c451);
+  box-shadow: 0 0 8px rgba(248, 70, 70, 0.5);
+}
+
+.ti-rp-mini { display: flex; gap: 8px; }
+.ti-rp-minibox {
+  flex: 1; padding: 7px 10px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.ti-rp-mk { display: block; font-size: 8px; letter-spacing: 0.1em; color: #6b7686; }
+.ti-rp-mv { display: block; margin-top: 2px; font-size: 18px; font-weight: 800; font-family: var(--font-geist-mono), monospace; }
+.ti-red { color: #ff6b6b; } .ti-amber { color: #f5c451; } .ti-cyan { color: #2de2e6; }
+
+.ti-rp-ctl { display: flex; flex-direction: column; gap: 9px; }
+.ti-rp-intlabel { font-size: 9px; letter-spacing: 0.08em; color: #6b7686; text-transform: uppercase; }
+.ti-rp-select {
+  height: 34px; padding: 0 10px; font-size: 12px; color: #d4d8df;
+  background: #090a0f; border: 1px solid #303649; border-radius: 8px; outline: none;
+}
+.ti-rp-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 42px; font-size: 13px; font-weight: 800; letter-spacing: 0.04em;
+  border-radius: 9px; cursor: pointer; transition: all 0.2s ease;
+}
+.ti-rp-start { color: #0a0d12; background: linear-gradient(180deg, #4ff0f4, #2de2e6); border: 1px solid #2de2e6; box-shadow: 0 0 20px rgba(45, 226, 230, 0.35); }
+.ti-rp-start:hover { box-shadow: 0 0 28px rgba(45, 226, 230, 0.6); }
+.ti-rp-stop { color: #ff9aa2; background: rgba(248, 70, 70, 0.12); border: 1px solid rgba(248, 70, 70, 0.5); }
+.ti-rp-stop:hover { background: rgba(248, 70, 70, 0.2); }
+
+@media (max-width: 900px) {
+  .ti-rp-grid { grid-template-columns: 1fr; }
+  .ti-rp-scope-wrap { margin-bottom: 8px; }
+}
+
+/* CVE detail modal */
+.ti-modal-backdrop {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(3px);
+  padding: 16px;
+}
+.ti-modal {
+  width: 560px; max-width: 100%; max-height: 85vh; overflow-y: auto;
+  background: linear-gradient(180deg, rgba(16, 20, 28, 0.98), rgba(10, 12, 18, 0.99));
+  border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+}
+.ti-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ti-modal-cve {
+  font-family: var(--font-geist-mono), monospace; font-size: 16px;
+  font-weight: 800; color: #fff; letter-spacing: 0.02em;
+}
+.ti-modal-x {
+  color: #8a92a0; background: transparent; border: 0; cursor: pointer;
+  padding: 4px; border-radius: 6px;
+}
+.ti-modal-x:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.ti-modal-loading, .ti-modal-err {
+  padding: 28px 16px; text-align: center; font-size: 12px; color: #9aa0aa;
+}
+.ti-modal-err { color: #f5c451; }
+.ti-modal-body { padding: 16px; }
+.ti-modal-metrics {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px;
+}
+.ti-modal-metrics > div {
+  padding: 10px; border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.ti-modal-k { display: block; font-size: 9px; letter-spacing: 0.1em; color: #6b7686; }
+.ti-modal-v {
+  display: block; margin-top: 4px; font-size: 18px; font-weight: 800; color: #fff;
+  font-family: var(--font-geist-mono), monospace;
+}
+.ti-modal-vector {
+  margin: 0 0 12px; padding: 8px 10px; font-size: 11px; color: #cfe9ff;
+  font-family: var(--font-geist-mono), monospace;
+  background: rgba(45, 226, 230, 0.06);
+  border: 1px solid rgba(45, 226, 230, 0.2); border-radius: 8px; word-break: break-all;
+}
+.ti-modal-desc {
+  margin: 0 0 14px; font-size: 12.5px; line-height: 1.7; color: #d4d8df;
+}
+.ti-modal-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700; color: #2de2e6; text-decoration: none;
+}
+.ti-modal-link:hover { text-decoration: underline; }
+
+@media (max-width: 640px) {
+  .ti-dock { top: auto; bottom: 10px; right: 10px; width: 260px; max-height: 60vh; }
+}

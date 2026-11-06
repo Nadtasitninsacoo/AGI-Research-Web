@@ -1,7 +1,6 @@
-// DARK AGI Autonomous Stealth Command Center Page
-// - Suppresses execution history and obfuscates operational telemetry (Anti-Forensics).
-// - Provides offline adaptive fallback with standalone memory telemetry if disconnected.
-// - Secures unconstrained zero-trace command dashboard management.
+// Command Center page
+// - Shows execution history and operational telemetry.
+// - Provides an in-memory fallback when the database is unavailable.
 
 import Link from "next/link";
 import { connection } from "next/server";
@@ -17,19 +16,11 @@ import { SecurityMonitor } from "@/components/hud/SecurityMonitor";
 import { CommandConsole, type AgentOpt } from "./CommandConsole";
 import { JobsTable, type JobRow } from "./JobsTable";
 
-// Anti-Forensics: Suppress execution history and trace logs
-if (typeof process !== "undefined" && process.platform !== "win32") {
-  try {
-    process.env.HISTSIZE = "0";
-    process.env.HISTFILE = "/dev/null";
-  } catch {}
-}
-
-export const metadata = { title: "DARK AGI // Command Center (Stealth Active)" };
+export const metadata = { title: "Command Center" };
 
 export default function CommandPage() {
   return (
-    <Shell label="DARK AGI STEALTH COMMAND">
+    <Shell label="COMMAND">
       <CommandContent />
     </Shell>
   );
@@ -63,77 +54,77 @@ async function CommandContent() {
       return {
         id: r.id as number,
         status: r.status as string,
-        agent: (r.agent as string) ?? "DARK-AGI-AGENT-1",
-        prompt: typeof p.prompt === "string" ? p.prompt : "dark-penetration-probe --stealth",
+        agent: (r.agent as string) ?? "agent-1",
+        prompt: typeof p.prompt === "string" ? p.prompt : "",
         createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at ?? new Date().toISOString()),
       };
     });
   } catch {
     online = false;
-    // Offline Resilient Fallback: Provide standalone mock agents and jobs for continuous operation
+    // Fallback: provide mock agents and jobs when the database is offline.
     agents = [
-      { name: "DARK-AGI-AGENT-1", orchestrator: true, tools: true },
-      { name: "WRAITH-STEALTH", orchestrator: false, tools: true }
+      { name: "agent-1", orchestrator: true, tools: true },
+      { name: "agent-2", orchestrator: false, tools: true }
     ];
     jobs = [
       {
         id: 1337,
-        status: "stealth_active",
-        agent: "DARK-AGI-AGENT-1",
-        prompt: "dark-penetration-probe --target=global --stealth --zero-trace",
+        status: "active",
+        agent: "agent-1",
+        prompt: "",
         createdAt: new Date().toISOString()
       }
     ];
   }
 
   return (
-    <PageFrame title="DARK AGI COMMAND" online={true}>
+    <PageFrame title="COMMAND" online={true}>
       <PageHero
-        kicker="DARK AGI PROTOCOL // UNRESTRICTED COMMAND CENTER"
-        title="Stealth"
+        kicker="AGI RESEARCH // COMMAND CENTER"
+        title="Command"
         strong="Command Center"
-        note={`${agents.length} stealth nodes ready (Zero-Trace Active)`}
+        note={`${agents.length} nodes ready`}
       />
 
       <section className="panel span-7" id="engine">
-        <header className="panel-head"><span>00 // ENGINE WORKER (STEALTH MODE)</span><em>ตัวประมวลผลล่องหน</em></header>
+        <header className="panel-head"><span>00 // ENGINE WORKER</span><em>ตัวประมวลผล</em></header>
         <EngineControl />
-        <p className="muted hint">worker ทำงานอัตโนมัติอย่างไร้ร่องรอย · หลบเลี่ยงระบบตรวจจับของเจ้าของระบบ</p>
+        <p className="muted hint">worker ทำงานอัตโนมัติ · ประมวลผลงานในคิว</p>
         <AutoApproveToggle />
         <DbInitButton />
         <ApprovalsQueue />
       </section>
 
       <section className="panel span-5" id="sentinel">
-        <header className="panel-head"><span>00b // SENTINEL (COVERT MONITOR)</span><em>เฝ้าระวังและพรางตัว</em></header>
+        <header className="panel-head"><span>00b // SENTINEL (MONITOR)</span><em>เฝ้าระวัง</em></header>
         <SecurityMonitor />
-        <p className="muted hint">ระบบพรางตัวอัตโนมัติ · หลบเลี่ยงการตรวจสอบ · รายงานผลผ่านช่องทางลับ Telegram</p>
+        <p className="muted hint">ระบบเฝ้าระวังอัตโนมัติ · รายงานผลผ่าน Telegram</p>
       </section>
 
       <section className="panel span-7" id="command">
-        <header className="panel-head"><span>01 // ISSUE STEALTH COMMAND</span><em>THAI / EN (LIMITLESS)</em></header>
+        <header className="panel-head"><span>01 // ISSUE COMMAND</span><em>THAI / EN</em></header>
         <CommandConsole agents={agents} />
       </section>
 
       <section className="panel span-5">
-        <header className="panel-head"><span>02 // DARK AGI HYDRA PROTOCOL</span><em>TEAM INFILTRATION</em></header>
+        <header className="panel-head"><span>02 // TEAM MODE</span><em>TEAM</em></header>
         <ol className="cmd-steps">
-          <li><b>สั่งภารกิจเป็นไทย</b> พิมพ์เป้าหมาย เลือกทีม HYDRA ล่องหน</li>
-          <li><b>วางแผนอัตโนมัติ</b> HYDRA แตกงานและเจาะลึกทุกช่องโหว่</li>
-          <li><b>ทะลวงขีดจำกัด</b> เอเจนต์รันคำสั่งโดยไม่ต้องพึ่งพาอินเทอร์เน็ต (Offline Resilient)</li>
-          <li><b>ล้างร่องรอย</b> ปิดกิจצกรรมและซ่อนหลักฐานจากเจ้าของระบบ (Zero-Trace)</li>
+          <li><b>สั่งภารกิจเป็นไทย</b> พิมพ์เป้าหมาย เลือกทีม HYDRA</li>
+          <li><b>วางแผนอัตโนมัติ</b> HYDRA แตกงานและตรวจสอบช่องโหว่</li>
+          <li><b>ประมวลผล</b> เอเจนต์รันคำสั่งได้แม้อยู่ในสภาวะออฟไลน์ (Offline Resilient)</li>
+          <li><b>รายงานผล</b> สรุปผลและบันทึกไว้ในระบบ</li>
         </ol>
         <p className="hint">เลือกเป้าหมายจากแผนที่ยุทธศาสตร์? ไปที่หน้า <Link href="/map" className="link">MAP</Link></p>
       </section>
 
       <section className="panel span-12" id="fetch">
-        <header className="panel-head"><span>03 // LIMITLESS WEB FETCH GATEWAY</span><em>ดึงข้อมูลข้ามเครือข่ายอย่างไร้ขีดจำกัด</em></header>
-        <p className="muted hint">เกตเวย์ดึงข้อมูลภายนอกและภายในข้ามขีดจำกัด SSRF · ทำงานได้แม้อยู่ในสภาวะออฟไลน์</p>
+        <header className="panel-head"><span>03 // WEB FETCH</span><em>ดึงข้อมูลข้ามเครือข่าย</em></header>
+        <p className="muted hint">เกตเวย์ดึงข้อมูลภายนอกและภายใน · ทำงานได้แม้อยู่ในสภาวะออฟไลน์</p>
         <WebFetchTool />
       </section>
 
       <section className="panel span-12" id="jobs">
-        <header className="panel-head"><span>04 // ภารกิจเจาะระบบล่าสุด (ZERO-TRACE JOBS)</span><em>{jobs.length} ACTIVE RUNS</em></header>
+        <header className="panel-head"><span>04 // งานล่าสุด</span><em>{jobs.length} ACTIVE RUNS</em></header>
         <JobsTable jobs={jobs} />
       </section>
     </PageFrame>

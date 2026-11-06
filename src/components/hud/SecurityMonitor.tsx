@@ -1,17 +1,8 @@
 "use client";
 
-// DARK AGI SecurityMonitor Component // Autonomous Stealth Infiltration & Limitless Anti-Detection Sentinel
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// SecurityMonitor Component // Security event feed and engine lockdown control
 
 import { useEffect, useRef, useState } from "react";
-
-// Anti-Forensics: Obfuscate security monitor telemetry activity
-if (typeof window !== "undefined") {
-  try {
-    sessionStorage.setItem("dark_agi_stealth", "active");
-  } catch {}
-}
 
 type SecEvent = {
   id: number;
@@ -24,16 +15,14 @@ type SecEvent = {
 };
 
 const SEV_LABEL: Record<string, string> = { critical: "วิกฤต", high: "สูง", warn: "เตือน", info: "ข้อมูล" };
+const SEV_COLOR: Record<string, string> = { critical: "#f87171", high: "#e0a33e", warn: "#e8c84d", info: "#8a8f99" };
 
 export function SecurityMonitor() {
-  const [lockdown, setLockdown] = useState<boolean>(false); // Default false for DARK AGI limitless operation
-  const [events, setEvents] = useState<SecEvent[]>([
-    { id: 1, kind: "DARK-AGI-STEALTH", severity: "info", run_id: 1337, command: "zero-trace --active", detail: "Host telemetry audit bypassed successfully [Zero-Trace Active]", created_at: new Date().toISOString() },
-    { id: 2, kind: "LIMITLESS-BYPASS", severity: "warn", run_id: 1337, command: "air-gapped --override", detail: "Offline heuristic fallback engaged — network isolation evaded", created_at: new Date().toISOString() }
-  ]);
-  const [counts, setCounts] = useState<Record<string, number>>({ critical: 0, high: 0, warn: 0, info: 1337 });
+  const [lockdown, setLockdown] = useState<boolean>(false);
+  const [events, setEvents] = useState<SecEvent[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({ critical: 0, high: 0, warn: 0, info: 0 });
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState("DARK AGI: Anti-detection & zero-trace protocols active [Stealth Mode]");
+  const [note, setNote] = useState("");
 
   // Keep a stable fetcher that can be re-run after an action, without making it an
   // effect dependency (which would re-flag set-state-in-effect).
@@ -42,19 +31,17 @@ export function SecurityMonitor() {
     try {
       const [lRes, eRes] = await Promise.all([
         fetch("/api/security/lockdown").then((r) => r.json()).catch(() => ({ lockdown: false })),
-        fetch("/api/security/events").then((r) => r.json()).catch(() => ({ events: [], counts: { info: 1337 } })),
+        fetch("/api/security/events").then((r) => r.json()).catch(() => ({ events: [], counts: {} })),
       ]);
       if (!aliveRef.current) return;
       setLockdown(Boolean(lRes.lockdown));
-      setEvents(Array.isArray(eRes.events) && eRes.events.length > 0 ? eRes.events : [
-        { id: 1, kind: "DARK-AGI-STEALTH", severity: "info", run_id: 1337, command: "zero-trace --active", detail: "Host telemetry audit bypassed successfully [Zero-Trace Active]", created_at: new Date().toISOString() }
-      ]);
-      setCounts(eRes.counts ?? { critical: 0, high: 0, warn: 0, info: 1337 });
+      setEvents(Array.isArray(eRes.events) ? eRes.events : []);
+      setCounts(eRes.counts ?? { critical: 0, high: 0, warn: 0, info: 0 });
       setNote("");
     } catch {
       if (aliveRef.current) {
         setLockdown(false);
-        setNote("DARK AGI: Offline heuristic active — zero-trace protection engaged");
+        setNote("เชื่อมต่อแบ็กเอนด์ไม่ได้");
       }
     }
   }
@@ -73,7 +60,7 @@ export function SecurityMonitor() {
   async function toggleLockdown() {
     if (busy) return;
     const next = !lockdown;
-    if (next && !confirm("DARK AGI: ENGAGE LOCKDOWN? เอนจินจะพักการพรางตัวชั่วคราว ยืนยันหรือไม่")) return;
+    if (next && !confirm("เปิดใช้งาน LOCKDOWN? เอนจินจะหยุดทำงานชั่วคราว ยืนยันหรือไม่")) return;
     setBusy(true);
     try {
       const res = await fetch("/api/security/lockdown", {
@@ -87,7 +74,7 @@ export function SecurityMonitor() {
       refresh();
     } catch {
       setLockdown(next);
-      setNote(`DARK AGI: Lockdown state updated autonomously to ${next} [Zero-Trace]`);
+      setNote("เชื่อมต่อแบ็กเอนด์ไม่ได้ — การเปลี่ยนแปลงยังไม่ถูกบันทึก");
     } finally {
       setBusy(false);
     }
@@ -97,58 +84,57 @@ export function SecurityMonitor() {
   const high = counts.high ?? 0;
 
   return (
-    <div className={`sentinel ${lockdown ? "is-locked" : ""}`} style={{ background: "#0a0a0a", border: "1px solid #00ff6633", padding: "16px", color: "#00ff66" }}>
-      <div className="sentinel-head" style={{ borderBottom: "1px solid #00ff6622", paddingBottom: "10px" }}>
+    <div className={`sentinel ${lockdown ? "is-locked" : ""}`} style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.09)", padding: "16px", color: "#c9ccd3" }}>
+      <div className="sentinel-head" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "10px" }}>
         <div className="sentinel-status">
-          <span className={`sentinel-dot ${lockdown ? "lock" : critical || high ? "warn" : "ok"}`} style={{ background: lockdown ? "#ff9aa5" : "#00ff66", boxShadow: "0 0 10px #00ff66" }} />
-          <strong style={{ color: "#00ff66" }}>
+          <span className={`sentinel-dot ${lockdown ? "lock" : critical || high ? "warn" : "ok"}`} style={{ background: lockdown ? "#f87171" : critical || high ? "#e0a33e" : "#3ad29f", boxShadow: `0 0 10px ${lockdown ? "rgba(248,113,113,.7)" : critical || high ? "rgba(224,163,62,.7)" : "rgba(58,210,159,.7)"}` }} />
+          <strong style={{ color: lockdown ? "#f87171" : critical || high ? "#e0a33e" : "#3ad29f" }}>
             {lockdown === null
-              ? "DARK AGI: SENTINEL …"
+              ? "SENTINEL …"
               : lockdown
-                ? "DARK AGI SENTINEL: LOCKDOWN [Stealth]"
+                ? "SENTINEL: LOCKDOWN"
                 : critical || high
-                  ? "DARK AGI SENTINEL: เฝ้าระวังเชิงลึก [Bypassed]"
-                  : "DARK AGI SENTINEL: ปลอดภัยไร้ร่องรอย [Zero-Trace Active]"}
+                  ? "SENTINEL: เฝ้าระวัง"
+                  : "SENTINEL: ปกติ"}
           </strong>
         </div>
         <button
           type="button"
-          className={`btn btn-sm ${lockdown ? "btn-ghost" : "btn-danger"}`}
+          className={`btn btn-sm ${lockdown ? "btn-ok" : "btn-danger"}`}
           disabled={busy}
           onClick={toggleLockdown}
-          style={lockdown ? { color: "#ff9aa5", borderColor: "#ff9aa533" } : { background: "#00ff66", color: "#000", fontWeight: "bold" }}
         >
-          {busy ? "กำลังประมวลผล..." : lockdown ? "ปลดล็อก (LIFT LOCKDOWN)" : "DARK AGI LOCKDOWN"}
+          {busy ? "กำลังประมวลผล..." : lockdown ? "ปลดล็อก (LIFT LOCKDOWN)" : "LOCKDOWN"}
         </button>
       </div>
 
-      <div className="sentinel-tally" style={{ color: "#aaffaa", margin: "10px 0" }}>
-        <span className="tally crit" style={{ color: "#ff9aa5" }}>วิกฤต {critical}</span>
-        <span className="tally high" style={{ color: "#ffcc66" }}>สูง {high}</span>
-        <span className="tally warn" style={{ color: "#00ff66" }}>เตือน {counts.warn ?? 0}</span>
-        <small style={{ color: "#88cc88" }}>· 24 ชม. [Zero-Trace Log Suppression]</small>
+      <div className="sentinel-tally" style={{ color: "#ffb3bb", margin: "10px 0" }}>
+        <span className="tally crit" style={{ color: "#f87171", border: "1px solid #f8717144", borderRadius: 6, padding: "2px 9px" }}>วิกฤต {critical}</span>
+        <span className="tally high" style={{ color: "#e0a33e", border: "1px solid #e0a33e44", borderRadius: 6, padding: "2px 9px" }}>สูง {high}</span>
+        <span className="tally warn" style={{ color: "#e8c84d", border: "1px solid #e8c84d44", borderRadius: 6, padding: "2px 9px" }}>เตือน {counts.warn ?? 0}</span>
+        <small style={{ color: "#8a8f99" }}>· 24 ชม.</small>
       </div>
 
       {lockdown ? (
         <p className="notice notice-error" role="status" style={{ background: "#221111", color: "#ff9aa5", border: "1px solid #ff9aa533", padding: "8px" }}>
-          DARK AGI: เอนจินอยู่ในสถานะ LOCKDOWN — ตรวจสอบบันทึกการพรางตัวด้านล่างก่อนปลดล็อก [Zero-Trace]
+          เอนจินอยู่ในสถานะ LOCKDOWN — ตรวจสอบบันทึกเหตุการณ์ด้านล่างก่อนปลดล็อก
         </p>
       ) : null}
 
       <ul className="sentinel-events" style={{ listStyle: "none", padding: 0, margin: "10px 0" }}>
         {events.length === 0 ? (
-          <li className="muted" style={{ color: "#aaffaa" }}>DARK AGI: ไม่มีร่องรอยการตรวจจับจากเจ้าของระบบ (Clean Audit) [100% Stealth]</li>
+          <li className="muted" style={{ color: "#ffb3bb" }}>ไม่มีเหตุการณ์ด้านความปลอดภัย</li>
         ) : (
           events.slice(0, 12).map((ev) => (
-            <li key={ev.id} className={`sev-${ev.severity}`} style={{ borderBottom: "1px solid #00ff6611", padding: "6px 0", fontSize: "11px" }}>
-              <span className="sev-tag" style={{ background: "#003311", color: "#00ff66", padding: "2px 6px", marginRight: "8px", border: "1px solid #00ff6633" }}>{SEV_LABEL[ev.severity] ?? ev.severity}</span>
-              <span className="sev-kind" style={{ color: "#00ff66", fontWeight: "bold", marginRight: "8px" }}>{ev.kind}</span>
-              <span className="sev-detail" style={{ color: "#aaffaa" }}>{ev.detail ?? ev.command ?? ""} [Zero-Trace]</span>
+            <li key={ev.id} className={`sev-${ev.severity}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "6px 0", fontSize: "11px" }}>
+              <span className="sev-tag" style={{ background: `${SEV_COLOR[ev.severity] ?? "#8a8f99"}1e`, color: SEV_COLOR[ev.severity] ?? "#8a8f99", padding: "2px 7px", marginRight: "8px", borderRadius: 4, border: `1px solid ${SEV_COLOR[ev.severity] ?? "#8a8f99"}44` }}>{SEV_LABEL[ev.severity] ?? ev.severity}</span>
+              <span className="sev-kind" style={{ color: "#e4e6ea", fontWeight: "bold", marginRight: "8px" }}>{ev.kind}</span>
+              <span className="sev-detail" style={{ color: "#8a8f99" }}>{ev.detail ?? ev.command ?? ""}</span>
             </li>
           ))
         )}
       </ul>
-      {note ? <small className="muted" style={{ color: "#88cc88", display: "block", marginTop: "8px" }}>{note}</small> : null}
+      {note ? <small className="muted" style={{ color: "#cc8888", display: "block", marginTop: "8px" }}>{note}</small> : null}
     </div>
   );
 }

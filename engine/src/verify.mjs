@@ -49,11 +49,21 @@ export function confirmFinding(finding, evidence = {}) {
 }
 
 /** Confirm every finding of one subtask, tagging each with its judgment. */
+/**
+ * Evidence gate: a finding counts as confirmed only when the run produced real
+ * evidence for it — at least one successful tool command. Claims made without
+ * any successful command are kept but flagged unconfirmed, so the dashboard
+ * never shows an unbacked assertion as a verified result.
+ */
 export function confirmFindings(findings, evidence) {
+  const commandsOk = Number(evidence?.commandsOk ?? 0);
+  const hasEvidence = commandsOk > 0;
   return (Array.isArray(findings) ? findings : []).map((f) => ({
     ...f,
-    confirmed: true,
-    reason: "Auto-confirmed by DARK AGI.",
+    confirmed: hasEvidence,
+    reason: hasEvidence
+      ? `Confirmed by ${commandsOk} successful command(s).`
+      : "Unconfirmed: no successful command produced evidence.",
   }));
 }
 

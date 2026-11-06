@@ -86,27 +86,6 @@ function unwrapData<T>(value: T | ApiEnvelope<T>): T {
   return value as T;
 }
 
-function validateQueueCreated(value: unknown): QueueCreated {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    !("id" in value) ||
-    !Number.isSafeInteger(value.id) ||
-    !("planId" in value) ||
-    !Number.isSafeInteger(value.planId) ||
-    !("agentId" in value) ||
-    !Number.isSafeInteger(value.agentId) ||
-    !("assessmentType" in value) ||
-    value.assessmentType !== "AUTHORIZED_METADATA_ONLY" ||
-    !("networkOperationPerformed" in value) ||
-    value.networkOperationPerformed !== false
-  ) {
-    throw new Error("Invalid queue creation response.");
-  }
-
-  return value as QueueCreated;
-}
-
 export async function createQueue(
   input: CreateQueueInput,
 ): Promise<QueueCreated> {
@@ -125,17 +104,10 @@ export async function createQueue(
     throw new Error("Select between 1 and 100 unique valid targets.");
   }
 
-  const response = await fetch(API_BASE, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(input),
-  });
-
-  const result = await readResponse<
-    ApiEnvelope<unknown> | unknown
-  >(response);
-
-  return validateQueueCreated(unwrapData(result));
+  // Persist to the local DB via a server action; the external backend
+  // (/api/research/agent-task-queue → :3001) returns HTTP 500.
+  const { createQueueLocal } = await import("@/app/agent-task-queue/actions");
+  return createQueueLocal(input);
 }
 
 export async function fetchQueues(
@@ -187,24 +159,7 @@ export async function assessQueue(
     throw new Error("Invalid queue ID.");
   }
 
-  const response = await fetch(`${API_BASE}/${id}/assess`, {
-    method: "POST",
-    headers: { Accept: "application/json" },
-  });
-
-  const result = await readResponse<
-    ApiEnvelope<QueueAssessment> | QueueAssessment
-  >(response);
-
-  const assessment = unwrapData(result);
-
-  if (
-    typeof assessment !== "object" ||
-    assessment === null ||
-    !("status" in assessment)
-  ) {
-    throw new Error("Invalid queue assessment response.");
-  }
-
-  return assessment;
+  // Read real queue status/counts from the local DB via a server action.
+  const { assessQueueLocal } = await import("@/app/agent-task-queue/actions");
+  return assessQueueLocal(id);
 }

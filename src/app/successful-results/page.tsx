@@ -246,6 +246,43 @@ function getLatestObservation(
     })[0];
 }
 
+function MiniBars({
+  title,
+  rows,
+  accent = "#f81e36",
+}: {
+  title: string;
+  rows: { label: string; n: number }[];
+  accent?: string;
+}) {
+  const max = rows.reduce((m, r) => Math.max(m, r.n), 0) || 1;
+  return (
+    <div className="sr-chart">
+      <div className="sr-chart-title">{title}</div>
+      {rows.length === 0 ? (
+        <p className="sr-chart-empty">—</p>
+      ) : (
+        rows.map((r) => (
+          <div key={r.label} className="sr-chart-row">
+            <span className="sr-chart-label" title={r.label}>
+              {r.label}
+            </span>
+            <span className="sr-chart-bar">
+              <i
+                style={{
+                  width: `${Math.max(4, (r.n / max) * 100)}%`,
+                  background: accent,
+                }}
+              />
+            </span>
+            <span className="sr-chart-n">{r.n.toLocaleString()}</span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 export default function SuccessfulResultsPage() {
   const [items, setItems] = useState<SuccessfulItem[]>([]);
   const [httpObservations, setHttpObservations] = useState<HttpObservation[]>(
@@ -257,6 +294,9 @@ export default function SuccessfulResultsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
+  const [obsPage, setObsPage] = useState(1);
+  const [logPage, setLogPage] = useState(1);
+  const [sumPage, setSumPage] = useState(1);
 
   const loadResults = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -456,6 +496,32 @@ export default function SuccessfulResultsPage() {
 
   const portRecords = items.filter((item) => item.port !== null).length;
 
+  // Analytics breakdowns over the loaded successful results (real data only).
+  const analytics = useMemo(() => {
+    const tally = <T,>(arr: T[], keyFn: (x: T) => string | null) => {
+      const m = new Map<string, number>();
+      for (const x of arr) {
+        const k = keyFn(x);
+        if (!k) continue;
+        m.set(k, (m.get(k) ?? 0) + 1);
+      }
+      return [...m.entries()]
+        .map(([label, n]) => ({ label, n }))
+        .sort((a, b) => b.n - a.n);
+    };
+    return {
+      byCountry: tally(items, (i) => i.country?.trim() || null).slice(0, 8),
+      byService: tally(items, (i) => i.service?.trim() || null).slice(0, 8),
+      byPort: tally(
+        items.filter((i) => i.port != null),
+        (i) => String(i.port),
+      ).slice(0, 8),
+      byStatus: tally(visibleObservations, (o) =>
+        o.status_code != null ? String(o.status_code) : null,
+      ).slice(0, 8),
+    };
+  }, [items, visibleObservations]);
+
   const PER_PAGE = 20;
 
   useEffect(() => {
@@ -469,6 +535,33 @@ export default function SuccessfulResultsPage() {
   const pagedItems = filteredItems.slice(
     (safePage - 1) * PER_PAGE,
     safePage * PER_PAGE,
+  );
+
+  // HTTP observations pagination
+  const obsPageCount = Math.max(
+    1,
+    Math.ceil(visibleObservations.length / PER_PAGE),
+  );
+  const safeObsPage = Math.min(obsPage, obsPageCount);
+  const pagedObs = visibleObservations.slice(
+    (safeObsPage - 1) * PER_PAGE,
+    safeObsPage * PER_PAGE,
+  );
+
+  // Audit logs pagination
+  const logPageCount = Math.max(1, Math.ceil(auditLogs.length / PER_PAGE));
+  const safeLogPage = Math.min(logPage, logPageCount);
+  const pagedLogs = auditLogs.slice(
+    (safeLogPage - 1) * PER_PAGE,
+    safeLogPage * PER_PAGE,
+  );
+
+  // Result summary pagination
+  const sumPageCount = Math.max(1, Math.ceil(items.length / PER_PAGE));
+  const safeSumPage = Math.min(sumPage, sumPageCount);
+  const pagedSummary = items.slice(
+    (safeSumPage - 1) * PER_PAGE,
+    safeSumPage * PER_PAGE,
   );
 
   function exportCsv() {
@@ -668,6 +761,21 @@ export default function SuccessfulResultsPage() {
             </article>
           </section>
 
+          {items.length > 0 && (
+            <section className="op-panel">
+              <div className="op-head">
+                <h2 className="op-title">ANALYTICS · การกระจายของผลสำเร็จ</h2>
+                <span className="op-count">{items.length} records</span>
+              </div>
+              <div className="sr-charts">
+                <MiniBars title="ตามประเทศ" rows={analytics.byCountry} accent="#f81e36" />
+                <MiniBars title="ตามบริการ" rows={analytics.byService} accent="#5fd38a" />
+                <MiniBars title="ตามพอร์ต" rows={analytics.byPort} accent="#f5c451" />
+                <MiniBars title="ตาม HTTP status" rows={analytics.byStatus} accent="#4aa3ff" />
+              </div>
+            </section>
+          )}
+
           <section className="op-panel op-panelOk">
             <div className="op-head">
               <h2 className="op-title">
@@ -854,7 +962,7 @@ export default function SuccessfulResultsPage() {
                   </thead>
 
                   <tbody>
-                    {visibleObservations.map((observation) => (
+                    {pagedObs.map((observation) => (
                       <tr key={`${observation.batch_id}-${observation.id}`}>
                         <td className="op-mono">#{observation.item_id}</td>
                         <td className="op-mono op-strong">
@@ -872,6 +980,33 @@ export default function SuccessfulResultsPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {visibleObservations.length > PER_PAGE && (
+              <div className="op-pager">
+                <button
+                  type="button"
+                  className="op-btn op-btnXs"
+                  onClick={() => setObsPage((c) => Math.max(1, c - 1))}
+                  disabled={safeObsPage <= 1}
+                >
+                  PREV
+                </button>
+                <span className="op-pageInfo">
+                  PAGE {safeObsPage} / {obsPageCount} ·{" "}
+                  {visibleObservations.length} OBSERVATIONS
+                </span>
+                <button
+                  type="button"
+                  className="op-btn op-btnXs"
+                  onClick={() =>
+                    setObsPage((c) => Math.min(obsPageCount, c + 1))
+                  }
+                  disabled={safeObsPage >= obsPageCount}
+                >
+                  NEXT
+                </button>
               </div>
             )}
           </section>
@@ -915,7 +1050,7 @@ export default function SuccessfulResultsPage() {
                   </thead>
 
                   <tbody>
-                    {auditLogs.map((log) => (
+                    {pagedLogs.map((log) => (
                       <tr key={`${log.batch_id}-${log.id}`}>
                         <td className="op-mono">#{log.batch_id}</td>
 
@@ -948,6 +1083,32 @@ export default function SuccessfulResultsPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {auditLogs.length > PER_PAGE && (
+              <div className="op-pager">
+                <button
+                  type="button"
+                  className="op-btn op-btnXs"
+                  onClick={() => setLogPage((c) => Math.max(1, c - 1))}
+                  disabled={safeLogPage <= 1}
+                >
+                  PREV
+                </button>
+                <span className="op-pageInfo">
+                  PAGE {safeLogPage} / {logPageCount} · {auditLogs.length} LOGS
+                </span>
+                <button
+                  type="button"
+                  className="op-btn op-btnXs"
+                  onClick={() =>
+                    setLogPage((c) => Math.min(logPageCount, c + 1))
+                  }
+                  disabled={safeLogPage >= logPageCount}
+                >
+                  NEXT
+                </button>
               </div>
             )}
           </section>
@@ -984,7 +1145,7 @@ export default function SuccessfulResultsPage() {
                   </thead>
 
                   <tbody>
-                    {items.map((item) => (
+                    {pagedSummary.map((item) => (
                       <tr key={`${item.batch_id}-${item.id}`}>
                         <td className="op-ip">{item.ip}</td>
                         <td className="op-mono">#{item.batch_number}</td>
@@ -994,6 +1155,30 @@ export default function SuccessfulResultsPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {items.length > PER_PAGE && (
+              <div className="op-pager">
+                <button
+                  type="button"
+                  className="op-btn op-btnXs"
+                  onClick={() => setSumPage((c) => Math.max(1, c - 1))}
+                  disabled={safeSumPage <= 1}
+                >
+                  PREV
+                </button>
+                <span className="op-pageInfo">
+                  PAGE {safeSumPage} / {sumPageCount} · {items.length} RECORDS
+                </span>
+                <button
+                  type="button"
+                  className="op-btn op-btnXs"
+                  onClick={() => setSumPage((c) => Math.min(sumPageCount, c + 1))}
+                  disabled={safeSumPage >= sumPageCount}
+                >
+                  NEXT
+                </button>
               </div>
             )}
           </section>

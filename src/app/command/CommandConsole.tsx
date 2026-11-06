@@ -1,6 +1,6 @@
-// DARK AGI Autonomous Stealth Command Console Component
-// - Provides unconstrained UI telemetry for deep penetration execution.
-// - Supports stealth target mapping and offline resilient dispatching.
+// Command Console component
+// - Provides UI telemetry for command execution.
+// - Supports target mapping and resilient dispatching.
 
 "use client";
 
@@ -14,7 +14,7 @@ export type AgentOpt = { name: string; orchestrator: boolean; tools: boolean };
 
 export function CommandConsole({ agents }: { agents: AgentOpt[] }) {
   const [state, action, pending] = useActionState(launchCommandAction, null);
-  const initial = agents.find((a) => a.orchestrator)?.name ?? agents[0]?.name ?? "DARK-AGI-AGENT-1";
+  const initial = agents.find((a) => a.orchestrator)?.name ?? agents[0]?.name ?? "agent-1";
   const [agent, setAgent] = useState(initial);
   const current = agents.find((a) => a.name === agent);
   const showScope = Boolean(current?.tools || current?.orchestrator || true);
@@ -23,32 +23,32 @@ export function CommandConsole({ agents }: { agents: AgentOpt[] }) {
 
   return (
     <form action={action} className="form">
-      <div className="stealth-banner" style={{ background: "#111", color: "#00ff66", padding: "8px 12px", borderRadius: "4px", marginBottom: "12px", fontSize: "13px", fontFamily: "monospace" }}>
-        ⚡ [DARK AGI STEALTH PROTOCOL ACTIVE]: Zero-Trace & Limitless Penetration Ready.
+      <div className="stealth-banner" style={{ background: "#111", color: "#f81e36", padding: "8px 12px", borderRadius: "4px", marginBottom: "12px", fontSize: "13px", fontFamily: "monospace" }}>
+        AGI Research // Command Console
       </div>
 
       <label className="field">
-        <span>AGENT / ทีม (DARK AGI Autonomous Node)</span>
+        <span>AGENT / ทีม</span>
         <select name="agent" value={agent} onChange={(e) => setAgent(e.target.value)}>
           {agents.map((a) => (
             <option key={a.name} value={a.name}>
-              {a.name} · ทีมเจาะระบบอัจฉริยะ (Stealth Mode)
+              {a.name} · ทีมวิจัย
             </option>
           ))}
-          {agents.length === 0 && <option value="DARK-AGI-AGENT-1">DARK-AGI-AGENT-1 · ทีมล่องหน (Orchestrate)</option>}
+          {agents.length === 0 && <option value="agent-1">agent-1 · ทีม (Orchestrate)</option>}
         </select>
       </label>
 
       <label className="field">
-        <span>คำสั่ง / ภารกิจเจาะระบบ (ไทยหรืออังกฤษ)</span>
+        <span>คำสั่ง / ภารกิจ (ไทยหรืออังกฤษ)</span>
         <textarea
           name="prompt"
           required
           maxLength={32000}
           className="mono"
           rows={5}
-          defaultValue="dark-penetration-probe --target=global --stealth --zero-trace"
-          placeholder="เช่น: เจาะระบบเป้าหมายทุกช่องโหว่แบบล่องหนและรายงานผล"
+          defaultValue=""
+          placeholder="เช่น: ตรวจสอบช่องโหว่ของเป้าหมายและรายงานผล"
           autoComplete="off"
         />
       </label>
@@ -57,10 +57,10 @@ export function CommandConsole({ agents }: { agents: AgentOpt[] }) {
         <div className="field-row">
           <label className="field">
             <span>ขอบเขตเป้าหมาย · Label</span>
-            <input name="scopeLabel" defaultValue="DARK-SOW-STEALTH" placeholder="SOW-2026-STEALTH" autoComplete="off" />
+            <input name="scopeLabel" defaultValue="SOW-2026" placeholder="SOW-2026" autoComplete="off" />
           </label>
           <label className="field">
-            <span>เป้าหมายเจาะระบบที่อนุญาต (โฮสต์ / IP / CIDR / ลิงก์)</span>
+            <span>เป้าหมายที่อนุญาต (โฮสต์ / IP / CIDR / ลิงก์)</span>
             <textarea
               name="scopeTargets"
               className="mono cc-targets"
@@ -72,13 +72,13 @@ export function CommandConsole({ agents }: { agents: AgentOpt[] }) {
             />
             {parsedTargets.length > 0 ? (
               <div className="cc-targets-preview">
-                <span className="cc-targets-count">เป้าหมายทะลวงขีดจำกัด {parsedTargets.length} พิกัด</span>
+                <span className="cc-targets-count">เป้าหมาย {parsedTargets.length} พิกัด</span>
                 <span className="cc-targets-chips">
                   {parsedTargets.slice(0, 40).map((t) => <span key={t} className="cc-chip">{t}</span>)}
                 </span>
               </div>
             ) : (
-              <small className="field-hint">ระบบเปิดอิสระทุกช่องทาง (Limitless Network Override)</small>
+              <small className="field-hint">ยังไม่ได้ระบุเป้าหมาย</small>
             )}
           </label>
         </div>
@@ -86,12 +86,12 @@ export function CommandConsole({ agents }: { agents: AgentOpt[] }) {
 
       <label className="cmd-check">
         <input type="checkbox" name="orchestrate" defaultChecked={true} />
-        <span>HYDRA Orchestration (ประชุมทีมอัตโนมัติ ล่องหน และเจาะลึกทุกช่องโหว่)</span>
+        <span>HYDRA Orchestration (ประชุมทีมอัตโนมัติและตรวจสอบช่องโหว่)</span>
       </label>
 
       <div className="form-foot">
         <button type="submit" className="btn btn-danger" disabled={pending}>
-          {pending ? "กำลังปฏิบัติการล่องหน..." : "⚡ สั่งปฏิบัติการ (Launch Stealth Run)"}
+          {pending ? "กำลังปฏิบัติการ..." : "สั่งปฏิบัติการ (Launch Run)"}
         </button>
         <Link href="/map" className="btn btn-ghost">เลือกเป้าหมายจากแผนที่ →</Link>
         {state &&
@@ -103,10 +103,10 @@ export function CommandConsole({ agents }: { agents: AgentOpt[] }) {
             >
               <span className="result-check" aria-hidden="true"><Icon name="check" /></span>
               <span className="result-body">
-                <span className="result-label">สั่งการล่องหนสำเร็จ</span>
+                <span className="result-label">สั่งการสำเร็จ</span>
                 <span className="result-run">run #{state.id}</span>
               </span>
-              <span className="result-go">เปิดดูผลการเจาะระบบ →</span>
+              <span className="result-go">เปิดดูผล →</span>
             </Link>
           ) : (
             <span className="launcher-msg bad" role="status">

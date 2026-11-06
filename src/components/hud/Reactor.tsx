@@ -1,5 +1,6 @@
 import type { AgentStat } from "@/lib/queries";
 import { NuclearMark } from "./NuclearMark";
+import { agentStatusMeta } from "@/lib/agentStatus";
 
 const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
@@ -10,13 +11,20 @@ const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
  */
 export function Reactor({ agents, successRate }: { agents: AgentStat[]; successRate: number }) {
   const runs = agents.reduce((s, a) => s + a.runs, 0);
-  // Any running agent drives the core "critical": orbits spin, nucleus flares.
-  const reacting = agents.some((a) => a.status === "running");
+  // The atom reacts ONLY while agents are actually working, and the harder the
+  // fleet works the stronger it moves: intensity = share of agents running.
+  const runningCount = agents.filter((a) => a.status === "running").length;
+  const reacting = runningCount > 0;
+  const intensity =
+    agents.length > 0 ? Math.min(1, runningCount / agents.length) : 0;
   return (
     <div className="reactor">
       {/* Atom: a blue/black radiation nucleus with two numbered "electron" orbs
-          riding crossed orbital rings. Goes critical while an agent runs. */}
-      <div className={`reactor-atom${reacting ? " is-reacting" : ""}`}>
+          riding crossed orbital rings. Motion scales with --react (0..1). */}
+      <div
+        className={`reactor-atom${reacting ? " is-reacting" : ""}`}
+        style={{ "--react": intensity } as Record<string, string | number>}
+      >
         <span className="atom-orbit atom-orbit-a" />
         <span className="atom-orbit atom-orbit-b" />
         <span className="atom-orbit atom-orbit-c" />
@@ -40,17 +48,18 @@ export function Reactor({ agents, successRate }: { agents: AgentStat[]; successR
         {agents.length === 0 && <li className="muted nx-empty">No agents online</li>}
         {agents.map((a) => {
           const success = pct(a.succeeded, a.runs);
+          const stat = agentStatusMeta(a.status);
           return (
-            <li key={a.id} className={`rb s-${a.status}`}>
+            <li key={a.id} className={`rb s-${stat.tone}`}>
               <span className="rb-name">
-                <i className={`dot dot-${a.status}`} />
+                <i className={`dot dot-${stat.tone}`} />
                 {a.name}
               </span>
               <div className="rb-gauge" role="progressbar" aria-label={`${a.name} success`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={success}>
                 <i style={{ width: `${success}%` }} />
               </div>
               <span className="rb-val">{a.runs > 0 ? `${success}%` : "—"}</span>
-              <span className="rb-state">{a.status.toUpperCase()}</span>
+              <span className="rb-state">{stat.label}</span>
             </li>
           );
         })}

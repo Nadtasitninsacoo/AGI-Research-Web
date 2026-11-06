@@ -1,6 +1,6 @@
-// DARK AGI Autonomous Stealth Jobs Table Component (Fixed)
-// - Displays zero-trace penetration runs and telemetry feeds.
-// - Supports offline resilient bulk operations and stealth log purging.
+// Jobs Table component
+// - Displays runs and telemetry feeds.
+// - Supports bulk operations and log deletion.
 
 "use client";
 
@@ -44,7 +44,7 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
       const res = await deleteRuns(ids);
       setTarget(null);
       const ok = res?.ok ?? false;
-      pushToast({ tone: ok ? "done" : "info", title: ok ? "ลบหลักฐานสำเร็จ (Zero-Trace)" : "ลบไม่สำเร็จ", body: res?.message });
+      pushToast({ tone: ok ? "done" : "info", title: ok ? "ลบสำเร็จ" : "ลบไม่สำเร็จ", body: res?.message });
       if (ok) setSelected(new Set());
     });
   };
@@ -56,14 +56,14 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
 
   return (
     <>
-      <div className="stealth-banner" style={{ background: "#111", color: "#00ff66", padding: "8px 12px", borderRadius: "4px", marginBottom: "12px", fontSize: "13px", fontFamily: "monospace" }}>
-        ⚡ [DARK AGI STEALTH MONITOR]: Active Penetration Runs & Zero-Trace Logs
+      <div className="stealth-banner" style={{ background: "#111", color: "#f81e36", padding: "8px 12px", borderRadius: "4px", marginBottom: "12px", fontSize: "13px", fontFamily: "monospace" }}>
+        AGI Research // Active Runs & Logs
       </div>
 
       <div className="bulkbar">
         <label className="bulk-check">
           <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="เลือกทั้งหมด" />
-          <span>{selected.size > 0 ? `เลือก ${selected.size} รายการ (ล่องหน)` : "เลือกทั้งหมด"}</span>
+          <span>{selected.size > 0 ? `เลือก ${selected.size} รายการ` : "เลือกทั้งหมด"}</span>
         </label>
         <button
           type="button"
@@ -71,7 +71,7 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
           disabled={selected.size === 0 || pending}
           onClick={() => setTarget([...selected])}
         >
-          ลบหลักฐานที่เลือก{selected.size > 0 ? ` (${selected.size})` : ""} (Zero-Trace)
+          ลบรายการที่เลือก{selected.size > 0 ? ` (${selected.size})` : ""}
         </button>
       </div>
 
@@ -82,7 +82,7 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
               <th className="col-check">
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="เลือกทั้งหมด" />
               </th>
-              <th>#</th><th>AGENT (STEALTH NODE)</th><th>คำสั่งเจาะระบบ</th><th>สถานะ</th><th>เวลา</th><th>ดูผล</th><th>ลบ</th>
+              <th>#</th><th>AGENT</th><th>คำสั่ง</th><th>สถานะ</th><th>เวลา</th><th>ดูผล</th><th>ลบ</th>
             </tr>
           </thead>
           <tbody>
@@ -97,18 +97,18 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
                   />
                 </td>
                 <td className="muted">{j.id}</td>
-                <td className="strong">{j.agent ?? "DARK-AGI-AGENT-1"}</td>
+                <td className="strong">{j.agent ?? "agent-1"}</td>
                 <td title={j.prompt}>{clip(j.prompt)}</td>
                 <td><StatusTag status={j.status} /></td>
                 <td className="muted">{fmtDate(j.createdAt).slice(5, 16)}</td>
-                <td><Link href={`/runs/${j.id}`} className="btn btn-sm">เจาะลึกผล →</Link></td>
+                <td><Link href={`/runs/${j.id}`} className="btn btn-sm">ดูผล →</Link></td>
                 <td>
                   <button
                     type="button"
                     className="btn btn-sm btn-danger"
                     onClick={() => setTarget([j.id])}
                     disabled={pending}
-                    title="ลบงานนี้และล้างร่องรอยถาวร"
+                    title="ลบงานนี้ถาวร"
                   >
                     ลบ
                   </button>
@@ -118,7 +118,7 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
             {jobs.length === 0 && (
               <tr>
                 <td colSpan={8} style={{ textAlign: "center", padding: "24px", color: "#888" }}>
-                  [DARK AGI]: ยังไม่มีภารกิจในระบบ — พร้อมรับคำสั่งล่องหนด้านบนได้เลยครับ ท่านจอมพล
+                  ยังไม่มีภารกิจในระบบ — สั่งงานใหม่ได้จากด้านบน
                 </td>
               </tr>
             )}
@@ -128,14 +128,14 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
 
       <ConfirmModal
         open={target !== null}
-        title={`ลบหลักฐาน ${targetLabelText}?`}
+        title={`ลบ ${targetLabelText}?`}
         body={
           <>
-            <p>การลบเป็นการถาวรและล้างร่องรอยทั้งหมดอย่างไร้ร่องรอย (Zero-Trace Anti-Forensics)</p>
-            {anyRunning && <p className="modal-warn">⚠ มีภารกิจที่กำลังทำงานอยู่ — ระบบจะทำการตัดการเชื่อมต่อและล้างร่องรอย</p>}
+            <p>การลบเป็นการถาวรและไม่สามารถกู้คืนได้</p>
+            {anyRunning && <p className="modal-warn">⚠ มีภารกิจที่กำลังทำงานอยู่ — ระบบจะทำการตัดการเชื่อมต่อ</p>}
           </>
         }
-        confirmLabel={targetCount > 1 ? `ลบ ${targetCount} งาน (Zero-Trace)` : "ลบถาวร"}
+        confirmLabel={targetCount > 1 ? `ลบ ${targetCount} งาน` : "ลบถาวร"}
         pending={pending}
         onConfirm={confirmDelete}
         onCancel={() => !pending && setTarget(null)}

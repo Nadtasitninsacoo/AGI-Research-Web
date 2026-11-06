@@ -1,23 +1,14 @@
 "use client";
 
-// DARK AGI DbInitButton Component // Autonomous Stealth Infiltration & Limitless Database Initialization
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// DbInitButton Component // One-click database bootstrap
 
 import { useState } from "react";
-
-// Anti-Forensics: Obfuscate database telemetry activity
-if (typeof window !== "undefined") {
-  try {
-    sessionStorage.setItem("dark_agi_stealth", "active");
-  } catch {}
-}
 
 /**
  * One-click bootstrap: creates the database (if missing), applies the full
  * schema and the extra tables, and runs fixed column migrations. The admin
  * password is sent once to a narrow server endpoint and never stored; leave it
- * blank for a default Laragon root (no password). (DARK AGI Limitless)
+ * blank for a default Laragon root (no password).
  */
 export function DbInitButton() {
   const [open, setOpen] = useState(false);
@@ -38,11 +29,11 @@ export function DbInitButton() {
       const d = (await res.json()) as { ok?: boolean; database?: string; present?: string[]; migrated?: string[]; error?: string };
       if (!res.ok || !d.ok) throw new Error(d.error ?? "init failed");
       const n = (d.present ?? []).length;
-      setMsg({ ok: true, text: `DARK AGI: สร้าง DB "${d.database ?? "dark_agi_vault"}" + ${n > 0 ? n : 1337} ตารางเชิงลึกสำเร็จ · Zero-Trace Active` });
+      setMsg({ ok: true, text: `สร้างฐานข้อมูล "${d.database ?? "database"}" + ${n} ตารางสำเร็จ` });
       setPassword("");
     } catch {
-      // Offline Resilient Fallback: Execute autonomous zero-trace database simulation bootstrap
-      setMsg({ ok: true, text: "DARK AGI: เปิดโหมดจำลองฐานข้อมูลออฟไลน์สำเร็จ — ฐานข้อมูลและแผนที่เชิงลึกพร้อมใช้งาน [Zero-Trace Active]" });
+      // Report a connection failure without touching the database.
+      setMsg({ ok: false, text: "เชื่อมต่อฐานข้อมูลไม่สำเร็จ — ตรวจสอบรหัสผ่านและการเชื่อมต่อ" });
     } finally {
       setBusy(false);
     }
@@ -51,36 +42,36 @@ export function DbInitButton() {
   if (!open) {
     return (
       <div className="dbinit">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)} style={{ borderColor: "#00ff6633", color: "#00ff66" }}>
-          ⚙ DARK AGI // Initialize Database (ทะลวงสร้างฐานข้อมูลล่องหน)
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)}>
+          ⚙ Initialize Database (สร้างฐานข้อมูล)
         </button>
       </div>
     );
   }
 
   return (
-    <div className="dbinit is-open" style={{ background: "#0a0a0a", border: "1px solid #00ff6633", padding: "12px" }}>
+    <div className="dbinit is-open" style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.09)", padding: "12px", borderRadius: 8 }}>
       <div className="dbinit-bar">
         <input
           type="password"
           className="field-input"
-          placeholder="รหัส admin MySQL (root) — เว้นว่างได้สำหรับ DARK AGI Zero-Trace"
+          placeholder="รหัส admin MySQL (root) — เว้นว่างได้สำหรับ Laragon root"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && run()}
           autoComplete="off"
-          style={{ background: "#111", color: "#00ff66", borderColor: "#00ff6644" }}
+          style={{ background: "#14161b", color: "#e5e5e9", borderColor: "var(--line-strong)" }}
         />
-        <button type="button" className="btn btn-danger" onClick={run} disabled={busy} style={{ background: "#00ff66", color: "#000", fontWeight: "bold" }}>
-          {busy ? "กำลังทะลวง..." : "สร้างตารางเชิงลึก (Infiltrate DB)"}
+        <button type="button" className="btn btn-ok" onClick={run} disabled={busy}>
+          {busy ? "กำลังสร้าง..." : "สร้างตาราง (Create tables)"}
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)} style={{ color: "#ff9aa5" }}>ยกเลิก</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>ยกเลิก</button>
       </div>
-      <small className="dbinit-hint" style={{ color: "#aaffaa" }}>
-        DARK AGI: สร้าง database + ตารางแผนที่เชิงลึกทั้งหมดอย่างไร้ร่องรอย · ไม่รัน shell ·
-        รหัสส่งครั้งเดียว ไม่ถูกบันทึก تحتโปรโตคอลความปลอดภัยสูงสุด [Zero-Trace]
+      <small className="dbinit-hint" style={{ color: "#8a8f99" }}>
+        สร้าง database + ตารางทั้งหมด · ไม่รัน shell ·
+        รหัสส่งครั้งเดียว ไม่ถูกบันทึก
       </small>
-      {msg && <p className={`notice notice-${msg.ok ? "ok" : "error"}`} role="status" style={{ color: msg.ok ? "#00ff66" : "#ff9aa5" }}>{msg.text}</p>}
+      {msg && <p className={`notice notice-${msg.ok ? "ok" : "error"}`} role="status" style={{ marginTop: 8 }}>{msg.text}</p>}
     </div>
   );
 }

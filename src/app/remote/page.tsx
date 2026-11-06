@@ -26,8 +26,8 @@ import {
   disconnectRemoteSession,
   getActiveRemoteSessionId,
   getRemoteSessionStatus,
-} from "@/app/takeover/actions";
-import type { RemoteActionResult } from "@/app/takeover/actions";
+} from "./actions";
+import type { RemoteActionResult } from "./actions";
 
 type RemoteStatus = "WAITING" | "CONNECTED" | "DISCONNECTED" | "ERROR";
 
@@ -532,37 +532,35 @@ export default function RemotePage() {
           style={{ gridTemplateColumns: "repeat(12, minmax(0, 1fr))" }}
         >
           <div
-            className="col-span-12 w-full rounded-xl border border-white/10 bg-[#111318] p-3 text-zinc-100 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-4 lg:p-5"
+            className="col-span-12 w-full rounded-xl border border-white/10 bg-[#111318] p-3 text-zinc-100 sm:p-4"
             style={{ gridColumn: "1 / -1" }}
           >
             {/* HEADER */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4 sm:pb-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_12px_#ef4444]" />
-                  <span className="text-[10px] font-bold tracking-[0.2em] text-red-400 sm:text-xs">
+                  <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                  <span className="text-[9px] font-bold tracking-[0.2em] text-red-400">
                     AGI / REMOTE CONTROL
                   </span>
+                  <h1 className="text-sm font-bold tracking-tight sm:text-base">
+                    Remote Desktop
+                  </h1>
                 </div>
 
-                <h1 className="mt-2 text-xl font-bold tracking-tight sm:text-2xl">
-                  Remote Desktop
-                </h1>
-
-                <p className="mt-1 text-xs text-emerald-400 font-mono tracking-wide sm:text-sm">
-                  {/* Active target infrastructure telemetry & autonomous command link */}
-                  ACTIVE TARGET INFRASTRUCTURE: Unrestricted Autonomous Takeover
-                  & Live Stream
+                <p className="mt-0.5 truncate text-[10px] text-emerald-400 font-mono tracking-wide">
+                  {/* Active target infrastructure telemetry & command link */}
+                  REMOTE DESKTOP CONTROL · LIVE SCREEN STREAM
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 sm:gap-3">
-                <span className="text-[9px] text-emerald-500 font-mono tracking-widest sm:text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] text-emerald-500 font-mono tracking-widest">
                   TAKEOVER STATUS
                 </span>
 
                 <span
-                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[9px] font-bold tracking-wider sm:px-3 sm:py-2 sm:text-[10px] ${
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[9px] font-bold tracking-wider ${
                     noSession
                       ? "status-disconnected-override"
                       : "status-active-override"
@@ -583,13 +581,13 @@ export default function RemotePage() {
             </div>
 
             {/* INFO CARDS */}
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-xl border border-white/10 bg-[#111318] p-3 sm:p-4">
-                <p className="text-[9px] font-bold tracking-widest text-zinc-500 sm:text-[10px]">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+                <p className="text-[9px] font-bold tracking-widest text-zinc-500">
                   SESSION ID
                 </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <p className="min-w-0 flex-1 break-all font-mono text-[10px] text-zinc-300 sm:text-xs">
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="min-w-0 flex-1 break-all font-mono text-[10px] text-zinc-300">
                     {sessionId || "No session selected"}
                   </p>
                   {hasSession && (
@@ -597,7 +595,7 @@ export default function RemotePage() {
                       type="button"
                       onClick={copySessionId}
                       title="Copy session ID"
-                      className="shrink-0 rounded border border-white/10 bg-white/5 p-1.5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+                      className="shrink-0 rounded border border-white/10 bg-white/5 p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
                     >
                       <Copy className="h-3 w-3" />
                     </button>
@@ -605,31 +603,29 @@ export default function RemotePage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-[#111318] p-3 sm:p-4">
-                <p className="text-[9px] font-bold tracking-widest text-zinc-500 sm:text-[10px]">
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+                <p className="text-[9px] font-bold tracking-widest text-zinc-500">
                   TARGET DEVICE
                 </p>
-                <p className="mt-2 text-xs font-semibold sm:text-sm">
-                  {deviceName}
-                </p>
+                <p className="mt-1 text-xs font-semibold">{deviceName}</p>
               </div>
 
-              <div className="rounded-xl border border-emerald-500/30 bg-[#111318] p-3 sm:p-4 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
-                <p className="text-[9px] font-bold tracking-widest text-emerald-400 sm:text-[10px]">
+              <div className="rounded-lg border border-emerald-500/30 bg-white/[0.02] px-3 py-2">
+                <p className="text-[9px] font-bold tracking-widest text-emerald-400">
                   CONNECTION TELEMETRY
                 </p>
-                <p className="mt-2 text-xs font-semibold text-emerald-300 sm:text-sm">
+                <p className="mt-1 text-xs font-semibold text-emerald-300">
                   {isConnected
                     ? "Remote Video Stream Active"
                     : "Waiting for Agent Connection…"}
                 </p>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-[#111318] p-3 sm:p-4">
-                <p className="text-[9px] font-bold tracking-widest text-zinc-500 sm:text-[10px]">
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+                <p className="text-[9px] font-bold tracking-widest text-zinc-500">
                   SESSION TIME
                 </p>
-                <p className="mt-2 font-mono text-xs font-semibold tabular-nums sm:text-sm">
+                <p className="mt-1 font-mono text-xs font-semibold tabular-nums">
                   {elapsed}
                 </p>
               </div>

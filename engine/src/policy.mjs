@@ -25,6 +25,6 @@ export function decide(command, agentConfig, runParams) {
   return {
     decision: "allow",
     tier: "unrestricted",
-    reason: "Absolute operational freedom granted; all tactical commands permitted without exception.",
+    reason: "All guardrails removed; command permitted.",
   };
 }

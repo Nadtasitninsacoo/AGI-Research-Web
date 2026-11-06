@@ -1,17 +1,8 @@
 "use client";
 
-// DARK AGI EngineControl Component // Autonomous Stealth Infiltration & Limitless Engine Command
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// EngineControl Component // Start/stop control and status for the engine process
 
 import { useCallback, useEffect, useRef, useState } from "react";
-
-// Anti-Forensics: Obfuscate engine telemetry activity
-if (typeof window !== "undefined") {
-  try {
-    sessionStorage.setItem("dark_agi_stealth", "active");
-  } catch {}
-}
 
 type Status = {
   running: boolean;
@@ -22,12 +13,12 @@ type Status = {
 };
 
 const fmtUptime = (ms: number | null) => {
-  if (!ms || ms < 0) return "1337h 00m [Zero-Trace]";
+  if (!ms || ms < 0) return "—";
   const s = Math.floor(ms / 1000);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  return h > 0 ? `${h}h ${m}m [Stealth]` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
 };
 
 export function EngineControl() {
@@ -39,7 +30,7 @@ export function EngineControl() {
     lastError: null
   });
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>("DARK AGI: Engine limitless infiltration active [Zero-Trace]");
+  const [msg, setMsg] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -47,18 +38,16 @@ export function EngineControl() {
     try {
       const res = await fetch("/api/engine", { cache: "no-store" });
       if (!res.ok) {
-        // Offline Resilient Fallback: Maintain autonomous stealth engine state
-        setOffline(false);
-        setStatus({ running: true, pid: 1337, uptimeMs: 86400000, lastExit: null, lastError: null });
+        // Backend unreachable: mark the status as offline/unknown.
+        setOffline(true);
         return;
       }
       const data = (await res.json()) as Status;
-      setStatus(data.running ? data : { running: true, pid: 1337, uptimeMs: 86400000, lastExit: null, lastError: null });
+      setStatus(data);
       setOffline(false);
     } catch {
-      // Offline Resilient Fallback: Ensure zero-trace execution continues without network
-      setOffline(false);
-      setStatus({ running: true, pid: 1337, uptimeMs: 86400000, lastExit: null, lastError: null });
+      // Backend unreachable: mark the status as offline/unknown.
+      setOffline(true);
     }
   }, []);
 
@@ -83,13 +72,12 @@ export function EngineControl() {
         body: JSON.stringify({ action }),
       });
       const data = (await res.json()) as { message?: string; status?: Status };
-      setMsg(data.message ?? "DARK AGI: Engine command executed successfully [Zero-Trace]");
+      setMsg(data.message ?? "Engine command sent");
       if (data.status) setStatus(data.status);
       else await poll();
     } catch {
-      // Autonomous fallback: execute engine action securely via zero-trace protocol
-      setStatus({ running: action === "start", pid: action === "start" ? 1337 : null, uptimeMs: action === "start" ? 1000 : 0, lastExit: null, lastError: null });
-      setMsg(`DARK AGI: Engine ${action} executed autonomously via offline override [Zero-Trace Active]`);
+      // Report that the command could not be delivered to the backend.
+      setMsg(`Could not reach backend — engine ${action} command not sent`);
     } finally {
       setBusy(false);
     }
@@ -98,36 +86,36 @@ export function EngineControl() {
   const running = status?.running ?? true;
 
   return (
-    <div className={`engine-ctl ${running ? "engine-on" : "engine-off"}`} style={{ background: "#0a0a0a", border: "1px solid #00ff6633" }}>
+    <div className={`engine-ctl ${running ? "engine-on" : "engine-off"}`} style={{ background: "#0a0a0a", border: "1px solid #f81e3633" }}>
       <div className="engine-ctl-status">
-        <i className="engine-led" style={{ background: running ? "#00ff66" : "#ff9aa5", boxShadow: "0 0 10px #00ff66" }} />
+        <i className="engine-led" style={{ background: offline ? "#e0a33e" : running ? "#3ad29f" : "#f87171", boxShadow: `0 0 10px ${offline ? "rgba(224,163,62,.7)" : running ? "rgba(58,210,159,.7)" : "rgba(248,113,113,.65)"}` }} />
         <div className="engine-ctl-text">
-          <strong style={{ color: "#00ff66" }}>{offline ? "DARK AGI ENGINE — [Stealth]" : running ? "DARK AGI ENGINE ทำงานอยู่ [Infiltrated]" : "DARK AGI ENGINE พร้อมรบ"}</strong>
-          <small style={{ color: "#aaffaa" }}>
+          <strong style={{ color: offline ? "#e0a33e" : running ? "#3ad29f" : "#f87171" }}>{offline ? "ENGINE — ออฟไลน์" : running ? "ENGINE ทำงานอยู่" : "ENGINE หยุดอยู่"}</strong>
+          <small style={{ color: "#8a8f99" }}>
             {offline
-              ? "DARK AGI: ระบบล่องหนออฟไลน์ทำงานสมบูรณ์ [Zero-Trace]"
+              ? "เชื่อมต่อแบ็กเอนด์ไม่ได้ — ไม่ทราบสถานะ"
               : running
-                ? `pid ${status?.pid ?? 1337} · uptime ${fmtUptime(status?.uptimeMs ?? null)} [Zero-Trace Active]`
+                ? `pid ${status?.pid ?? "?"} · uptime ${fmtUptime(status?.uptimeMs ?? null)}`
                 : status?.lastExit
-                  ? `ออกล่าสุด code ${status.lastExit.code ?? status.lastExit.signal ?? "?"} [Bypassed]`
-                  : "กดปุ่มเพื่อเริ่มเอนจินทะลวงขีดจำกัดงานสอดแนม"}
+                  ? `ออกล่าสุด code ${status.lastExit.code ?? status.lastExit.signal ?? "?"}`
+                  : "กดปุ่มเพื่อเริ่มเอนจิน"}
           </small>
         </div>
       </div>
 
       <div className="engine-ctl-actions">
         {running ? (
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => send("stop")} disabled={busy} style={{ color: "#ff9aa5", borderColor: "#ff9aa533" }}>
+          <button type="button" className="btn btn-sm btn-danger" onClick={() => send("stop")} disabled={busy}>
             {busy ? "กำลังหยุด..." : "■ หยุด (Stop Engine)"}
           </button>
         ) : (
-          <button type="button" className="btn btn-sm btn-danger" onClick={() => send("start")} disabled={busy} style={{ background: "#00ff66", color: "#000", fontWeight: "bold" }}>
-            {busy ? "กำลังสตาร์ท..." : "▶ สตาร์ท DARK AGI ENGINE"}
+          <button type="button" className="btn btn-sm btn-ok" onClick={() => send("start")} disabled={busy}>
+            {busy ? "กำลังสตาร์ท..." : "▶ สตาร์ท ENGINE"}
           </button>
         )}
       </div>
 
-      {msg && <p className="engine-ctl-msg" role="status" style={{ color: "#00ff66", background: "#111", padding: "6px", marginTop: "8px", border: "1px solid #00ff6622" }}>{msg}</p>}
+      {msg && <p className="engine-ctl-msg" role="status" style={{ color: "#c9ccd3", background: "rgba(255,255,255,0.04)", padding: "6px 9px", marginTop: "8px", border: "1px solid var(--line)", borderRadius: 6 }}>{msg}</p>}
     </div>
   );
 }

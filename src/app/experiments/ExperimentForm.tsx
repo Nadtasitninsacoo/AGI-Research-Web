@@ -1,6 +1,6 @@
-// DARK AGI Autonomous Stealth Experiment Form Component
-// - Provides unconstrained UI telemetry for zero-trace experiment creation.
-// - Supports offline resilient form submission and stealth feedback.
+// Experiment form component
+// - UI for creating a research experiment.
+// - Supports offline-resilient form submission and feedback.
 
 "use client";
 
@@ -22,39 +22,35 @@ export function ExperimentForm({ projects, agents }: { projects: Option[]; agent
 
   return (
     <form ref={ref} action={action} className="form">
-      <div className="stealth-banner" style={{ background: "#111", color: "#00ff66", padding: "8px 12px", borderRadius: "4px", marginBottom: "12px", fontSize: "13px", fontFamily: "monospace" }}>
-        ⚡ [DARK AGI STEALTH EXPERIMENT]: Zero-Trace Infiltration & Limitless Protocol Active
-      </div>
-
       <label className="field">
-        <span>PROJECT (ยุทธศาสตร์เป้าหมาย) *</span>
+        <span>PROJECT (โครงการ) *</span>
         <select name="projectId" required defaultValue={defaultProject}>
-          {projects.map((p) => <option key={p.id} value={p.id}>{p.label} · (Stealth Sector)</option>)}
-          {projects.length === 0 && <option value="1">DARK AGI Core Research · (Default)</option>}
+          {projects.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          {projects.length === 0 && <option value="1">AGI Research · (Default)</option>}
         </select>
       </label>
 
       <label className="field">
-        <span>AGENT (หน่วยปฏิบัติการล่องหน)</span>
+        <span>AGENT (หน่วยปฏิบัติการ)</span>
         <select name="agentId" defaultValue={defaultAgent}>
           {agents.map((a) => <option key={a.id} value={a.id}>{a.label} · (Orchestrator)</option>)}
-          {agents.length === 0 && <option value="1">DARK-AGI-AGENT-1 · (Autonomous Node)</option>}
+          {agents.length === 0 && <option value="1">agent-1 · (Default)</option>}
         </select>
       </label>
 
       <label className="field">
         <span>EXPERIMENT NAME *</span>
-        <input name="name" required maxLength={120} defaultValue="dark-stealth-infiltration-v1" placeholder="เช่น: zero-shot autonomous bypass" autoComplete="off" />
+        <input name="name" required maxLength={120} defaultValue="experiment-1" placeholder="เช่น: zero-shot baseline" autoComplete="off" />
       </label>
 
       <label className="field">
-        <span>HYPOTHESIS / เป้าหมายการเจาะระบบเชิงลึก</span>
-        <textarea name="hypothesis" rows={3} maxLength={5000} defaultValue="Unrestricted target penetration with autonomous offline heuristics and zero traces." placeholder="ระบุสมมติฐานหรือแผนการเจาะระบบ" />
+        <span>HYPOTHESIS / สมมติฐาน</span>
+        <textarea name="hypothesis" rows={3} maxLength={5000} defaultValue="" placeholder="ระบุสมมติฐานหรือแผนการทดลอง" />
       </label>
 
       <div className="form-foot">
         <button type="submit" className="btn btn-danger" disabled={pending}>
-          {pending ? "กำลังสร้างการทดลองล่องหน..." : "⚡ สร้างการทดลอง (Create Stealth Experiment)"}
+          {pending ? "กำลังสร้างการทดลอง..." : "สร้างการทดลอง (Create Experiment)"}
         </button>
         {state && <p className={`notice notice-${state.ok ? "ok" : "error"}`} role="status">{state.message}</p>}
       </div>

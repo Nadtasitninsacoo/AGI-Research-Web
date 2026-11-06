@@ -2,11 +2,19 @@
 
 import { useMemo, useState } from "react";
 import type { SavedPortTarget } from "@/app/recon/actions";
+import type { ActiveRun } from "@/app/runs/actions";
+import { assessTarget, SEVERITY_META } from "@/app/takeover/utils/risk";
+import { SeveritySparkline } from "@/components/SeveritySparkline";
+
+type RowRun = { id: number; status: string };
 
 type SavedPortTargetPickerProps = {
   targets: SavedPortTarget[];
   loading?: boolean;
   error?: string | null;
+  activeRuns?: ActiveRun[];
+  targetRuns?: Record<string, number>;
+  runStatuses?: Record<number, string>;
   onSelectionChange: (targets: SavedPortTarget[]) => void;
 };
 
@@ -14,10 +22,74 @@ function getTargetKey(target: SavedPortTarget): string {
   return `${target.ip}:${target.port}`;
 }
 
+const ACTIVE_STATUSES = new Set(["queued", "running"]);
+
+/** Find a genuinely-active run whose scope targets reference this IP/host. */
+function findActiveRun(
+  target: SavedPortTarget,
+  activeRuns: ActiveRun[],
+): ActiveRun | null {
+  const ipPort = `${target.ip}:${target.port}`;
+
+  for (const run of activeRuns) {
+    const hit = run.targets.some(
+      (t) =>
+        t.includes(ipPort) ||
+        t.includes(target.ip) ||
+        (target.hostname ? t.includes(target.hostname) : false),
+    );
+    if (hit) return run;
+  }
+
+  return null;
+}
+
+/**
+ * The run this row belongs to: first the run it was explicitly submitted under
+ * (user's own action, persisted), else a live run whose scope matches its IP.
+ */
+function resolveRowRun(
+  target: SavedPortTarget,
+  targetRuns: Record<string, number>,
+  runStatuses: Record<number, string>,
+  activeRuns: ActiveRun[],
+): RowRun | null {
+  const mappedId = targetRuns[getTargetKey(target)];
+  if (mappedId != null) {
+    return { id: mappedId, status: runStatuses[mappedId] ?? "unknown" };
+  }
+
+  const scoped = findActiveRun(target, activeRuns);
+  if (scoped) return { id: scoped.id, status: scoped.status };
+
+  return null;
+}
+
+/** Label + colour for a run badge, by status. */
+function runBadge(status: string): { label: (id: number) => string; color: string; bg: string; pulse: boolean } {
+  switch (status.toLowerCase()) {
+    case "running":
+      return { label: (id) => `● กำลังรัน #${id}`, color: "#2de2e6", bg: "rgba(45,226,230,0.15)", pulse: true };
+    case "queued":
+      return { label: (id) => `ในคิว #${id}`, color: "#e0a33e", bg: "rgba(224,163,62,0.12)", pulse: false };
+    case "succeeded":
+      return { label: (id) => `✓ ดูผล #${id}`, color: "#3ad29f", bg: "rgba(58,210,159,0.12)", pulse: false };
+    case "failed":
+      return { label: (id) => `✕ Run #${id}`, color: "#f87171", bg: "rgba(248,113,113,0.12)", pulse: false };
+    case "cancelled":
+      return { label: (id) => `ยกเลิก #${id}`, color: "#8a8f99", bg: "rgba(138,143,153,0.12)", pulse: false };
+    default:
+      return { label: (id) => `ดู Run #${id}`, color: "#9aa0aa", bg: "rgba(255,255,255,0.05)", pulse: false };
+  }
+}
+
 export default function SavedPortTargetPicker({
   targets,
   loading = false,
   error = null,
+  activeRuns = [],
+  targetRuns = {},
+  runStatuses = {},
   onSelectionChange,
 }: SavedPortTargetPickerProps) {
   const [query, setQuery] = useState("");
@@ -37,6 +109,7 @@ export default function SavedPortTargetPicker({
         target.service ?? "",
         target.hostname ?? "",
         target.source ?? "",
+        target.country ?? "",
       ]
         .join(" ")
         .toLowerCase();
@@ -44,6 +117,16 @@ export default function SavedPortTargetPicker({
       return searchableText.includes(normalizedQuery);
     });
   }, [query, targets]);
+
+  // Compute each target's severity ONCE per target set (not per render/selection).
+  const severityByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const target of targets) {
+      const key = getTargetKey(target);
+      map.set(key, assessTarget(target, key).severity);
+    }
+    return map;
+  }, [targets]);
 
   const selectedTargets = useMemo(
     () =>
@@ -61,7 +144,15 @@ export default function SavedPortTargetPicker({
     onSelectionChange(nextTargets);
   }
 
+  function isLocked(target: SavedPortTarget): boolean {
+    const run = resolveRowRun(target, targetRuns, runStatuses, activeRuns);
+    return run ? ACTIVE_STATUSES.has(run.status.toLowerCase()) : false;
+  }
+
   function toggleTarget(target: SavedPortTarget) {
+    // A target with a live (queued/running) run cannot be re-selected for a re-run.
+    if (isLocked(target)) return;
+
     const key = getTargetKey(target);
     const nextKeys = new Set(selectedKeys);
 
@@ -78,6 +169,8 @@ export default function SavedPortTargetPicker({
     const nextKeys = new Set(selectedKeys);
 
     for (const target of filteredTargets) {
+      // Skip rows already tied to a live (queued/running) run — no re-run.
+      if (isLocked(target)) continue;
       nextKeys.add(getTargetKey(target));
     }
 
@@ -99,10 +192,10 @@ export default function SavedPortTargetPicker({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold tracking-wide text-slate-100">
-            SAVED IP / PORT TARGETS
+            เป้าหมายที่มีช่องโหว่ (ALL VULNERABILITIES)
           </h2>
           <p className="mt-1 text-xs text-slate-400">
-            เลือกเป้าหมายได้มากกว่าหนึ่งรายการ
+            โหลดทุกเป้าหมายที่มี CVE · เลือกได้มากกว่าหนึ่งรายการ
           </p>
         </div>
 
@@ -115,7 +208,7 @@ export default function SavedPortTargetPicker({
         type="search"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="ค้นหา IP, Port, Service หรือ Hostname..."
+        placeholder="ค้นหา IP, Port, Service, Hostname หรือ ประเทศ..."
         aria-label="ค้นหา Saved IP และ Port"
         className="mb-3 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-indigo-500"
       />
@@ -161,27 +254,112 @@ export default function SavedPortTargetPicker({
           {filteredTargets.map((target) => {
             const key = getTargetKey(target);
             const checked = selectedKeys.has(key);
+            const rowRun = resolveRowRun(
+              target,
+              targetRuns,
+              runStatuses,
+              activeRuns,
+            );
+            const locked = rowRun
+              ? ACTIVE_STATUSES.has(rowRun.status.toLowerCase())
+              : false;
+            const sev = (severityByKey.get(key) ??
+              "INFO") as keyof typeof SEVERITY_META;
+            const sevMeta = SEVERITY_META[sev];
 
             return (
               <label
                 key={key}
-                className="flex cursor-pointer items-center gap-3 border-b border-slate-800 px-3 py-3 last:border-b-0 hover:bg-slate-800/60"
+                title={
+                  locked && rowRun
+                    ? `ไม่สามารถรันซ้ำได้ขณะ Run #${rowRun.id} ยัง${
+                        rowRun.status.toLowerCase() === "running"
+                          ? "ทำงานอยู่"
+                          : "อยู่ในคิว"
+                      }`
+                    : undefined
+                }
+                style={{
+                  contentVisibility: "auto",
+                  containIntrinsicSize: "auto 34px",
+                }}
+                className={`flex items-center gap-3 border-b border-slate-800 px-3 py-1.5 last:border-b-0 ${
+                  locked
+                    ? "cursor-not-allowed opacity-60"
+                    : "cursor-pointer hover:bg-slate-800/60"
+                }`}
               >
                 <input
                   type="checkbox"
                   checked={checked}
+                  disabled={locked}
                   onChange={() => toggleTarget(target)}
-                  className="h-4 w-4 shrink-0 accent-indigo-500"
+                  className="h-3.5 w-3.5 shrink-0 accent-indigo-500 disabled:cursor-not-allowed"
                 />
 
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium text-slate-100">
+                <span className="min-w-0 flex-1 truncate text-xs text-slate-100">
+                  <span className="font-medium">
                     {target.ip}:{target.port}
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-slate-400">
-                    {target.service || "Unknown service"}
-                    {target.hostname ? ` · ${target.hostname}` : ""}
+                  <span className="text-slate-400">
+                    {[
+                      target.service || "Unknown service",
+                      target.hostname,
+                      target.source,
+                    ]
+                      .filter(Boolean)
+                      .map((detail) => ` · ${detail}`)
+                      .join("")}
                   </span>
+                </span>
+
+                {rowRun
+                  ? (() => {
+                      const badge = runBadge(rowRun.status);
+                      return (
+                        <a
+                          href={`/runs/${rowRun.id}`}
+                          onClick={(event) => event.stopPropagation()}
+                          title={`เปิดหน้า Run #${rowRun.id} (${rowRun.status})`}
+                          className="shrink-0 inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wide no-underline transition-opacity hover:opacity-80"
+                          style={{
+                            color: badge.color,
+                            background: badge.bg,
+                            border: `1px solid ${badge.color}55`,
+                          }}
+                        >
+                          {badge.label(rowRun.id)}
+                        </a>
+                      );
+                    })()
+                  : null}
+
+                {target.country ? (
+                  <span className="shrink-0 rounded border border-slate-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300">
+                    {target.country}
+                  </span>
+                ) : null}
+
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                    target.authorized
+                      ? "bg-emerald-500/10 text-emerald-300"
+                      : "bg-amber-500/10 text-amber-300"
+                  }`}
+                >
+                  {target.authorized ? "Authorized" : "Unauthorized"}
+                </span>
+
+                <span
+                  className={`shrink-0 inline-flex items-center gap-1 rounded border ${sevMeta.border} ${sevMeta.bg} px-1.5 py-0.5 text-[10px] font-bold ${sevMeta.text}`}
+                  title={`ระดับความรุนแรง: ${sevMeta.label}`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${sevMeta.dot}`} />
+                  {sevMeta.label}
+                </span>
+
+                <span className="shrink-0 rounded bg-black/30 px-1 py-0.5">
+                  <SeveritySparkline seed={key} severity={sev} width={64} height={16} />
                 </span>
 
                 <span className="shrink-0 text-xs text-slate-500">

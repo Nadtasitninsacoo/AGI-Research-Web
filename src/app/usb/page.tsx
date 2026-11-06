@@ -2,7 +2,6 @@
 
 import { PageFrame, PageHero, Shell } from "@/components/hud/Shell";
 import { UsbLab } from "./UsbLab";
-import { UsbAuthorizedRecovery } from "./UsbAuthorizedRecovery";
 
 export const metadata = {
   title: "AGI Research // USB Lab - Absolute Authority",
@@ -18,9 +17,6 @@ export default function UsbPage() {
           strong="Lab"
           note="AUTHORIZED DEVICE INSPECTION · HARDWARE ANALYSIS"
         />
-        <div className="span-12">
-          <UsbAuthorizedRecovery />
-        </div>
         <UsbLab />
       </PageFrame>
     </Shell>

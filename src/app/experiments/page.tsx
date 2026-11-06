@@ -52,7 +52,7 @@ async function ExperimentsContent({
   const total = exps.ok ? exps.data.pagination.total : 0;
 
   return (
-    <div className="content w-full min-w-0" style={{ padding: "20px" }}>
+    <>
       <PageHero
         kicker="AGI RESEARCH // LAB"
         title="Experiment"
@@ -60,8 +60,7 @@ async function ExperimentsContent({
         note={exps.ok ? `${total} experiments` : undefined}
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <section className="panel min-w-0 xl:col-span-8" id="experiments">
+        <section className="panel span-8" id="experiments">
           <header className="panel-head">
             <span>01 // EXPERIMENTS</span>
             <em>{total} TOTAL</em>
@@ -131,7 +130,7 @@ async function ExperimentsContent({
           )}
         </section>
 
-        <section className="panel min-w-0 xl:col-span-4">
+        <section className="panel span-4">
           <header className="panel-head">
             <span>02 // NEW EXPERIMENT</span>
             <em>DRAFT</em>
@@ -146,7 +145,6 @@ async function ExperimentsContent({
 
           <ExperimentForm projects={projectOpts} agents={agentOpts} />
         </section>
-      </div>
-    </div>
+    </>
   );
 }

@@ -1,6 +1,4 @@
-// DARK AGI Icon Component // Autonomous Stealth Infiltration & Limitless Recon Map Icons
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// Icon Component // Inline SVG icon set
 
 const PATHS = {
   overview: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 1v4M12 19v4M1 12h4M19 12h4",
@@ -10,7 +8,7 @@ const PATHS = {
   logs: "M4 6h16M4 12h10M4 18h14",
   command: "M4 4h16v16H4zM7 9l3 3-3 3M13 15h4",
   monitor: "M4 5h16v10H4zM9 19h6M12 15v4",
-  // Upgraded Deep Recon Map Path: Encompassing deep unindexed nodes, air-gapped bridges, and zero-trace vectors
+  // Map icon
   map: "M9 4L3 7v13l6-3 6 3 6-3V4l-6 3-6-3zM9 4v13M15 7v13M3 10l6 3M15 13l6-3M9 13l6 3",
   nexus: "M12 12a9 9 0 1 0 0 .01zM12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM12 3v4M12 17v4M3 12h4M17 12h4",
   experiments: "M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3",
@@ -21,6 +19,9 @@ const PATHS = {
   scan: "M12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14M12 2v3M12 19v3M2 12h3M19 12h3M12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3",
   ports: "M8 7V3M16 7V3M6 7h12v3a6 6 0 0 1-12 0zM12 16v5",
   usb: "M12 21V5M12 5l-3 3M12 5l3 3M12 14l-4-2.5V9M8 11.5a1 1 0 1 0 0-.1M12 11l4-2.5 0-1.5M16 6.5l1.5-1.5 1.5 1.5-1.5 1.5z",
+  shield: "M12 3l8 3v5c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6zM9 12l2 2 4-4",
+  radar: "M12 12l6-3M12 3a9 9 0 1 0 9 9M12 7a5 5 0 1 0 5 5",
+  rocket: "M12 2c3 2 5 5 5 9l-2 4H9l-2-4c0-4 2-7 5-9zM12 8.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9 15l-2 3M15 15l2 3M10 19h4",
 } as const;
 
 export type IconName = keyof typeof PATHS;

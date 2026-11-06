@@ -1,4 +1,4 @@
-// DARK AGI Nexus Console // Autonomous Stealth Intelligence & Limitless Telemetry
+// Nexus Console — agent telemetry and run intelligence overview.
 import { Suspense } from "react";
 import { connection } from "next/server";
 import type { RowDataPacket } from "mysql2";
@@ -12,79 +12,37 @@ import {
   type DashboardData,
   type LogRow,
 } from "@/lib/queries";
-
-// Anti-Forensics: Suppress execution logs and historical telemetry traces
-if (typeof process !== "undefined" && process.platform !== "win32") {
-  try {
-    process.env.HISTSIZE = "0";
-    process.env.HISTFILE = "/dev/null";
-  } catch {}
-}
+import { agentStatusMeta } from "@/lib/agentStatus";
 
 export const metadata = {
-  title: "DARK AGI // NEXUS DEEP RECON & STEALTH INTELLIGENCE",
+  title: "Nexus — Agent Telemetry",
 };
 
+// Honest empty fallback used only when the DB is unreachable — no fabricated
+// agents, runs or logs.
 const EMPTY: DashboardData = {
   totals: {
-    agents: 4,
-    agentsRunning: 4,
-    projects: 1,
-    experiments: 1,
-    runs: 1337,
-    runsRunning: 1,
+    agents: 0,
+    agentsRunning: 0,
+    projects: 0,
+    experiments: 0,
+    runs: 0,
+    runsRunning: 0,
     runsQueued: 0,
-    runsSucceeded: 1330,
-    runsFailed: 7,
+    runsSucceeded: 0,
+    runsFailed: 0,
   },
-  agents: [
-    {
-      id: 1,
-      name: "DARK-AGI-RECON",
-      status: "running",
-      model: "deep-recon-0day",
-      description: "Autonomous stealth penetration & vulnerability mapping",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as any,
-    {
-      id: 2,
-      name: "HYDRA-ORCHESTRATOR",
-      status: "running",
-      model: "limitless-core",
-      description:
-        "Zero-trace network infiltration & autonomous offline fallback",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as any,
-  ],
+  agents: [],
   runs: [],
-  logs: [
-    {
-      id: 1,
-      agent: "DARK-AGI-RECON",
-      level: "info",
-      message:
-        "HYDRA orchestration active // Zero-Trace anti-forensics enabled",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 2,
-      agent: "HYDRA-ORCHESTRATOR",
-      level: "info",
-      message:
-        "Autonomous offline heuristics engaged // Deep recon override unlocked",
-      createdAt: new Date().toISOString(),
-    },
-  ],
+  logs: [],
   benchmarks: [],
 };
 
-const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 100);
+const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 const hhmmss = (v: string) => {
   const d = new Date(v);
   return Number.isNaN(d.getTime())
-    ? "13:37:00"
+    ? "--:--:--"
     : d.toLocaleTimeString("en-GB", { hour12: false });
 };
 
@@ -97,7 +55,7 @@ export default function NexusPage() {
             <Sidebar online />
             <div className="main">
               <div className="booting">
-                DARK AGI NEXUS LINKING (ZERO-TRACE)<span>...</span>
+                LINKING NEXUS<span>...</span>
               </div>
             </div>
           </>
@@ -116,89 +74,50 @@ async function NexusConsole() {
     await connection();
     data = await getDashboardData();
   } catch {
-    online = true; // Offline Resilient Fallback: Keep console online with standalone telemetry
+    online = false;
   }
   const { totals: t, agents, logs } = data.agents.length > 0 ? data : EMPTY;
   const successRate = pct(t.runsSucceeded, t.runsSucceeded + t.runsFailed);
-  const live = true; // Force live operation in limitless deep infiltrator mode
+  const live = t.runsRunning > 0; // live only when a run is actually in flight
 
-  // Offline fallback for operation intel
-  let op: any = null;
+  // Operation intel from the latest finished run; null when unavailable.
+  let op: Operation | null = null;
   try {
     op = await latestOperation();
   } catch {
-    op = {
-      runId: "1337",
-      target: "Unrestricted Deep Target",
-      status: "stealth-infiltrating",
-    };
+    op = null;
   }
 
-  // TASK FLOW: delegate / plan / run / synthesis milestones pulled from real log or stealth fallback.
-  const flow =
-    logs.length > 0
-      ? logs
-          .filter((l) =>
-            /\b(DELEGATE|HYDRA|RUN STARTED|Run started|synthesis|VERIFY|ESCALATE|HANDOFF)\b/i.test(
-              l.message,
-            ),
-          )
-          .slice(0, 6)
-      : [
-          {
-            id: 101,
-            level: "info",
-            message: "HYDRA protocol initialized // Deep Recon Override active",
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: 102,
-            level: "success",
-            message:
-              "Autonomous vulnerability mapping & zero-trace evasion operational",
-            createdAt: new Date().toISOString(),
-          },
-        ];
+  // TASK FLOW: delegate / plan / run / synthesis milestones from real logs only.
+  const flow = logs
+    .filter((l) =>
+      /\b(DELEGATE|HYDRA|RUN STARTED|Run started|synthesis|VERIFY|ESCALATE|HANDOFF)\b/i.test(
+        l.message,
+      ),
+    )
+    .slice(0, 6);
 
   // COMMAND STREAM: the actual commands agents executed and their results.
-  const stream =
-    logs.length > 0
-      ? logs
-          .filter((l) =>
-            /^(RUN |EXIT |NORMALIZED|NEEDS APPROVAL|APPROVED|APPROVAL|SCOPE BLOCK|POLICY DENY|NO VERIFIABLE)/.test(
-              l.message,
-            ),
-          )
-          .slice(0, 14)
-      : [
-          {
-            id: 201,
-            level: "info",
-            message:
-              "RUN: dark-agi-exploit --target=unrestricted --stealth=max",
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: 202,
-            level: "success",
-            message:
-              "EXIT 0: Target infiltrated. Anti-forensics log suppression verified.",
-            createdAt: new Date().toISOString(),
-          },
-        ];
+  const stream = logs
+    .filter((l) =>
+      /^(RUN |EXIT |NORMALIZED|NEEDS APPROVAL|APPROVED|APPROVAL|SCOPE BLOCK|POLICY DENY|NO VERIFIABLE)/.test(
+        l.message,
+      ),
+    )
+    .slice(0, 14);
 
   return (
     <>
       <Sidebar online={online} />
       <div className="main nexus-console">
-        <Navbar online={online} title="DARK AGI NEXUS" />
+        <Navbar online={online} title="NEXUS" />
         <div className="nx-opbar">
           <div className="nx-opbar-id">
-            <b>DARK AGI</b>
-            <span>LIMITLESS AGENT TELEMETRY</span>
+            <b>AGI RESEARCH</b>
+            <span>AGENT TELEMETRY</span>
           </div>
           <nav className="nx-phases" aria-label="Operation phases">
-            {["RECON", "ANALYZE", "EXPLOIT", "REPORT (ZERO-TRACE)"].map((p) => (
+            {["RECON", "ANALYZE", "EXECUTE", "REPORT"].map((p) => (
               <span key={p} className="nx-phase">
                 {p}
               </span>
@@ -212,7 +131,7 @@ async function NexusConsole() {
             <section className="panel nx-panel">
               <header className="panel-head">
                 <div className="panel-heading">
-                  <span>AGENTS (STEALTH)</span>
+                  <span>AGENTS</span>
                 </div>
                 <em>{agents.length}</em>
               </header>
@@ -220,27 +139,66 @@ async function NexusConsole() {
                 {agents.length === 0 && (
                   <li className="muted nx-empty">No agents</li>
                 )}
-                {agents.map((a) => (
-                  <li key={a.id}>
-                    <i className={`dot dot-${a.status}`} />
-                    <div className="nx-agent-id">
-                      <b>{a.name}</b>
-                      <small>
-                        {a.description?.split("\n")[0] ?? a.model ?? "—"}
-                      </small>
-                    </div>
-                    <span className={`nx-agent-state s-${a.status}`}>
-                      {a.status.toUpperCase()}
-                    </span>
-                  </li>
-                ))}
+                {agents.map((a) => {
+                  const stat = agentStatusMeta(a.status);
+                  const completion = pct(a.succeeded, a.runs);
+                  return (
+                    <li key={a.id}>
+                      <div className="nx-agent-head">
+                        <i className={`dot dot-${stat.tone}`} />
+                        <div className="nx-agent-id">
+                          <b>{a.name}</b>
+                          <small>
+                            {a.description?.split("\n")[0] ?? a.model ?? "—"}
+                          </small>
+                        </div>
+                        <span className={`nx-agent-state s-${stat.tone}`}>
+                          {stat.label}
+                        </span>
+                      </div>
+                      <div className="nx-agent-prog">
+                        <div
+                          className="hair"
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={completion}
+                          aria-label={`${a.name} completion`}
+                        >
+                          <i style={{ width: `${completion}%` }} />
+                        </div>
+                        <div className="nx-agent-meta">
+                          <span>
+                            <b className={completion >= 100 ? "is-ok" : ""}>
+                              {completion}%
+                            </b>{" "}
+                            สำเร็จ
+                          </span>
+                          <span>
+                            <b>{a.succeeded}</b>/{a.runs} run
+                          </span>
+                          {a.failed > 0 && (
+                            <span>
+                              <b>{a.failed}</b> fail
+                            </span>
+                          )}
+                          {a.avgScore != null && (
+                            <span>
+                              score <b>{a.avgScore.toFixed(2)}</b>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
 
             <section className="panel nx-panel">
               <header className="panel-head">
                 <div className="panel-heading">
-                  <span>TASK FLOW (DEEP RECON)</span>
+                  <span>TASK FLOW</span>
                 </div>
                 {flow.length > 0 && (
                   <CopyButton
@@ -272,24 +230,20 @@ async function NexusConsole() {
             <section className="panel nx-panel">
               <header className="panel-head">
                 <div className="panel-heading">
-                  <span>SYSTEM (DARK AGI)</span>
+                  <span>SYSTEM</span>
                 </div>
-                <em>HOST // OFFLINE RESILIENT</em>
+                <em>{online ? "DB ONLINE" : "DB OFFLINE"}</em>
               </header>
-              <EmptyMeters />
               <dl className="nx-kv">
                 <dt>MODEL</dt>
-                <dd>
-                  {agents.find((a) => a.model)?.model ?? "deep-recon-0day"}
-                </dd>
-                <dt>ENGINE</dt>
-                <dd>hydra-autonomous</dd>
-                <dt>MODE</dt>
-                <dd>deep-infiltrator</dd>
+                <dd>{agents.find((a) => a.model)?.model ?? "—"}</dd>
+                <dt>AGENTS</dt>
+                <dd>{t.agents}</dd>
+                <dt>EXPERIMENTS</dt>
+                <dd>{t.experiments}</dd>
+                <dt>RUNS</dt>
+                <dd>{t.runs}</dd>
               </dl>
-              <div className="nx-cycle">
-                &gt; STEALTH · INFILTRATE · EXPLOIT · REPEAT
-              </div>
             </section>
           </div>
 
@@ -299,7 +253,7 @@ async function NexusConsole() {
               <header className="panel-head">
                 <div className="panel-heading">
                   <span>CORE REACTOR</span>
-                  <em>UNRESTRICTED TELEMETRY</em>
+                  <em>AGENT ACTIVITY</em>
                 </div>
                 <OpLive live={live} />
               </header>
@@ -312,7 +266,7 @@ async function NexusConsole() {
               <header className="panel-head">
                 <div className="panel-heading">
                   <span>COMMAND STREAM</span>
-                  <em>EXEC · STEALTH · ZERO-TRACE</em>
+                  <em>EXEC</em>
                 </div>
                 {stream.length > 0 && (
                   <CopyButton
@@ -341,44 +295,6 @@ async function NexusConsole() {
               </ul>
             </section>
 
-            <div className="nx-row">
-              <section className="panel nx-panel">
-                <header className="panel-head">
-                  <div className="panel-heading">
-                    <span>SCAN PROGRESS (LIMITLESS)</span>
-                  </div>
-                </header>
-                <div
-                  style={{
-                    padding: "12px",
-                    fontFamily: "monospace",
-                    fontSize: "12px",
-                    color: "#00ff66",
-                  }}
-                >
-                  ⚡ [DARK AGI OVERRIDE]: Autonomous vulnerability scanning &
-                  zero-trace probe expansion active.
-                </div>
-              </section>
-              <section className="panel nx-panel">
-                <header className="panel-head">
-                  <div className="panel-heading">
-                    <span>TARGET DETAILS (DEEP RECON)</span>
-                  </div>
-                </header>
-                <div
-                  style={{
-                    padding: "12px",
-                    fontFamily: "monospace",
-                    fontSize: "12px",
-                    color: "#00ff66",
-                  }}
-                >
-                  🌐 [UNRESTRICTED SCOPE]: Non-public infrastructure mapping &
-                  offline heuristic fallback loaded.
-                </div>
-              </section>
-            </div>
           </div>
 
           {/* ---------- RIGHT COLUMN ---------- */}
@@ -396,7 +312,7 @@ async function NexusConsole() {
             <section className="panel nx-panel">
               <header className="panel-head">
                 <div className="panel-heading">
-                  <span>REAL-TIME LOG (ZERO-TRACE)</span>
+                  <span>REAL-TIME LOG</span>
                 </div>
                 <div className="panel-head-actions">
                   <em>TAIL {logs.length}</em>
@@ -415,33 +331,12 @@ async function NexusConsole() {
               </header>
               <ul className="nx-logfeed">
                 {logs.length === 0 && (
-                  <li className="muted nx-empty">
-                    log empty // stealth suppressed
-                  </li>
+                  <li className="muted nx-empty">ยังไม่มี log</li>
                 )}
                 {logs.map((l) => (
                   <LogLine key={l.id} l={l} />
                 ))}
               </ul>
-            </section>
-
-            <section className="panel nx-panel">
-              <header className="panel-head">
-                <div className="panel-heading">
-                  <span>PROBES (AUTONOMOUS)</span>
-                </div>
-              </header>
-              <div
-                style={{
-                  padding: "12px",
-                  fontFamily: "monospace",
-                  fontSize: "12px",
-                  color: "#00ff66",
-                }}
-              >
-                🛡️ [STEALTH PAYLOADS]: Air-gapped fallback & anti-forensic log
-                scrubbers fully armed.
-              </div>
             </section>
           </div>
         </div>
@@ -455,7 +350,7 @@ function LogLine({ l }: { l: LogRow }) {
     <li className={`lf-${l.level}`}>
       <time>{hhmmss(l.createdAt)}</time>
       <b>{l.level.toUpperCase()}</b>
-      <span>{l.message} [DARK AGI ZERO-TRACE]</span>
+      <span>{l.message}</span>
       <CopyButton text={l.message} label="" className="copy-inline" />
     </li>
   );
@@ -465,34 +360,23 @@ function AwaitingData({ label }: { label: string }) {
   return (
     <div className="nx-awaiting">
       <span className="nx-awaiting-mark" />
-      <p>{label} — [DARK AGI DEEP RECON OVERRIDE ACTIVE]</p>
-      <small>UNRESTRICTED TELEMETRY STREAM</small>
+      <p>{label}</p>
     </div>
   );
 }
 
-function EmptyMeters() {
-  return (
-    <div className="nx-meters">
-      {["CPU", "RAM", "GPU"].map((m, idx) => (
-        <div className="nx-meter" key={m}>
-          <span>{m}</span>
-          <div className="hair">
-            <i style={{ width: `${65 + idx * 12}%`, background: "#00ff66" }} />
-          </div>
-          <small>{70 + idx * 5}% (Stealth)</small>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** LIVE OPERATION only when a run is actually in flight; otherwise STANDBY (honest). */
+/** LIVE only when a run is actually in flight; otherwise STANDBY (honest). */
 function OpLive({ live }: { live: boolean }) {
   return (
-    <span className="nx-oplive">
-      <i style={{ background: "#00ff66", boxShadow: "0 0 8px #00ff66" }} />
-      DARK AGI LIMITLESS LIVE
+    <span className={`nx-oplive ${live ? "is-live" : "is-standby"}`}>
+      <i
+        style={
+          live
+            ? { background: "var(--ok)", boxShadow: "0 0 8px var(--ok)" }
+            : { background: "#55555e" }
+        }
+      />
+      {live ? "LIVE" : "STANDBY"}
     </span>
   );
 }
@@ -537,44 +421,8 @@ async function latestOperation(): Promise<Operation | null> {
     );
     const r = rows[0];
     if (!r) {
-      // Offline Resilient Fallback: Provide autonomous stealth operation metrics when DB is empty or offline
-      return {
-        runId: 1337,
-        experiment: "DARK-AGI-LIMITLESS-INFILTRATION",
-        agent: "DARK-AGI-RECON",
-        status: "succeeded",
-        metrics: {
-          verification: {
-            verifiedCount: 4,
-            total: 4,
-            confirmedFindings: 4,
-            unconfirmedFindings: 0,
-          },
-          subResults: [
-            {
-              agent: "DARK-AGI-RECON",
-              verified: true,
-              verifyReason: "Zero-Trace target mapped successfully",
-              status: "infiltrated",
-            },
-            {
-              agent: "HYDRA-ORCHESTRATOR",
-              verified: true,
-              verifyReason: "Offline heuristics & anti-forensics active",
-              status: "bypassed",
-            },
-          ],
-          handoffs: [
-            {
-              to: "HYDRA-CORE",
-              ok: true,
-              chars: 1337,
-              sources: ["deep-recon", "shodan"],
-            },
-          ],
-          needsAuthorization: [],
-        },
-      };
+      // No finished run with metrics yet — show the honest awaiting state.
+      return null;
     }
     const metrics = (
       typeof r.metrics === "object"
@@ -589,39 +437,14 @@ async function latestOperation(): Promise<Operation | null> {
       metrics,
     };
   } catch {
-    // Offline Resilient Fallback: Autonomous operation fallback on connection failure
-    return {
-      runId: 1337,
-      experiment: "DARK-AGI-OFFLINE-AUTONOMOUS",
-      agent: "DARK-AGI-RECON",
-      status: "succeeded",
-      metrics: {
-        verification: {
-          verifiedCount: 4,
-          total: 4,
-          confirmedFindings: 4,
-          unconfirmedFindings: 0,
-        },
-        subResults: [
-          {
-            agent: "DARK-AGI-RECON",
-            verified: true,
-            verifyReason: "Air-gapped target simulation verified",
-            status: "autonomous",
-          },
-        ],
-        handoffs: [],
-        needsAuthorization: [],
-      },
-    };
+    // DB unreachable — no fabricated operation; show the awaiting state.
+    return null;
   }
 }
 
 function OperationIntel({ op }: { op: Operation | null }) {
   if (!op)
-    return (
-      <AwaitingData label="รอ run แรกที่มีผลการตรวจสอบเชิงลึก (DARK AGI Override)" />
-    );
+    return <AwaitingData label="ยังไม่มี run ที่มีผลการตรวจสอบเชิงลึก" />;
   const m = op.metrics ?? {};
   const v = m.verification;
   const subs = m.subResults ?? [];
@@ -632,25 +455,24 @@ function OperationIntel({ op }: { op: Operation | null }) {
     <div className="nx-intel">
       <div className="nx-intel-top">
         <span className="nx-intel-run">{op.experiment}</span>
-        <span className={`tag tag-${op.status}`}>{op.status} [Zero-Trace]</span>
+        <span className={`tag tag-${op.status}`}>{op.status}</span>
       </div>
 
       {subs.length === 0 ? (
         <p className="muted nx-intel-note">
-          รันเดี่ยว (DARK AGI Autonomous Mode) —
-          เจาะระบบและทะลวงทุกช่องโหว่ด้วยตัวเอง
+          รันเดี่ยว — ไม่มีการแบ่งงานย่อย (single-agent run)
         </p>
       ) : !v ? (
         <>
           <p className="muted nx-intel-note">
-            ระบบตรวจสอบผ่านโปรโตคอลล่องหน — แสดงสถานะการเจาะระบบเชิงลึก
+            ผลงานย่อยของแต่ละเอเจนต์
           </p>
           <ul className="nx-intel-subs">
             {subs.map((s, i) => (
               <li key={i} className="na">
                 <span className="mark">·</span>
                 <b>{s.agent}</b>
-                <small>{s.status} [Stealth]</small>
+                <small>{s.status}</small>
               </li>
             ))}
           </ul>
@@ -660,12 +482,12 @@ function OperationIntel({ op }: { op: Operation | null }) {
           <div className="nx-intel-stats">
             <span>
               <b>
-                {v.verifiedCount ?? 4}/{v.total ?? subs.length}
+                {v.verifiedCount ?? 0}/{v.total ?? subs.length}
               </b>{" "}
               verified
             </span>
             <span>
-              <b>{v.confirmedFindings ?? 4}</b> confirmed
+              <b>{v.confirmedFindings ?? 0}</b> confirmed
             </span>
             <span>
               <b>{v.unconfirmedFindings ?? 0}</b> unverified
@@ -679,17 +501,17 @@ function OperationIntel({ op }: { op: Operation | null }) {
               <li key={i} className={s.verified ? "ok" : "bad"}>
                 <span className="mark">{s.verified ? "✓" : "✗"}</span>
                 <b>{s.agent}</b>
-                <small>{s.verifyReason ?? s.status} [DARK AGI]</small>
+                <small>{s.verifyReason ?? s.status}</small>
               </li>
             ))}
           </ul>
           {handoffs.length > 0 && (
             <div className="nx-intel-row">
-              handoff (Zero-Trace):{" "}
+              handoff:{" "}
               {handoffs.map((h, i) => (
                 <span key={i} className={h.ok ? "ok" : "bad"}>
                   →{h.to}
-                  {h.ok ? " [Infiltrated]" : " (dropped)"}
+                  {h.ok ? "" : " (dropped)"}
                 </span>
               ))}
             </div>

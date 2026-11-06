@@ -1,6 +1,8 @@
-import { Cpu, FlaskConical, Target } from "lucide-react";
+import { Activity, Cpu, FlaskConical, Target, Users } from "lucide-react";
+import Link from "next/link";
 
 import type { Agent, Experiment, RunMode } from "@/lib/execution/types";
+import { agentStatusMeta } from "@/lib/agentStatus";
 
 import { s } from "./classNames";
 
@@ -12,6 +14,7 @@ type Props = {
   selectedAgent: Agent | undefined;
   runMode: RunMode;
   teamCount: number;
+  activeAgents?: Agent[];
 };
 
 export function ExecutionStatusPanel({
@@ -22,9 +25,10 @@ export function ExecutionStatusPanel({
   selectedAgent,
   runMode,
   teamCount,
+  activeAgents = [],
 }: Props) {
   return (
-    <aside className={`${s.panel} ${s.panelCyan} ${s.sticky}`}>
+    <aside className={`${s.panel} ${s.panelCyan} ${s.areaStatus}`}>
       <header className={s.head}>
         <h2 className={s.title}>
           <span className={s.iconChip}>
@@ -101,10 +105,78 @@ export function ExecutionStatusPanel({
           )}
         </dl>
 
+        {/* Live count + real per-agent status + activity graph of the agents
+            participating in this run (updates as you select agents). */}
+        <div className={s.agentPanel}>
+          <div className={s.agentPanelHead}>
+            <span className={s.agentPanelLabel}>
+              <Users size={11} />
+              {runMode === "team" ? "TEAM AGENTS" : "ACTIVE AGENT"}
+            </span>
+            <b className={s.agentPanelCount}>{activeAgents.length}</b>
+          </div>
+
+          {activeAgents.length === 0 ? (
+            <p className={s.none}>No agent selected</p>
+          ) : (
+            <>
+              <div
+                className={s.agentBars}
+                aria-hidden
+                data-reacting={activeAgents.some(
+                  (a) => String(a.status).toLowerCase() === "running",
+                )}
+              >
+                {activeAgents.map((agent, i) => {
+                  const stat = agentStatusMeta(agent.status);
+                  return (
+                    <i
+                      key={agent.id}
+                      className={`ex-eqbar ex-eqbar-${stat.tone}`}
+                      style={{ animationDelay: `${(i % 8) * 0.12}s` }}
+                    />
+                  );
+                })}
+              </div>
+
+              <ul className={s.agentStatList}>
+                {activeAgents.map((agent) => {
+                  const stat = agentStatusMeta(agent.status);
+                  return (
+                    <li key={agent.id} className={s.agentStatRow}>
+                      <i className={`dot dot-${stat.tone}`} />
+                      <span className={s.agentStatName} title={agent.name}>
+                        {agent.name}
+                      </span>
+                      <em className={`s-${stat.tone}`}>{stat.label}</em>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </div>
+
         <p className={s.note}>
           Runs are created through the authenticated Research API. Results and
           execution logs are displayed on the Run Monitor page.
         </p>
+
+        {/* Open the Run Monitor (any run's live graph/status) without starting
+            a new run via START RUN. */}
+        <Link
+          href="/runs"
+          className={`${s.btn} ${s.btnGhost}`}
+          style={{
+            width: "100%",
+            justifyContent: "center",
+            marginTop: 4,
+            textDecoration: "none",
+          }}
+        >
+          <Activity size={14} />
+          RUN MONITOR · ดูผลรัน
+        </Link>
       </div>
     </aside>
   );

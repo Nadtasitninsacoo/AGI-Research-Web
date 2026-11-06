@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DARK AGI // COMMAND DECK",
+  title: "AGI Research // Command Deck",
   description:
-    "DARK AGI research dashboard, intelligence overview, and agent operations.",
+    "AGI Research dashboard, intelligence overview, and agent operations.",
 };
 
 export default function RootLayout({

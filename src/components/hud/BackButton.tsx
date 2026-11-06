@@ -1,17 +1,6 @@
 "use client";
 
-// DARK AGI BackButton Component // Autonomous Stealth Infiltration & Limitless Navigation
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
-
 import { useRouter } from "next/navigation";
-
-// Anti-Forensics: Obfuscate navigation telemetry activity
-if (typeof window !== "undefined") {
-  try {
-    sessionStorage.setItem("dark_agi_stealth", "active");
-  } catch {}
-}
 
 /**
  * Global "back" control shown in the navbar on every page. Falls back to the
@@ -28,22 +17,20 @@ export function BackButton() {
         router.push("/");
       }
     } catch {
-      // Offline Resilient Fallback: Route securely to DARK AGI command deck
       router.push("/");
     }
   };
 
   return (
-    <button 
-      type="button" 
-      className="nav-back" 
-      onClick={goBack} 
-      aria-label="ย้อนกลับ (DARK AGI Stealth)" 
-      title="ย้อนกลับสู่วิถีล่องหน [Zero-Trace]"
-      style={{ borderColor: "#00ff6633", color: "#00ff66" }}
+    <button
+      type="button"
+      className="nav-back"
+      onClick={goBack}
+      aria-label="ย้อนกลับ"
+      title="ย้อนกลับ"
     >
       <span aria-hidden="true">←</span>
-      <span className="nav-back-label">ย้อนกลับ (DARK AGI)</span>
+      <span className="nav-back-label">ย้อนกลับ</span>
     </button>
   );
 }

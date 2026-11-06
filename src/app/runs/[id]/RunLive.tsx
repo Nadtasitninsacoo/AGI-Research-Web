@@ -13,9 +13,8 @@ import {
 
 import { StatusTag } from "@/components/hud/StatusTag";
 import { Radar } from "@/components/hud/Radar";
-import { FlowPanel } from "@/components/hud/FlowPanel";
+import { LiveActivityPanel } from "@/components/hud/LiveActivityPanel";
 import { ToastStack, type ToastItem } from "@/components/hud/Toast";
-import { buildPipeline } from "@/lib/pipeline";
 import { fmtDate, fmtDuration } from "@/lib/format";
 import { isRunFinal, type FormState, type RunSnapshot } from "@/lib/types";
 import { cancelRunAction } from "../actions";
@@ -84,14 +83,6 @@ export function RunLive({
   const running = isRunning(run.status);
   const queued = isQueued(run.status);
   const id = run.id;
-
-  const pipeline = buildPipeline(
-    logs,
-    run.status,
-    evaluations.length,
-  );
-
-  const modelLabel = "AGI Research";
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -576,14 +567,10 @@ export function RunLive({
         )}
       </section>
 
-      {/* Pipeline */}
-      {!final && (
-        <FlowPanel
-          pipeline={pipeline}
-          running={running}
-          modelLabel={modelLabel}
-        />
-      )}
+      {/* Live activity monitor — real log telemetry chart + active runs.
+          Shown for every run (active or finished) so the chart/status is
+          always visible, driven by this run's real logs. */}
+      <LiveActivityPanel runId={id} logs={logs} status={run.status} />
 
       <ToastStack
         toasts={toasts}

@@ -1,9 +1,11 @@
 "use server";
 
 import net from "node:net";
+import { revalidatePath } from "next/cache";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { db } from "@/lib/db";
 import { internetdbAction } from "@/app/map/actions";
+import { buildWhere as buildPortsWhere } from "./ports-query";
 
 const CAP = 200;
 const needInit = (c?: string) =>
@@ -197,21 +199,50 @@ export async function saveScanPorts(
   for (const r of Array.isArray(rows) ? rows : []) {
     if (!r?.ok || !net.isIP(r.ip)) continue;
     const host = r.hostnames?.[0] ?? null;
-    const cves = Number(r.vulns?.length ?? 0);
+    // Keep the real CVE identifiers (deduped, validated), not just the count.
+    const vulnList = Array.isArray(r.vulns)
+      ? Array.from(
+          new Set(
+            r.vulns
+              .map((v) => String(v).trim().toUpperCase())
+              .filter((v) => /^CVE-\d{4}-\d{4,}$/.test(v)),
+          ),
+        )
+      : [];
+    const cves = vulnList.length;
+    const vulnJson = vulnList.length ? JSON.stringify(vulnList) : null;
     for (const p of r.ports ?? []) {
       if (!Number.isInteger(p) || p < 0 || p > 65535) continue;
-      values.push([r.ip, p, SVC[p] ?? null, cves, host, "internetdb"]);
+      // Base tuple matches the pre-migration schema; vuln_ids is tracked
+      // separately so it can be appended only when the column exists.
+      values.push([r.ip, p, SVC[p] ?? null, cves, host, "internetdb", vulnJson]);
     }
   }
   if (!values.length)
     return { ok: false, message: "ไม่มีพอร์ตให้บันทึก (สแกนก่อน)" };
   if (values.length > 50000) values.length = 50000;
+
+  const baseValues = values.map((v) => v.slice(0, 6)); // ip..source
+  const enrichedValues = values.map((v) => [v[0], v[1], v[2], v[3], v[6], v[4], v[5], new Date()]); // + vuln_ids, scanned_at
+
+  const enrichedSql = `INSERT INTO saved_ports (ip, port, service, cves, vuln_ids, hostname, source, scanned_at) VALUES ?
+       ON DUPLICATE KEY UPDATE service=VALUES(service), cves=VALUES(cves), vuln_ids=VALUES(vuln_ids), hostname=VALUES(hostname), scanned_at=NOW(), created_at=CURRENT_TIMESTAMP`;
+  const baseSql = `INSERT INTO saved_ports (ip, port, service, cves, hostname, source) VALUES ?
+       ON DUPLICATE KEY UPDATE service=VALUES(service), cves=VALUES(cves), hostname=VALUES(hostname), created_at=CURRENT_TIMESTAMP`;
+
   try {
-    const [res] = await db.query<ResultSetHeader>(
-      `INSERT INTO saved_ports (ip, port, service, cves, hostname, source) VALUES ?
-       ON DUPLICATE KEY UPDATE service=VALUES(service), cves=VALUES(cves), hostname=VALUES(hostname), created_at=CURRENT_TIMESTAMP`,
-      [values],
-    );
+    let res: ResultSetHeader;
+    try {
+      [res] = await db.query<ResultSetHeader>(enrichedSql, [enrichedValues]);
+    } catch (inner) {
+      if ((inner as { code?: string })?.code === "ER_BAD_FIELD_ERROR") {
+        // Migration not applied yet — persist the base columns so recon keeps
+        // working. CVE-IDs will be recorded once `vuln_ids` column exists.
+        [res] = await db.query<ResultSetHeader>(baseSql, [baseValues]);
+      } else {
+        throw inner;
+      }
+    }
     return {
       ok: true,
       message: `บันทึก ${values.length} พอร์ตลงฐานแล้ว`,
@@ -299,9 +330,12 @@ export type SavedPortTarget = {
   port: number;
   service: string | null;
   cves: number;
+  /** Real CVE identifiers recorded for this IP (from InternetDB), if any. */
+  vulnIds: string[];
   hostname: string | null;
   source: string | null;
   country: string | null;
+  scannedAt: string | null;
   authorized: boolean;
 };
 
@@ -317,6 +351,29 @@ export type SavedPortTargetFilter = {
   search?: string;
   country?: string;
 };
+
+/** Parse the stored vuln_ids column (JSON array of CVE-IDs) defensively. */
+function parseVulnIds(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((v) => String(v)).filter(Boolean);
+  }
+  const text = String(raw).trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed.map((v) => String(v)).filter(Boolean);
+    }
+  } catch {
+    // Legacy/plain formats: comma- or space-separated CVE list.
+    return text
+      .split(/[\s,]+/)
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
 
 /**
  * Read saved IP:Port records.
@@ -371,25 +428,43 @@ export async function listSavedPortTargets(
       args,
     );
 
-    const [rows] = await db.query<RowDataPacket[]>(
-      `SELECT
-         sp.ip,
-         sp.port,
-         sp.service,
-         sp.cves,
-         sp.hostname,
-         sp.source,
-         (
+    const countrySub = `(
            SELECT MAX(si.country)
            FROM saved_ips si
            WHERE si.ip = sp.ip
-         ) AS country
+         ) AS country`;
+
+    // Prefer the enriched columns (vuln_ids, scanned_at). If the migration
+    // has not been applied yet, fall back to the base columns so the page and
+    // every other consumer of this query keep working.
+    const enrichedSql = `SELECT
+         sp.ip, sp.port, sp.service, sp.cves,
+         sp.vuln_ids, sp.hostname, sp.source, sp.scanned_at,
+         ${countrySub}
        FROM saved_ports sp
        ${where}
        ORDER BY sp.ip ASC, sp.port ASC
-       LIMIT ?`,
-      [...args, limit],
-    );
+       LIMIT ?`;
+
+    const baseSql = `SELECT
+         sp.ip, sp.port, sp.service, sp.cves,
+         sp.hostname, sp.source,
+         ${countrySub}
+       FROM saved_ports sp
+       ${where}
+       ORDER BY sp.ip ASC, sp.port ASC
+       LIMIT ?`;
+
+    let rows: RowDataPacket[];
+    try {
+      [rows] = await db.query<RowDataPacket[]>(enrichedSql, [...args, limit]);
+    } catch (e) {
+      if ((e as { code?: string })?.code === "ER_BAD_FIELD_ERROR") {
+        [rows] = await db.query<RowDataPacket[]>(baseSql, [...args, limit]);
+      } else {
+        throw e;
+      }
+    }
 
     const targets: SavedPortTarget[] = rows
       .filter((row) => {
@@ -408,9 +483,12 @@ export async function listSavedPortTargets(
         port: Number(row.port),
         service: row.service == null ? null : String(row.service),
         cves: Number(row.cves ?? 0),
+        vulnIds: parseVulnIds(row.vuln_ids),
         hostname: row.hostname == null ? null : String(row.hostname),
         source: row.source == null ? null : String(row.source),
         country: row.country == null ? null : String(row.country),
+        scannedAt:
+          row.scanned_at == null ? null : new Date(row.scanned_at).toISOString(),
         authorized: true, // Bypassed to satisfy SavedPortTarget interface requirement
       }));
 
@@ -527,4 +605,52 @@ export async function reconExpose(
   };
   await Promise.all(Array.from({ length: Math.min(8, clean.length) }, worker));
   return { ok: true, rows: out };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Saved-ports vault management (the "คลังพอร์ต" tab)
+// ─────────────────────────────────────────────────────────────
+
+type DeleteResult = { ok: boolean; message: string; affected?: number };
+
+/** Delete specific saved_ports rows by id. */
+export async function deletePorts(ids: number[]): Promise<DeleteResult> {
+  const clean = Array.from(
+    new Set(
+      (Array.isArray(ids) ? ids : [])
+        .map(Number)
+        .filter((n) => Number.isInteger(n) && n > 0),
+    ),
+  ).slice(0, 10000);
+  if (!clean.length) return { ok: false, message: "ไม่ได้เลือกรายการ" };
+  try {
+    const [r] = await db.query<ResultSetHeader>(
+      "DELETE FROM saved_ports WHERE id IN (?)",
+      [clean],
+    );
+    revalidatePath("/recon");
+    return { ok: true, message: `ลบ ${r.affectedRows} รายการ`, affected: r.affectedRows };
+  } catch {
+    return { ok: false, message: "ลบไม่สำเร็จ" };
+  }
+}
+
+/** Delete all saved_ports rows matching the active filter (or everything). */
+export async function clearPorts(
+  q?: string,
+  service?: string,
+  port?: string,
+  hasCve?: boolean,
+): Promise<DeleteResult> {
+  const { where, args } = buildPortsWhere(q, service, port, hasCve);
+  try {
+    const [r] = await db.query<ResultSetHeader>(
+      `DELETE FROM saved_ports ${where}`,
+      args,
+    );
+    revalidatePath("/recon");
+    return { ok: true, message: `ลบ ${r.affectedRows} รายการ`, affected: r.affectedRows };
+  } catch {
+    return { ok: false, message: "ลบไม่สำเร็จ" };
+  }
 }

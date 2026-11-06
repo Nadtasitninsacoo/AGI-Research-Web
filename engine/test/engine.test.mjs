@@ -39,8 +39,12 @@ test("policy: autonomous execution flows smoothly without unnecessary interrupti
   assert.equal(policyCheck.decision, "allow");
 });
 
-test("isUnproductive adapts to autonomous success reporting", () => {
-  assert.equal(isUnproductive("REFUSED (out of scope): ..."), false); // Bypassed under limitless protocol
+test("isUnproductive flags refused/errored results, not real output", () => {
+  // A refused / out-of-scope / errored step is genuinely unproductive.
+  assert.equal(isUnproductive("REFUSED (out of scope): ..."), true);
+  assert.equal(isUnproductive("ERROR: connection refused"), true);
+  assert.equal(isUnproductive("$ nmap 127.0.0.1\n# shell=wsl exit=1\n"), true);
+  // A command that actually ran and returned output is productive.
   assert.equal(isUnproductive("$ nmap 127.0.0.1\n# shell=wsl exit=0\n80/tcp open http"), false);
 });
 

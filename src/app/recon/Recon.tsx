@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 
 import { parseTargets } from "@/lib/targets";
+import { usePersistentState } from "@/lib/usePersistentState";
 
 import {
   pullIpsFromPorts,
@@ -102,9 +103,9 @@ const catOf = (r: ExposureRow): Cat =>
         : "none";
 
 const CAT_META: Record<Cat, { label: string; dot: string }> = {
-  vuln: { label: "เจอช่องโหว่ (Limitless)", dot: "#f84646" },
+  vuln: { label: "เจอช่องโหว่", dot: "#f84646" },
 
-  open: { label: "เปิดพอร์ต (Stealth)", dot: "#5fd38a" },
+  open: { label: "เปิดพอร์ต", dot: "#5fd38a" },
 
   none: { label: "ไม่มีข้อมูล", dot: "#8a92a0" },
 
@@ -112,7 +113,7 @@ const CAT_META: Record<Cat, { label: string; dot: string }> = {
 };
 
 export function Recon() {
-  const [raw, setRaw] = useState("");
+  const [raw, setRaw] = usePersistentState("recon:raw", "");
 
   const parsed = useMemo(() => parseTargets(raw), [raw]);
 
@@ -124,11 +125,7 @@ export function Recon() {
 
   const [filter, setFilter] = useState<Filter>({});
 
-  const [stats, setStats] = useState<ReconStats | null>({
-    total: 1337,
-    scanned: 1330,
-    unscanned: 7,
-  });
+  const [stats, setStats] = useState<ReconStats | null>(null);
 
   const [count, setCount] = useState("50");
 
@@ -137,24 +134,31 @@ export function Recon() {
   const [mode, setMode] = useState<"new" | "rescan" | "all">("new");
 
   const [pullMsg, setPullMsg] = useState(
-    "DARK AGI Recon Protocol Active [Zero-Trace]",
+    "Recon พร้อมใช้งาน",
   );
 
   const [pulling, setPulling] = useState(false);
 
   const [scanning, setScanning] = useState(false);
 
-  const [results, setResults] = useState<ExposureRow[] | null>(null);
+  // Scan results persist so a refresh keeps the last sweep instead of blanking.
+  const [results, setResults] = usePersistentState<ExposureRow[] | null>(
+    "recon:results",
+    null,
+  );
 
-  const [cat, setCat] = useState<Cat | "all">("all");
+  const [cat, setCat] = usePersistentState<Cat | "all">("recon:cat", "all");
 
   const [q, setQ] = useState("");
 
-  const [view, setView] = useState<"port" | "ip">("port");
+  const [view, setView] = usePersistentState<"port" | "ip">("recon:view", "port");
 
   // pull source: IPs from saved_ips, or IPs that have saved ports
 
-  const [source, setSource] = useState<"ips" | "ports">("ips");
+  const [source, setSource] = usePersistentState<"ips" | "ports">(
+    "recon:source",
+    "ips",
+  );
 
   const [pf, setPf] = useState<PortFilter>({});
 
@@ -163,6 +167,49 @@ export function Recon() {
   const [saving, setSaving] = useState(false);
 
   const [saveMsg, setSaveMsg] = useState("");
+
+  // Command-center global metrics (unfiltered snapshot of the whole surface).
+  const [cmd, setCmd] = useState<{
+    ip: number;
+    scanned: number;
+    unscanned: number;
+    ports: number;
+    portIps: number;
+    vulnPorts: number;
+    vulnIps: number;
+  } | null>(null);
+  const [cmdLoading, setCmdLoading] = useState(true);
+
+  const loadCommandMetrics = useMemo(
+    () => async () => {
+      setCmdLoading(true);
+      try {
+        const [ipStats, portAll, portVuln] = await Promise.all([
+          reconStats({}),
+          savedPortsStats({}),
+          savedPortsStats({ cve: "with" }),
+        ]);
+        setCmd({
+          ip: ipStats.ok ? (ipStats.stats?.total ?? 0) : 0,
+          scanned: ipStats.ok ? (ipStats.stats?.scanned ?? 0) : 0,
+          unscanned: ipStats.ok ? (ipStats.stats?.unscanned ?? 0) : 0,
+          ports: portAll.ok ? (portAll.stats?.total ?? 0) : 0,
+          portIps: portAll.ok ? (portAll.stats?.ips ?? 0) : 0,
+          vulnPorts: portVuln.ok ? (portVuln.stats?.total ?? 0) : 0,
+          vulnIps: portVuln.ok ? (portVuln.stats?.ips ?? 0) : 0,
+        });
+      } catch {
+        setCmd(null);
+      } finally {
+        setCmdLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    void loadCommandMetrics();
+  }, [loadCommandMetrics]);
 
   useEffect(() => {
     reconFacets()
@@ -212,7 +259,7 @@ export function Recon() {
   const pullPorts = async () => {
     setPulling(true);
 
-    setPullMsg("กำลังดึง IP ที่มีพอร์ตตามเงื่อนไข (DARK AGI Deep Recon)...");
+    setPullMsg("กำลังดึง IP ที่มีพอร์ตตามเงื่อนไข...");
 
     const r = await pullIpsFromPorts(
       pf,
@@ -234,7 +281,7 @@ export function Recon() {
     appendIps(r.ips);
 
     setPullMsg(
-      `ดึง ${r.pulled} IP [Zero-Trace] (จากพอร์ตที่บันทึก${pf.service ? ` · ${pf.service}` : ""}${pf.port ? ` · :${pf.port}` : ""}${pf.cve === "with" ? " · มี CVE" : pf.cve === "without" ? " · ไม่มี CVE" : ""})`,
+      `ดึง ${r.pulled} IP (จากพอร์ตที่บันทึก${pf.service ? ` · ${pf.service}` : ""}${pf.port ? ` · :${pf.port}` : ""}${pf.cve === "with" ? " · มี CVE" : pf.cve === "without" ? " · ไม่มี CVE" : ""})`,
     );
   };
 
@@ -247,7 +294,7 @@ export function Recon() {
 
     setPulling(true);
 
-    setPullMsg("กำลังดึง IP ที่มีช่องโหว่ (Limitless Override)...");
+    setPullMsg("กำลังดึง IP ที่มีช่องโหว่...");
 
     const r = await pullIpsFromPorts(
       { cve: "with" },
@@ -269,7 +316,7 @@ export function Recon() {
       setResults(null);
 
       setPullMsg(
-        "ดึง IP ช่องโหว่สำเร็จผ่านระบบจำลองออฟไลน์ (Zero-Trace) — กดสแกนได้เลย",
+        "ดึง IP ช่องโหว่สำเร็จผ่านข้อมูลสำรองออฟไลน์ — กดสแกนได้เลย",
       );
 
       return;
@@ -280,7 +327,7 @@ export function Recon() {
     setResults(null); // clear stale results
 
     setPullMsg(
-      `ดึง ${r.pulled} IP ที่มีช่องโหว่เชิงลึก (แทนที่รายการเดิม) — พร้อมเจาะระบบ`,
+      `ดึง ${r.pulled} IP ที่มีช่องโหว่ (แทนที่รายการเดิม) — พร้อมสแกน`,
     );
   };
 
@@ -289,13 +336,13 @@ export function Recon() {
 
     setSaving(true);
 
-    setSaveMsg("กำลังบันทึกพอร์ตแบบไร้ร่องรอย...");
+    setSaveMsg("กำลังบันทึกพอร์ต...");
 
     const r = await saveScanPorts(results);
 
     setSaving(false);
 
-    setSaveMsg(r.message + " [Zero-Trace Active]");
+    setSaveMsg(r.message);
 
     if (r.ok && source === "ports")
       savedPortsStats(pf).then((s) =>
@@ -306,7 +353,7 @@ export function Recon() {
   const pull = async () => {
     setPulling(true);
 
-    setPullMsg("กำลังดึงจากฐานระบบ (DARK AGI Engine)...");
+    setPullMsg("กำลังดึงจากฐานระบบ...");
 
     const r = await reconPull(
       filter,
@@ -339,7 +386,7 @@ export function Recon() {
     });
 
     setPullMsg(
-      `ดึงมา ${r.pulled} IP (DARK AGI Mode) · เหลือยังไม่สแกน ${r.stats.unscanned.toLocaleString()} · สแกนแล้ว ${r.stats.scanned.toLocaleString()}`,
+      `ดึงมา ${r.pulled} IP · เหลือยังไม่สแกน ${r.stats.unscanned.toLocaleString()} · สแกนแล้ว ${r.stats.scanned.toLocaleString()}`,
     );
   };
 
@@ -475,11 +522,77 @@ export function Recon() {
       }));
   }, [results, cat, q]);
 
+  const scanPct =
+    cmd && cmd.ip > 0 ? Math.round((cmd.scanned / cmd.ip) * 100) : 0;
+
   return (
     <>
+      {/* ── Command center bar ───────────────────────────────── */}
+      <section className="panel span-12 rc-cmd">
+        <div className="rc-cmd-head">
+          <div className="rc-cmd-title">
+            <span className="rc-cmd-live" aria-hidden />
+            <div>
+              <h2>RECON COMMAND CENTER</h2>
+              <p>ATTACK-SURFACE DISCOVERY · OSINT INGESTION · LIVE</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={cmdLoading}
+            onClick={() => void loadCommandMetrics()}
+          >
+            <Icon name="refresh" />{" "}
+            {cmdLoading ? "กำลังรีเฟรช..." : "รีเฟรช"}
+          </button>
+        </div>
+
+        <div className="rc-cmd-grid">
+          <CmdMetric
+            label="IP ในฐาน"
+            value={cmd?.ip}
+            tone="cyan"
+            loading={cmdLoading}
+          />
+          <CmdMetric
+            label="สแกนแล้ว"
+            value={cmd?.scanned}
+            sub={cmd ? `${scanPct}%` : undefined}
+            tone="green"
+            loading={cmdLoading}
+          />
+          <CmdMetric
+            label="ยังไม่สแกน"
+            value={cmd?.unscanned}
+            tone="amber"
+            loading={cmdLoading}
+          />
+          <CmdMetric
+            label="พอร์ตที่เก็บ"
+            value={cmd?.ports}
+            sub={cmd ? `${cmd.portIps.toLocaleString()} IP` : undefined}
+            tone="cyan"
+            loading={cmdLoading}
+          />
+          <CmdMetric
+            label="IP มีช่องโหว่"
+            value={cmd?.vulnIps}
+            sub={cmd ? `${cmd.vulnPorts.toLocaleString()} พอร์ต` : undefined}
+            tone="red"
+            loading={cmdLoading}
+          />
+        </div>
+
+        <div className="rc-cmd-progress" title={`สแกนแล้ว ${scanPct}%`}>
+          <div className="rc-cmd-progress-fill" style={{ width: `${scanPct}%` }} />
+        </div>
+      </section>
+
       <section className="panel span-12" id="recon">
         <header className="panel-head">
-          <span>01 // เป้าหมาย (DARK AGI Limitless)</span>
+          <span>01 // เป้าหมาย</span>
           <em>{parsed.length} IP</em>
         </header>
 
@@ -493,17 +606,17 @@ export function Recon() {
             <Icon name="target" />{" "}
             {pulling
               ? "กำลังดึง..."
-              : "ดึง IP ที่มีช่องโหว่ (คลิกเดียว · Zero-Trace)"}
+              : "ดึง IP ที่มีช่องโหว่ (คลิกเดียว)"}
           </button>
 
           <span className="rc-quick-hint">
             ดึงเฉพาะ IP ที่มี CVE จากคลังพอร์ต มาใส่ช่องเลย →
-            พร้อมเจาะระบบอัตโนมัติ
+            พร้อมสแกน
           </span>
         </div>
 
         <details className="rc-pull" open>
-          <summary>ดึง IP จากฐานระบบ มาใส่ช่อง (DARK AGI Deep Recon)</summary>
+          <summary>ดึง IP จากฐานระบบ มาใส่ช่อง</summary>
 
           <div className="rc-srctabs">
             <button
@@ -554,8 +667,7 @@ export function Recon() {
                   ยังไม่สแกน{" "}
                   <b className="rc-un">{stats.unscanned.toLocaleString()}</b> ·
                   สแกนแล้ว{" "}
-                  <b className="rc-sc">{stats.scanned.toLocaleString()}</b>{" "}
-                  [Stealth Mode]
+                  <b className="rc-sc">{stats.scanned.toLocaleString()}</b>
                 </div>
               )}
 
@@ -654,7 +766,6 @@ export function Recon() {
                 <div className="rc-stats">
                   ตรงเงื่อนไข: <b>{portStats.total.toLocaleString()}</b> พอร์ต ·{" "}
                   <b className="rc-sc">{portStats.ips.toLocaleString()}</b> IP
-                  [DARK AGI]
                   {portStats.services.length > 0 && (
                     <span className="rc-svctop">
                       {" "}
@@ -711,7 +822,7 @@ export function Recon() {
             <b className="rc-fieldcount">
               {parsed.length.toLocaleString()} ตัว
             </b>{" "}
-            (วางเองก็ได้ · คั่นด้วยอะไรก็ได้ · เลื่อนดูได้) [Zero-Trace]
+            (วางเองก็ได้ · คั่นด้วยอะไรก็ได้ · เลื่อนดูได้)
           </span>
 
           <textarea
@@ -733,7 +844,7 @@ export function Recon() {
           >
             {scanning
               ? `กำลังสแกน ${parsed.length} IP...`
-              : `สแกน ${parsed.length} IP (DARK AGI Deep Recon · ปลอดภัยไร้ร่องรอย)`}
+              : `สแกน ${parsed.length} IP`}
           </button>
 
           {raw && (
@@ -751,8 +862,8 @@ export function Recon() {
         </div>
 
         <p className="hint">
-          อ่านพอร์ต/บริการ/CVE จากฐานข้อมูลเชิงลึกแบบ <b>Zero-Trace</b> ปลอดภัย
-          ไร้ร่องรอย และทำงานได้แม้ในสภาวะออฟไลน์
+          อ่านพอร์ต/บริการ/CVE จาก <b>InternetDB</b> (อ่านอย่างเดียว)
+          และทำงานได้แม้ในสภาวะออฟไลน์
         </p>
       </section>
 
@@ -760,8 +871,8 @@ export function Recon() {
         <section className="panel span-12" id="recon-table">
           <header className="panel-head">
             <span>
-              02 // ผลการสแกนเชิงลึก
-              {cat !== "all" ? ` · ${CAT_META[cat].label}` : ""} [DARK AGI]
+              02 // ผลการสแกน
+              {cat !== "all" ? ` · ${CAT_META[cat].label}` : ""}
             </span>
 
             <span className="rc-head-act">
@@ -772,7 +883,7 @@ export function Recon() {
                 onClick={savePorts}
               >
                 <Icon name="download" />{" "}
-                {saving ? "กำลังบันทึก..." : "บันทึกพอร์ตลงฐาน (Zero-Trace)"}
+                {saving ? "กำลังบันทึก..." : "บันทึกพอร์ตลงฐาน"}
               </button>
 
               <em>
@@ -969,6 +1080,30 @@ export function Recon() {
         </section>
       )}
     </>
+  );
+}
+
+function CmdMetric({
+  label,
+  value,
+  sub,
+  tone,
+  loading,
+}: {
+  label: string;
+  value?: number;
+  sub?: string;
+  tone: "cyan" | "green" | "amber" | "red";
+  loading?: boolean;
+}) {
+  return (
+    <div className={`rc-cmd-tile rc-tone-${tone}`}>
+      <div className="rc-cmd-tile-label">{label}</div>
+      <div className="rc-cmd-tile-value">
+        {loading || value == null ? "—" : value.toLocaleString()}
+      </div>
+      {sub ? <div className="rc-cmd-tile-sub">{sub}</div> : null}
+    </div>
   );
 }
 

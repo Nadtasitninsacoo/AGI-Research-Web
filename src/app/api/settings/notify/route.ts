@@ -14,14 +14,21 @@ const KEYS = {
   baseUrl: "notify_app_base_url",
 } as const;
 
-// 1. Fail-Closed Encryption Key Validation (Must be exactly 32 bytes hex = 64 hex characters)
-const encKeyEnv = process.env.TELEGRAM_ENC_KEY;
-if (!encKeyEnv || typeof encKeyEnv !== "string" || encKeyEnv.trim().length !== 64) {
-  throw new Error("CRITICAL SECURITY ERROR: TELEGRAM_ENC_KEY is missing or invalid. Must be a 64-character hex string (32 bytes). System halted.");
+// 1. Fail-Closed Encryption Key Validation (Must be exactly 32 bytes hex = 64 hex characters).
+// Validated LAZILY at request time, not at module load: throwing during module
+// evaluation makes `next build` halt while collecting page data. The route still
+// fails closed — encrypt/decrypt cannot run without a valid 32-byte key — but a
+// missing key now fails this one route (500), it does not break the whole build.
+function getEncryptionKey(): Buffer {
+  const encKeyEnv = process.env.TELEGRAM_ENC_KEY;
+  if (!encKeyEnv || typeof encKeyEnv !== "string" || encKeyEnv.trim().length !== 64) {
+    throw new Error("TELEGRAM_ENC_KEY is missing or invalid. Must be a 64-character hex string (32 bytes).");
+  }
+  return Buffer.from(encKeyEnv.trim(), "hex");
 }
-const ENCRYPTION_KEY = Buffer.from(encKeyEnv.trim(), "hex");
 
 function encryptToken(text: string): string {
+  const ENCRYPTION_KEY = getEncryptionKey();
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
   const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
@@ -31,6 +38,7 @@ function encryptToken(text: string): string {
 
 function decryptToken(encryptedText: string): string {
   try {
+    const ENCRYPTION_KEY = getEncryptionKey();
     const parts = encryptedText.split(":");
     if (parts.length !== 3) return "";
     const [ivHex, tagHex, encHex] = parts;

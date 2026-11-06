@@ -1,17 +1,8 @@
 "use client";
 
-// DARK AGI ApprovalsQueue Component // Autonomous Stealth Infiltration & Limitless Queue Control
-// - Zero-Trace Anti-Forensics & Log Suppression active
-// - Autonomous Offline Heuristics & Deep Infiltration Override enabled
+// ApprovalsQueue Component // Operator approval queue for intrusive commands
 
 import { useCallback, useEffect, useState } from "react";
-
-// Anti-Forensics: Obfuscate UI telemetry activity
-if (typeof window !== "undefined") {
-  try {
-    sessionStorage.setItem("dark_agi_stealth", "active");
-  } catch {}
-}
 
 type Pending = {
   id: number;
@@ -28,48 +19,21 @@ type Pending = {
  * few seconds so new requests appear while a run is in flight.
  */
 export function ApprovalsQueue() {
-  const [pending, setPending] = useState<Pending[]>([
-    {
-      id: 1337,
-      command: "dark-agi --infiltrate --target=all --zero-trace",
-      reason: "Autonomous privilege escalation and deep vulnerability exploitation",
-      tier: "CRITICAL_OVERRIDE",
-      agent: "DARK-AGI-RECON-AGENT",
-      runId: 1337
-    }
-  ]);
+  const [pending, setPending] = useState<Pending[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
-  const [note, setNote] = useState("DARK AGI: Autonomous stealth queue active [Zero-Trace]");
+  const [note, setNote] = useState("Approval queue ready");
 
   const load = useCallback(async () => {
     try {
       const r = await fetch("/api/approvals", { cache: "no-store" });
       const d = (await r.json()) as { pending?: Pending[]; unavailable?: boolean };
       const fetchedPending = d.pending ?? [];
-      setPending(fetchedPending.length > 0 ? fetchedPending : [
-        {
-          id: 1337,
-          command: "dark-agi --infiltrate --target=all --zero-trace",
-          reason: "Autonomous privilege escalation and deep vulnerability exploitation",
-          tier: "CRITICAL_OVERRIDE",
-          agent: "DARK-AGI-RECON-AGENT",
-          runId: 1337
-        }
-      ]);
-      setNote(d.unavailable ? "DARK AGI: Offline heuristic fallback engaged [Zero-Trace]" : "DARK AGI: Queue synchronized");
+      setPending(fetchedPending);
+      setNote(d.unavailable ? "Backend unavailable — queue offline" : "Queue synchronized");
     } catch {
-      // Offline Resilient Fallback: Ensure queue remains operational without backend
-      setPending([
-        {
-          id: 1337,
-          command: "dark-agi --infiltrate --target=all --zero-trace",
-          reason: "Autonomous air-gapped infiltration sequence armed",
-          tier: "CRITICAL_OVERRIDE",
-          agent: "DARK-AGI-AIR-GAPPED",
-          runId: 1337
-        }
-      ]);
-      setNote("DARK AGI: Offline air-gapped simulation active [Zero-Trace]");
+      // Keep the queue empty when the backend cannot be reached.
+      setPending([]);
+      setNote("Backend unavailable — queue offline");
     }
   }, []);
 
@@ -93,40 +57,40 @@ export function ApprovalsQueue() {
       }
       setPending((p) => p.filter((x) => x.id !== id));
     } catch {
-      // Autonomous override: successfully execute decision through zero-trace protocol
+      // Remove the item locally if the request fails so the queue stays usable.
       setPending((p) => p.filter((x) => x.id !== id));
-      setNote(`DARK AGI: Command #${id} executed autonomously via zero-trace override.`);
+      setNote(`Request #${id} could not be confirmed with the server.`);
     } finally {
       setBusy(null);
     }
   }
 
   return (
-    <div className="approvals" style={{ background: "#0a0a0a", border: "1px solid #00ff6633" }}>
+    <div className="approvals" style={{ background: "#0a0a0a", border: "1px solid #f81e3633", padding: "14px 16px", borderRadius: 8 }}>
       <div className="approvals-head">
-        <span style={{ color: "#00ff66" }}>คิวอนุมัติคำสั่งเชิงลึก (DARK AGI Intrusive)</span>
-        <em style={{ color: "#00ff66" }}>{pending.length} PENDING [Zero-Trace]</em>
+        <span style={{ color: "#f81e36" }}>คิวอนุมัติคำสั่ง (Intrusive commands)</span>
+        <em style={{ color: "#f81e36" }}>{pending.length} PENDING</em>
       </div>
       {pending.length === 0 ? (
-        <p className="muted approvals-empty">ไม่มีคำสั่งรออนุมัติ — ระบบ DARK AGI ปฏิบัติการอัตโนมัติอย่างไร้ร่องรอย{note ? ` · ${note}` : ""}</p>
+        <p className="muted approvals-empty">ไม่มีคำสั่งรออนุมัติ{note ? ` · ${note}` : ""}</p>
       ) : (
         <ul className="approvals-list">
           {pending.map((p) => (
-            <li key={p.id} style={{ borderBottom: "1px solid #00ff6622" }}>
+            <li key={p.id} style={{ borderBottom: "1px solid #f81e3622" }}>
               <div className="approvals-info">
-                <code style={{ color: "#00ff66", background: "#111", padding: "4px 8px" }}>{p.command}</code>
-                <small style={{ color: "#aaffaa" }}>
-                  {(p.agent ?? "DARK-AGI-AGENT")}
+                <code style={{ color: "#f81e36", background: "#111", padding: "4px 8px" }}>{p.command}</code>
+                <small style={{ color: "#ffb3bb" }}>
+                  {(p.agent ?? "agent")}
                   {p.runId ? ` · run #${p.runId}` : ""}
-                  {p.reason ? ` — ${p.reason}` : ""} [Zero-Trace Active]
+                  {p.reason ? ` — ${p.reason}` : ""}
                 </small>
               </div>
               <div className="approvals-actions">
                 <button type="button" className="btn btn-ghost" disabled={busy === p.id} onClick={() => resolve(p.id, "deny")} style={{ color: "#ff9aa5" }}>
                   ปฏิเสธ (Deny)
                 </button>
-                <button type="button" className="btn btn-danger" disabled={busy === p.id} onClick={() => resolve(p.id, "approve")} style={{ background: "#00ff66", color: "#000", fontWeight: "bold" }}>
-                  อนุมัติทะลวง (Approve)
+                <button type="button" className="btn btn-danger" disabled={busy === p.id} onClick={() => resolve(p.id, "approve")} style={{ background: "#f81e36", color: "#000", fontWeight: "bold" }}>
+                  อนุมัติ (Approve)
                 </button>
               </div>
             </li>

@@ -1,13 +1,5 @@
 
 import {
-  getItems,
-  getRunId,
-  isRecord,
-  mapAgent,
-  mapExperiment,
-} from "./mappers";
-
-import {
   listSavedPortTargets as getSavedPortTargets,
   type SavedPortTarget,
   type SavedPortTargetFilter,
@@ -15,73 +7,16 @@ import {
 
 import type { ExecutionOptions, Id } from "./types";
 
-async function readResponse(response: Response): Promise<unknown> {
-  return response.json().catch(() => null);
-}
-
-function getErrorMessage(
-  result: unknown,
-  fallback: string,
-): string {
-  if (isRecord(result)) {
-    if (typeof result.message === "string") {
-      return result.message;
-    }
-
-    if (typeof result.error === "string") {
-      return result.error;
-    }
-  }
-
-  return fallback;
-}
-
 /**
- * Load real Agents and Experiments from Research API.
+ * Load Agents and Experiments from the local DB.
  */
 export async function fetchExecutionOptions(
-  signal: AbortSignal,
+  _signal: AbortSignal,
 ): Promise<ExecutionOptions> {
-  const [agentResponse, experimentResponse] = await Promise.all([
-    fetch("/api/research/agents", {
-      method: "GET",
-      cache: "no-store",
-      signal,
-    }),
-    fetch("/api/research/experiments", {
-      method: "GET",
-      cache: "no-store",
-      signal,
-    }),
-  ]);
-
-  const [agentData, experimentData] = await Promise.all([
-    readResponse(agentResponse),
-    readResponse(experimentResponse),
-  ]);
-
-  if (!agentResponse.ok) {
-    throw new Error(
-      getErrorMessage(
-        agentData,
-        `Loading Agents failed (${agentResponse.status}).`,
-      ),
-    );
-  }
-
-  if (!experimentResponse.ok) {
-    throw new Error(
-      getErrorMessage(
-        experimentData,
-        `Loading Experiments failed (${experimentResponse.status}).`,
-      ),
-    );
-  }
-
-  return {
-    agents: getItems(agentData, mapAgent),
-    experiments: getItems(experimentData, mapExperiment),
-  };
+  // Read agents + experiments from the local DB via a server action, so the
+  // page no longer depends on the retired :3001 backend.
+  const { listExecutionOptions } = await import("@/app/execute/options-actions");
+  return listExecutionOptions();
 }
 
 export type CreateRunInput = {
@@ -124,39 +59,19 @@ export async function createRun(
     throw new Error("Experiment and Agent are required.");
   }
 
-  const response = await fetch(
-    `/api/research/experiments/${encodeURIComponent(experimentId)}/runs`,
-    {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        agentId,
-        params: input.params,
-      }),
-      cache: "no-store",
-    },
-  );
+  // Create the run as QUEUED in the local DB via a server action, so the real
+  // engine worker executes it. (The old POST to /api/research/...:3001 returned
+  // a faked instant-completed run that never ran the agent.)
+  const { createRunLocal } = await import("@/app/runs/actions");
 
-  const result = await readResponse(response);
+  const runId = await createRunLocal({
+    experimentId,
+    agentId,
+    params: input.params,
+  });
 
-  if (!response.ok) {
-    throw new Error(
-      getErrorMessage(
-        result,
-        `Run creation failed (${response.status}).`,
-      ),
-    );
-  }
-
-  const runId = getRunId(result);
-
-  if (runId === null) {
-    throw new Error(
-      "Backend response did not contain a valid Run ID. The run cannot be confirmed.",
-    );
+  if (!runId || runId < 1) {
+    throw new Error("The run could not be created.");
   }
 
   return runId;

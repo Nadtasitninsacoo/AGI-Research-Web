@@ -82,26 +82,13 @@ function unwrapData<T>(value: T | ApiEnvelope<T>): T {
 }
 
 export async function fetchTeamTaskPlans(
-  signal?: AbortSignal,
+  _signal?: AbortSignal,
 ): Promise<TeamTaskPlan[]> {
-  const response = await fetch(API_BASE, {
-    method: "GET",
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-    signal,
-  });
-
-  const result = await readResponse<
-    TeamTaskPlan[] | ApiEnvelope<TeamTaskPlan[]>
-  >(response);
-
-  const plans = unwrapData(result);
-
-  if (!Array.isArray(plans)) {
-    throw new Error("Invalid team task plans response.");
-  }
-
-  return plans;
+  // Read directly from the local DB via a server action. The old call to the
+  // external NestJS backend (/api/research/team-task-plans → :3001) returns
+  // HTTP 500, so this page is migrated to the DB like run-batches/runs.
+  const { listTeamTaskPlans } = await import("@/app/team-task-plans/actions");
+  return listTeamTaskPlans();
 }
 
 export async function createTeamTaskPlan(

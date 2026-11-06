@@ -1,72 +1,65 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  Cpu,
   Database,
-  Play,
   RefreshCw,
+  Radar,
+  Save,
   Search,
   Server,
+  ShieldAlert,
   ShieldCheck,
-  Square,
-  Terminal,
+  Zap,
 } from "lucide-react";
 
 import { Navbar } from "@/components/hud/Navbar";
 import { Sidebar } from "@/components/hud/Sidebar";
-import { createAgentLabRun } from "./agent-lab-actions";
-
-import {
-  SESSION_POLL_INTERVAL,
-  TELEMETRY_INTERVAL,
-  taskLabels,
-  initialEvents,
-} from "./constants";
-
-import { targetKey, formatTime } from "./utils";
-
-import type {
-  TakeoverAgent,
-  EventItem,
-  TeamTaskItem,
-  TaskType,
-  TeamMember,
-} from "./types";
+import { usePersistentState } from "@/lib/usePersistentState";
 
 import { Metric } from "./components/Metric";
 import { NotificationStack } from "./components/NotificationStack";
-import { TakeoverWorkspace } from "./components/TakeoverWorkspace";
-
 import { useNotifications } from "./hooks/useNotifications";
-import { useTaskStorage } from "./hooks/useTaskStorage";
 import { useTakeoverData } from "./hooks/useTakeoverData";
-import { useRemoteSession } from "./hooks/useRemoteSession";
+import { scanIpsForVulns } from "./scan-actions";
+import { saveVulnFindings, type VulnFindingInput } from "./findings-actions";
+import { targetKey, formatTime } from "./utils";
+import {
+  assessTarget,
+  compareBySeverity,
+  SEVERITIES,
+  SEVERITY_META,
+  type RiskAssessment,
+  type Severity,
+} from "./utils/risk";
 
-import type { SavedPortTarget } from "@/app/recon/actions";
+type SeverityFilter = Severity | "ALL";
+type CveFilter = "all" | "with" | "without";
 
-export default function TakeoverPage() {
-  const [events, setEvents] = useState<EventItem[]>(initialEvents);
+// Map a risk assessment to a DB finding row (IP/port/severity/CVE list + status).
+function assessmentToFinding(a: RiskAssessment): VulnFindingInput {
+  const vulnerable = a.target.cves > 0 || a.target.vulnIds.length > 0;
+  return {
+    ip: a.target.ip,
+    port: a.target.port,
+    service: a.serviceLabel ?? a.target.service ?? null,
+    hostname: a.target.hostname ?? null,
+    severity: a.severity,
+    score: a.score,
+    cves: a.target.cves,
+    vulnIds: a.target.vulnIds,
+    exposure: a.exposureTier ?? null,
+    remediation: a.remediation ?? null,
+    status: vulnerable ? "VULNERABLE" : "CLEAN",
+  };
+}
 
+export default function VulnerabilityAnalysisPage() {
   const { notifications, notify, dismissNotification } = useNotifications();
-
-  const [experimentId, setExperimentId] = useState("");
-  const [creatingRun, setCreatingRun] = useState(false);
-  const [createdRunKey, setCreatedRunKey] = useState<string | null>(null);
-  const [runMessage, setRunMessage] = useState("");
-  const [pendingRun, setPendingRun] = useState<{
-    experimentId: number;
-    ip: SavedPortTarget["ip"];
-    port: SavedPortTarget["port"];
-  } | null>(null);
-
-  const { tasks, tasksHydrated, taskStorageError, savingTask, addTask } =
-    useTaskStorage(notify);
 
   const {
     targets,
-    agents,
     targetMessage,
     agentMessage,
     loading,
@@ -74,744 +67,228 @@ export default function TakeoverPage() {
     refreshData,
   } = useTakeoverData();
 
-  const {
-    remoteSession,
-    remoteLoading,
-    remoteMessage,
-    setRemoteSession,
-    setRemoteMessage,
-    remoteConnected,
-    remoteDisconnected,
-    createRemoteSession: createRemoteSessionHook,
-    refreshRemoteStatus,
-  } = useRemoteSession();
-
-  const [selectedTargetKey, setSelectedTargetKey] = useState("");
-
-  // Team selection
-  const [selectedAgentIds, setSelectedAgentIds] = useState<number[]>([]);
-  const [teamLeaderId, setTeamLeaderId] = useState("");
-
-  const [taskType, setTaskType] = useState<TaskType>("EXPOSURE_REVIEW");
-
   const [search, setSearch] = useState("");
-  const [serviceFilter, setServiceFilter] = useState("");
-  const [portFilter, setPortFilter] = useState("");
-  const [cveFilter, setCveFilter] = useState("all");
-
-  const [authorized, setAuthorized] = useState(false);
+  const [severityFilter, setSeverityFilter] =
+    usePersistentState<SeverityFilter>("vuln.severityFilter", "ALL");
+  const [cveFilter, setCveFilter] = usePersistentState<CveFilter>(
+    "vuln.cveFilter",
+    "all",
+  );
   const [clock, setClock] = useState("--:--:--");
-  const [live, setLive] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const addEvent = useCallback(
-    (message: string, type: EventItem["type"] = "INFO") => {
-      setEvents((previous) =>
-        [
-          {
-            id: Date.now() + Math.random(),
-            time: formatTime(),
-            type,
-            message,
-          },
-          ...previous,
-        ].slice(0, 60),
-      );
-    },
-    [],
-  );
+  // Auto-save mode: when new vulnerable findings appear, persist them to the DB.
+  const [autoSave, setAutoSave] = usePersistentState("vuln.autoSave", false);
+  const autoSaveKnownRef = useRef<Set<string>>(new Set());
+  const autoSavingRef = useRef(false);
 
-  // ---------------------------------------------------------------------------
-  // Derived data
-  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const tick = () => setClock(formatTime());
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
-  // Multi-target selection
-  const [selectedTargetKeys, setSelectedTargetKeys] = useState<string[]>([]);
-
-  function clearTargetSelection() {
-    setSelectedTargetKeys([]);
-    setSelectedTargetKey("");
-  }
-
-  const selectedTargets = useMemo(
+  // -- Risk assessment over all saved targets ------------------------------
+  const assessments = useMemo<RiskAssessment[]>(
     () =>
-      targets.filter((target) =>
-        selectedTargetKeys.includes(targetKey(target)),
-      ),
-    [targets, selectedTargetKeys],
-  );
-
-  const selectedTarget =
-    selectedTargets[0] ??
-    targets.find((target) => targetKey(target) === selectedTargetKey) ??
-    null;
-
-  const currentLabRunKey =
-    selectedTarget && experimentId.trim()
-      ? `${Number(experimentId)}:${selectedTarget.ip}:${selectedTarget.port}:HEALTH_CHECK`
-      : "";
-
-  const labRunCreated =
-    Boolean(currentLabRunKey) && createdRunKey === currentLabRunKey;
-
-  const filteredTargets = useMemo(() => {
-    return targets.filter((target) => {
-      const query = search.trim().toLowerCase();
-
-      const matchesSearch =
-        !query ||
-        target.ip.toLowerCase().includes(query) ||
-        (target.hostname ?? "").toLowerCase().includes(query) ||
-        (target.service ?? "").toLowerCase().includes(query);
-
-      const matchesService =
-        !serviceFilter ||
-        (target.service ?? "").toLowerCase() === serviceFilter.toLowerCase();
-
-      const matchesPort = !portFilter || String(target.port) === portFilter;
-
-      const matchesCve =
-        cveFilter === "all" ||
-        (cveFilter === "with" && target.cves > 0) ||
-        (cveFilter === "without" && target.cves === 0);
-
-      return matchesSearch && matchesService && matchesPort && matchesCve;
-    });
-  }, [targets, search, serviceFilter, portFilter, cveFilter]);
-
-  const allFilteredSelected =
-    filteredTargets.length > 0 &&
-    filteredTargets.every((target) =>
-      selectedTargetKeys.includes(targetKey(target)),
-    );
-
-  function toggleTargetSelection(target: SavedPortTarget) {
-    const key = targetKey(target);
-    const isSelected = selectedTargetKeys.includes(key);
-
-    if (isSelected) {
-      const nextKeys = selectedTargetKeys.filter((item) => item !== key);
-
-      setSelectedTargetKeys(nextKeys);
-
-      if (selectedTargetKey === key) {
-        setSelectedTargetKey(nextKeys[0] ?? "");
-      }
-
-      return;
-    }
-
-    setSelectedTargetKeys((current) => [...current, key]);
-    setSelectedTargetKey(key);
-  }
-
-  function toggleSelectAllFiltered() {
-    const filteredKeys = filteredTargets.map(targetKey);
-
-    setSelectedTargetKeys((current) => {
-      if (allFilteredSelected) {
-        return current.filter((key) => !filteredKeys.includes(key));
-      }
-
-      return Array.from(new Set([...current, ...filteredKeys]));
-    });
-  }
-
-  const availableAgents = useMemo(
-    () =>
-      agents.filter(
-        (agent) => agent.status !== "retired" && agent.status !== "error",
-      ),
-    [agents],
-  );
-
-  const selectedAgents = useMemo(
-    () => agents.filter((agent) => selectedAgentIds.includes(agent.id)),
-    [agents, selectedAgentIds],
-  );
-
-  const selectedLeader = useMemo(
-    () =>
-      selectedAgents.find((agent) => String(agent.id) === teamLeaderId) ?? null,
-    [selectedAgents, teamLeaderId],
-  );
-
-  const services = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          targets
-            .map((target) => target.service)
-            .filter((service): service is string => Boolean(service)),
-        ),
-      ).sort(),
+      targets
+        .map((t) => assessTarget(t, targetKey(t)))
+        .sort(compareBySeverity),
     [targets],
   );
 
-  const totalCves = targets.reduce((total, target) => total + target.cves, 0);
+  const stats = useMemo(() => {
+    const uniqueIps = new Set(targets.map((t) => t.ip)).size;
+    const withCves = assessments.filter((a) => a.target.cves > 0).length;
+    const totalCves = targets.reduce(
+      (sum, t) => sum + Math.max(0, Number(t.cves ?? 0)),
+      0,
+    );
+    const bySeverity = SEVERITIES.reduce<Record<Severity, number>>(
+      (acc, s) => {
+        acc[s] = assessments.filter((a) => a.severity === s).length;
+        return acc;
+      },
+      { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 },
+    );
+    const criticalHigh = bySeverity.CRITICAL + bySeverity.HIGH;
+    return { uniqueIps, withCves, totalCves, bySeverity, criticalHigh };
+  }, [targets, assessments]);
 
-  const activeAgents = agents.filter(
-    (agent) => agent.status === "running",
-  ).length;
+  const maxSeverityCount = useMemo(
+    () => Math.max(1, ...SEVERITIES.map((s) => stats.bySeverity[s])),
+    [stats],
+  );
 
-  // Keep the selected team valid when the Agent list is refreshed.
-  useEffect(() => {
-    const validIds = new Set(availableAgents.map((agent) => agent.id));
-
-    setSelectedAgentIds((current) => current.filter((id) => validIds.has(id)));
-  }, [availableAgents]);
-
-  useEffect(() => {
-    if (teamLeaderId && !selectedAgentIds.includes(Number(teamLeaderId))) {
-      setTeamLeaderId("");
-    }
-  }, [selectedAgentIds, teamLeaderId]);
-
-  // ---------------------------------------------------------------------------
-  // Team selection
-  // ---------------------------------------------------------------------------
-
-  function toggleAgent(agent: TakeoverAgent) {
-    if (agent.status === "retired" || agent.status === "error") {
-      notify(
-        "AGENT UNAVAILABLE",
-        `${agent.name} ไม่สามารถเข้าร่วมทีมได้`,
-        "warning",
-      );
-      return;
-    }
-
-    setSelectedAgentIds((current) => {
-      const exists = current.includes(agent.id);
-
-      if (exists) {
-        const next = current.filter((id) => id !== agent.id);
-
-        if (String(agent.id) === teamLeaderId) {
-          setTeamLeaderId("");
-        }
-
-        addEvent(`Removed ${agent.name} from the planned team.`, "INFO");
-        return next;
+  // -- Filtered table ------------------------------------------------------
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return assessments.filter((a) => {
+      if (severityFilter !== "ALL" && a.severity !== severityFilter)
+        return false;
+      if (cveFilter === "with" && a.target.cves <= 0) return false;
+      if (cveFilter === "without" && a.target.cves > 0) return false;
+      if (q) {
+        const hay =
+          `${a.target.ip} ${a.target.port} ${a.target.service ?? ""} ${
+            a.target.hostname ?? ""
+          }`.toLowerCase();
+        if (!hay.includes(q)) return false;
       }
-
-      addEvent(`Added ${agent.name} to the planned team.`, "SUCCESS");
-
-      // First selected Agent becomes the initial team leader.
-      if (current.length === 0) {
-        setTeamLeaderId(String(agent.id));
-      }
-
-      return [...current, agent.id];
+      return true;
     });
+  }, [assessments, search, severityFilter, cveFilter]);
+
+  const topPriority = useMemo(
+    () => assessments.filter((a) => a.severity === "CRITICAL" || a.severity === "HIGH").slice(0, 6),
+    [assessments],
+  );
+
+  async function handleRefresh() {
+    await refreshData();
+    notify("อัปเดตแล้ว", "โหลดข้อมูล asset ล่าสุดจากฐานข้อมูลเรียบร้อย", "success");
   }
 
-  function handleLeaderChange(value: string) {
-    if (value && !selectedAgentIds.includes(Number(value))) {
+  // Passive CVE scan over the unique IPs currently shown in the table.
+  async function handleScan() {
+    if (scanning) return;
+    const ips = Array.from(new Set(filtered.map((a) => a.target.ip)));
+    if (!ips.length) {
+      notify("สแกนไม่ได้", "ไม่มี asset ในตารางให้สแกน", "warning");
       return;
     }
-
-    setTeamLeaderId(value);
-
-    const leader = agents.find((agent) => String(agent.id) === value);
-
-    if (leader) {
-      addEvent(`${leader.name} assigned as team leader.`, "SUCCESS");
-    }
-  }
-
-  function clearTeamSelection() {
-    setSelectedAgentIds([]);
-    setTeamLeaderId("");
-    addEvent("Cleared team selection.", "WARNING");
-  }
-
-  // ---------------------------------------------------------------------------
-  // Task management
-  // ---------------------------------------------------------------------------
-
-  async function prepareTask(): Promise<void> {
-    if (!tasksHydrated) {
-      notify("TASK STORAGE", "กำลังโหลดรายการภารกิจ กรุณารอสักครู่", "warning");
-      return;
-    }
-
-    if (taskStorageError) {
-      notify(
-        "TASK STORAGE ERROR",
-        "ไม่สามารถยืนยันการบันทึกภารกิจได้",
-        "error",
-      );
-      return;
-    }
-
-    if (!selectedTarget) {
-      notify("TASK PLAN", "กรุณาเลือก Target ก่อน", "warning");
-      addEvent("Select a saved target first.", "WARNING");
-      return;
-    }
-
-    if (selectedAgents.length < 2) {
-      notify(
-        "TEAM SELECTION",
-        "กรุณาเลือก Agent อย่างน้อย 2 ตัวเพื่อสร้างทีม",
-        "warning",
-      );
-      addEvent("A team requires at least two selected agents.", "WARNING");
-      return;
-    }
-
-    if (!selectedLeader) {
-      notify(
-        "TEAM LEADER",
-        "กรุณากำหนดหัวหน้าทีมจาก Agent ที่เลือก",
-        "warning",
-      );
-      return;
-    }
-
-    if (!authorized) {
-      notify("TASK PLAN", "ยืนยันสิทธิ์การใช้งานก่อน", "warning");
-      addEvent(
-        "Authorization confirmation is required before preparing a task.",
-        "WARNING",
-      );
-      return;
-    }
-
-    const unavailableMember = selectedAgents.find(
-      (agent) => agent.status === "retired" || agent.status === "error",
-    );
-
-    if (unavailableMember) {
-      notify(
-        "AGENT UNAVAILABLE",
-        `${unavailableMember.name} ไม่พร้อมใช้งาน`,
-        "error",
-      );
-      return;
-    }
-
-    const teamMembers: TeamMember[] = selectedAgents.map((agent) => ({
-      agentId: agent.id,
-      agentName: agent.name,
-      role: agent.id === selectedLeader.id ? "TEAM_LEADER" : "REVIEWER",
-    }));
-
-    const task: TeamTaskItem = {
-      id: Date.now(),
-      teamLeaderId: selectedLeader.id,
-      teamLeader: selectedLeader.name,
-      teamMembers,
-      target: selectedTarget.ip,
-      port: selectedTarget.port,
-      type: taskType,
-      createdAt: new Date().toISOString(),
-    };
-
-    const savedTask = await addTask(task);
-
-    if (!savedTask) {
-      return;
-    }
-
-    notify(
-      "TEAM PLAN SAVED",
-      `บันทึก Draft Plan #${savedTask.id} ลง MySQL สำเร็จ (ยังไม่ได้สร้าง Run)`,
-      "success",
-    );
-
-    addEvent(
-      `Draft plan #${savedTask.id} saved: ${taskLabels[taskType]} → Leader: ${selectedLeader.name} → ${teamMembers.length} Agents → ${selectedTarget.ip}:${selectedTarget.port}`,
-      "SUCCESS",
-    );
-  }
-
-  function cancelTask(taskId: number) {
-    notify(
-      "CANCEL UNAVAILABLE",
-      `Draft Plan #${taskId} ยังไม่มี API สำหรับยกเลิก`,
-      "warning",
-    );
-  }
-
-  function cancelAllTasks() {
-    notify(
-      "CANCEL UNAVAILABLE",
-      "ระบบยังไม่มี API สำหรับยกเลิก Draft Plans",
-      "warning",
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Authorized Lab Run
-  // ---------------------------------------------------------------------------
-
-  async function handleCreateLabRun() {
-    if (creatingRun) return;
-
-    if (!selectedTarget) {
-      notify("LAB RUN", "กรุณาเลือก Saved Target ก่อน", "warning");
-      return;
-    }
-
-    if (!authorized) {
-      notify("LAB RUN", "กรุณายืนยันสิทธิ์ก่อนสร้าง Run", "warning");
-      return;
-    }
-
-    const parsedExperimentId = Number(experimentId);
-
-    if (!Number.isSafeInteger(parsedExperimentId) || parsedExperimentId < 1) {
-      notify("LAB RUN", "Experiment ID ไม่ถูกต้อง", "warning");
-      return;
-    }
-
-    setPendingRun({
-      experimentId: parsedExperimentId,
-      ip: selectedTarget.ip,
-      port: selectedTarget.port,
-    });
-  }
-
-  async function confirmLabRun() {
-    if (!pendingRun || creatingRun) return;
-
-    const parsedExperimentId = pendingRun.experimentId;
-    const target = `${pendingRun.ip}:${pendingRun.port}`;
-
-    setCreatingRun(true);
-    setRunMessage("");
-
+    setScanning(true);
+    notify("กำลังสแกน", `ค้นหา CVE จาก InternetDB สำหรับ ${ips.length} IP...`, "info");
     try {
-      const result = await createAgentLabRun({
-        experimentId: parsedExperimentId,
-        targetIp: pendingRun.ip,
-        targetPort: pendingRun.port,
-        actionType: "HEALTH_CHECK",
-        confirmed: true,
-      });
-
-      const message = result.message ?? "Lab Run queued successfully.";
-
-      setRunMessage(message);
-
-      if (!result.ok) {
-        notify("LAB RUN FAILED", message, "error");
-        addEvent(`Lab Run creation failed: ${result.message}`, "ERROR");
-        return;
+      const result = await scanIpsForVulns(ips);
+      if (result.ok) {
+        notify("สแกนเสร็จ", result.message, "success");
+        await refreshData();
+      } else {
+        notify("สแกนไม่สำเร็จ", result.message, "error");
       }
-
-      setCreatedRunKey(
-        `${parsedExperimentId}:${pendingRun.ip}:${pendingRun.port}:HEALTH_CHECK`,
-      );
-
-      notify("LAB RUN CREATED", message, "success");
-
-      addEvent(
-        `HEALTH_CHECK queued: ${target} / Experiment #${parsedExperimentId}`,
-        "SUCCESS",
-      );
-
-      await refreshData();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "ไม่สามารถสร้าง Lab Run ได้";
-
-      setRunMessage(message);
-      notify("LAB RUN ERROR", message, "error");
-      addEvent(`Lab Run error: ${message}`, "ERROR");
+    } catch {
+      notify("สแกนไม่สำเร็จ", "เกิดข้อผิดพลาดระหว่างสแกน", "error");
     } finally {
-      setCreatingRun(false);
-      setPendingRun(null);
+      setScanning(false);
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Data loading
-  // ---------------------------------------------------------------------------
-
-  const refreshWorkspaceData = useCallback(async () => {
-    if (refreshing) return;
-
+  // Save the currently-filtered findings to the DB (IP, port, severity, CVE list,
+  // and a VULNERABLE/CLEAN status). Respects the active search + filters.
+  async function handleSaveFindings() {
+    if (saving) return;
+    if (filtered.length === 0) {
+      notify("บันทึกไม่ได้", "ไม่มีข้อมูลในตาราง (ตามตัวกรองปัจจุบัน)", "warning");
+      return;
+    }
+    const findings: VulnFindingInput[] = filtered.map(assessmentToFinding);
+    const vulnCount = findings.filter((f) => f.status === "VULNERABLE").length;
+    setSaving(true);
+    notify("กำลังบันทึก", `บันทึก ${findings.length} รายการ (มีช่องโหว่ ${vulnCount})...`, "info");
     try {
-      await refreshData();
-
-      addEvent(
-        `Refreshed workspace data: ${targets.length} saved targets and ${agents.length} agents.`,
-        "SUCCESS",
+      const res = await saveVulnFindings(findings);
+      notify(
+        res.ok ? "บันทึกสำเร็จ" : "บันทึกไม่สำเร็จ",
+        res.message,
+        res.ok ? "success" : "error",
       );
     } catch {
-      notify("REFRESH FAILED", "โหลดข้อมูลจากระบบไม่สำเร็จ", "error");
-
-      addEvent("Failed to refresh workspace data.", "ERROR");
+      notify("บันทึกไม่สำเร็จ", "เกิดข้อผิดพลาดระหว่างบันทึกลงฐานข้อมูล", "error");
+    } finally {
+      setSaving(false);
     }
-  }, [
-    refreshing,
-    refreshData,
-    addEvent,
-    notify,
-    targets.length,
-    agents.length,
-  ]);
+  }
 
+  // AUTO-SAVE · poll for fresh data while the mode is on.
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setClock(formatTime());
-    }, SESSION_POLL_INTERVAL);
-
-    return () => window.clearInterval(timer);
-  }, []);
-
-  // ---------------------------------------------------------------------------
-  // Live telemetry
-  // ---------------------------------------------------------------------------
-
-  useEffect(() => {
-    if (!live) return;
-
-    let busy = false;
-
+    if (!autoSave) return;
     const id = window.setInterval(() => {
-      if (busy) return;
-
-      busy = true;
-
-      refreshData()
-        .catch(() => undefined)
-        .finally(() => {
-          busy = false;
-        });
-    }, TELEMETRY_INTERVAL);
-
+      void refreshData();
+    }, 20000);
     return () => window.clearInterval(id);
-  }, [live, refreshData]);
+  }, [autoSave, refreshData]);
 
+  // AUTO-SAVE · whenever the assessed targets change, persist any NEW vulnerable
+  // findings to the DB (keyed by ip:port so nothing is saved twice).
   useEffect(() => {
-    if (!pendingRun || creatingRun) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setPendingRun(null);
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [pendingRun, creatingRun]);
-
-  // ---------------------------------------------------------------------------
-  // Target selection
-  // ---------------------------------------------------------------------------
-
-  function chooseTarget(target: SavedPortTarget) {
-    setSelectedTargetKey(targetKey(target));
-
-    addEvent(
-      `Selected ${target.ip}:${target.port}/${target.service ?? "unknown"}`,
+    if (!autoSave || autoSavingRef.current) return;
+    const vulnerable = assessments.filter(
+      (a) => a.target.cves > 0 || a.target.vulnIds.length > 0,
     );
-  }
+    const fresh = vulnerable.filter((a) => !autoSaveKnownRef.current.has(a.key));
+    if (fresh.length === 0) return;
 
-  // ---------------------------------------------------------------------------
-  // Remote session
-  // ---------------------------------------------------------------------------
+    autoSavingRef.current = true;
+    void (async () => {
+      try {
+        const res = await saveVulnFindings(fresh.map(assessmentToFinding));
+        if (res.ok) {
+          for (const a of fresh) autoSaveKnownRef.current.add(a.key);
+          notify(
+            "ออโต้เซฟช่องโหว่",
+            `บันทึกช่องโหว่ใหม่ ${fresh.length} รายการลงฐานข้อมูลแล้ว`,
+            "success",
+          );
+        } else {
+          notify("ออโต้เซฟไม่สำเร็จ", res.message, "error");
+        }
+      } catch {
+        notify("ออโต้เซฟไม่สำเร็จ", "เกิดข้อผิดพลาดระหว่างบันทึก", "error");
+      } finally {
+        autoSavingRef.current = false;
+      }
+    })();
+  }, [autoSave, assessments, notify]);
 
-  async function handleCreateRemoteSession() {
-    if (remoteLoading) return;
-
-    if (!authorized) {
-      setRemoteMessage("Authorization confirmation is required.");
-
-      addEvent(
-        "Remote session creation blocked: authorization required.",
-        "WARNING",
-      );
-      return;
-    }
-
-    await createRemoteSessionHook(authorized);
-
-    if (remoteSession?.id) {
-      notify(
-        "REMOTE SESSION",
-        "สร้าง Session แล้ว กำลังรอ Agent ที่ลงทะเบียนเชื่อมต่อ",
-        "success",
-      );
-
-      addEvent(`Remote session created: ${remoteSession.id}`, "SUCCESS");
-    }
-  }
-
-  async function handleRefreshRemoteStatus() {
-    if (!remoteSession || remoteLoading) return;
-
-    await refreshRemoteStatus();
-
-    if (remoteSession?.status) {
-      addEvent(`Remote session status: ${remoteSession.status}`, "INFO");
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+  const online = !targetMessage;
 
   return (
     <div className="shell" style={{ background: "#090a0f" }}>
-      <Sidebar online={!agentMessage} />
+      <Sidebar online={online} />
 
       <NotificationStack
         notifications={notifications}
         onDismiss={dismissNotification}
       />
 
-      {pendingRun && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-          onClick={() => {
-            if (!creatingRun) setPendingRun(null);
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="lab-run-confirm-title"
-            onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-md rounded border border-amber-500/40 bg-[#0e1017] shadow-2xl shadow-amber-500/10"
-          >
-            <div className="flex items-center gap-2 border-b border-[#252b3b] px-4 py-3">
-              <ShieldCheck className="h-4 w-4 text-amber-400" />
-
-              <h2
-                id="lab-run-confirm-title"
-                className="text-xs font-bold tracking-widest text-amber-300"
-              >
-                ยืนยันสร้าง HEALTH_CHECK LAB RUN
-              </h2>
-            </div>
-
-            <div className="space-y-3 p-4">
-              <div className="rounded border border-[#252b3b] bg-[#090a0f] p-3">
-                <div className="grid grid-cols-[110px_1fr] gap-y-2 text-[10px]">
-                  <span className="text-slate-500">EXPERIMENT ID</span>
-                  <span className="font-mono text-white">
-                    #{pendingRun.experimentId}
-                  </span>
-
-                  <span className="text-slate-500">TARGET</span>
-                  <span className="font-mono text-cyan-300">
-                    {pendingRun.ip}:{pendingRun.port}
-                  </span>
-
-                  <span className="text-slate-500">ACTION</span>
-                  <span className="font-mono text-amber-300">HEALTH_CHECK</span>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 p-3 text-[10px] leading-relaxed text-amber-200">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
-                ระบบจะสร้าง Queued Run เท่านั้น ไม่สั่งรันคำสั่งกับ Target
-                โดยตรง
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t border-[#252b3b] px-4 py-3">
-              <button
-                type="button"
-                onClick={() => setPendingRun(null)}
-                disabled={creatingRun}
-                className="rounded border border-[#303649] px-4 py-2 text-[10px] font-bold tracking-widest text-slate-400 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                CANCEL
-              </button>
-
-              <button
-                type="button"
-                autoFocus
-                onClick={() => void confirmLabRun()}
-                disabled={creatingRun}
-                className="flex items-center gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-[10px] font-bold tracking-widest text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {creatingRun ? (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    CREATING...
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-3.5 w-3.5" />
-                    CONFIRM
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div
-        id="takeover-page"
+        id="vuln-page"
         className="takeover-page main flex min-w-0 flex-col bg-[#090a0f] text-slate-100"
       >
-        <Navbar online={!agentMessage} title="TAKEOVER" link="API" />
+        <Navbar online={online} title="VULN ANALYSIS" link="DB" />
 
         <main className="flex-1 space-y-4 p-4 md:p-6">
           <header className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-red-400" />
-
+                <ShieldAlert className="h-5 w-5 text-amber-400" />
                 <h1 className="text-lg font-bold tracking-widest text-white">
-                  AGENT CONTROL CENTER
+                  NETWORK VULNERABILITY ANALYSIS
                 </h1>
               </div>
-
               <p className="mt-1 text-[10px] tracking-wider text-slate-500">
-                SAVED TARGETS / MULTI-AGENT TEAM / SECURE LAB ENVIRONMENT
+                ASSET EXPOSURE / RISK PRIORITIZATION / REMEDIATION GUIDANCE
               </p>
             </div>
 
-            <div className="tko-runlight flex items-center gap-3 rounded border border-[#252b3b] bg-[#0e1017] px-3 py-2">
-              <span
-                className={`tko-dot ${live ? "is-running" : "is-error"}`}
-                aria-hidden
-              />
-
+            <div className="flex items-center gap-3 rounded border border-[#252b3b] bg-[#0e1017] px-3 py-2">
               <div>
                 <div
                   className={`text-[10px] font-bold ${
-                    live ? "text-emerald-400" : "text-amber-400"
+                    online ? "text-emerald-400" : "text-amber-400"
                   }`}
                 >
-                  {live ? "WORKSPACE ONLINE" : "LIVE PAUSED"}
+                  {online ? "DATABASE ONLINE" : "DATABASE OFFLINE"}
                 </div>
-
                 <div className="text-[9px] text-slate-500">{clock}</div>
               </div>
 
               <button
                 type="button"
-                onClick={() => setLive((value) => !value)}
-                className={`ml-1 inline-flex items-center gap-1 px-2 py-1.5 text-[9px] font-bold tracking-wider ${
-                  live ? "tko-stop" : "tko-live"
-                }`}
-                aria-label={
-                  live ? "Stop live telemetry" : "Resume live telemetry"
-                }
-              >
-                {live ? (
-                  <>
-                    <Square className="h-3 w-3" fill="currentColor" />
-                    STOP
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-3 w-3" fill="currentColor" />
-                    LIVE
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void refreshWorkspaceData()}
+                onClick={() => void handleRefresh()}
                 disabled={refreshing}
                 className="rounded border border-[#303649] p-2 text-slate-400 hover:text-white disabled:opacity-50"
                 aria-label="Refresh data"
@@ -823,303 +300,341 @@ export default function TakeoverPage() {
             </div>
           </header>
 
-          {/* Metrics */}
+          {targetMessage ? (
+            <div className="rounded border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
+              {targetMessage}
+            </div>
+          ) : null}
 
+          {/* KPI metrics */}
           <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Metric
-              label="SAVED PORT RECORDS"
+              label="ASSETS (UNIQUE IP)"
+              value={stats.uniqueIps}
+              icon={<Server className="h-4 w-4 text-blue-400" />}
+            />
+            <Metric
+              label="EXPOSED SERVICES"
               value={targets.length}
               icon={<Database className="h-4 w-4 text-cyan-400" />}
             />
-
             <Metric
-              label="UNIQUE IP ADDRESSES"
-              value={new Set(targets.map((target) => target.ip)).size}
-              icon={<Server className="h-4 w-4 text-blue-400" />}
-            />
-
-            <Metric
-              label="RECORDED CVE COUNTS"
-              value={totalCves}
+              label="SERVICES WITH KNOWN CVEs"
+              value={stats.withCves}
               icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
             />
-
             <Metric
-              label="RUNNING AGENTS"
-              value={`${activeAgents}/${agents.length}`}
-              icon={<Cpu className="h-4 w-4 text-emerald-400" />}
+              label="CRITICAL + HIGH"
+              value={stats.criticalHigh}
+              icon={<ShieldAlert className="h-4 w-4 text-red-400" />}
             />
           </section>
 
-          {/* Saved target database */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* Severity distribution */}
+            <section className="rounded border border-[#303649] bg-[#0e1017] p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-slate-400" />
+                <h2 className="text-xs font-bold tracking-widest text-white">
+                  SEVERITY DISTRIBUTION
+                </h2>
+              </div>
 
+              <div className="space-y-2.5">
+                {SEVERITIES.map((s) => {
+                  const count = stats.bySeverity[s];
+                  const meta = SEVERITY_META[s];
+                  const pct = Math.round((count / maxSeverityCount) * 100);
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() =>
+                        setSeverityFilter((prev) =>
+                          prev === s ? "ALL" : s,
+                        )
+                      }
+                      className={`w-full text-left ${
+                        severityFilter === s ? "opacity-100" : "opacity-90"
+                      }`}
+                    >
+                      <div className="mb-1 flex items-center justify-between text-[10px] font-bold tracking-wider">
+                        <span className={meta.text}>{meta.label}</span>
+                        <span className="font-mono text-slate-300">
+                          {count}
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded bg-[#090a0f]">
+                        <div
+                          className={`h-full ${meta.dot} transition-all`}
+                          style={{ width: `${count === 0 ? 0 : Math.max(4, pct)}%` }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="mt-3 text-[9px] leading-relaxed text-slate-500">
+                ความรุนแรงประเมินจากระดับการเปิดเผยบริการ + CVE จริงจาก InternetDB
+                (passive OSINT, มี CVE-ID จริงแต่ยังไม่มีคะแนน CVSS) — ใช้จัดลำดับการแก้ไข
+                กด SCAN FOR CVEs เพื่อดึง CVE-ID ล่าสุด · คลิกแถบเพื่อกรองตาราง
+              </p>
+            </section>
+
+            {/* Top priority remediation */}
+            <section className="rounded border border-[#303649] bg-[#0e1017] p-4 lg:col-span-2">
+              <div className="mb-3 flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-red-400" />
+                <h2 className="text-xs font-bold tracking-widest text-white">
+                  TOP PRIORITY REMEDIATION
+                </h2>
+              </div>
+
+              {topPriority.length === 0 ? (
+                <p className="py-6 text-center text-xs text-slate-500">
+                  {loading
+                    ? "กำลังวิเคราะห์..."
+                    : "ไม่พบ asset ระดับ Critical/High จากข้อมูลปัจจุบัน"}
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {topPriority.map((a) => {
+                    const meta = SEVERITY_META[a.severity];
+                    return (
+                      <li
+                        key={a.key}
+                        className={`rounded border ${meta.border} ${meta.bg} p-3`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 font-mono text-xs text-white">
+                            <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
+                            {a.target.ip}:{a.target.port}
+                            <span className="text-slate-400">
+                              {a.serviceLabel}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] font-bold">
+                            <span className={meta.text}>{meta.label}</span>
+                            <span className="rounded bg-black/40 px-1.5 py-0.5 font-mono text-slate-300">
+                              {a.score}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
+                          {a.remediation}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          </div>
+
+          {/* Asset table */}
           <section className="rounded border border-[#303649] bg-[#0e1017] p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Server className="h-4 w-4 text-red-400" />
+              <h2 className="text-xs font-bold tracking-widest text-white">
+                ASSET RISK REGISTER
+                <span className="ml-2 font-mono text-[10px] text-slate-500">
+                  {filtered.length} / {assessments.length}
+                </span>
+              </h2>
 
-                <h2 className="text-xs font-bold tracking-widest text-white">
-                  SAVED TARGET DATABASE
-                </h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleScan()}
+                  disabled={scanning || filtered.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-bold tracking-wider text-cyan-300 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  title="ค้นหา CVE จริงจาก InternetDB (passive OSINT) สำหรับ IP ที่แสดงอยู่"
+                >
+                  <Radar className={`h-3.5 w-3.5 ${scanning ? "animate-spin" : ""}`} />
+                  {scanning ? "กำลังสแกน..." : "SCAN FOR CVEs"}
+                </button>
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded border border-cyan-500/20 bg-cyan-500/5 p-3">
-                  <div className="flex items-center gap-3">
-                    <Database className="h-4 w-4 text-cyan-400" />
+                <button
+                  type="button"
+                  onClick={() => void handleSaveFindings()}
+                  disabled={saving || filtered.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold tracking-wider text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  title="บันทึกช่องโหว่ที่กรองอยู่ลงฐานข้อมูล (IP, Port, รายละเอียด, สถานะมีช่องโหว่)"
+                >
+                  <Save className={`h-3.5 w-3.5 ${saving ? "animate-pulse" : ""}`} />
+                  {saving ? "กำลังบันทึก..." : `บันทึกช่องโหว่ (${filtered.length})`}
+                </button>
 
-                    <div>
-                      <div className="text-[10px] font-bold tracking-wider text-white">
-                        MULTI-TARGET SELECTION
-                      </div>
+                <button
+                  type="button"
+                  onClick={() => setAutoSave((v) => !v)}
+                  aria-pressed={autoSave}
+                  title="เปิด/ปิดโหมดบันทึกช่องโหว่ใหม่ลงฐานข้อมูลอัตโนมัติ"
+                  className={`inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-[10px] font-bold tracking-wider transition ${
+                    autoSave
+                      ? "border-emerald-500/70 bg-emerald-500/15 text-emerald-300 shadow-[0_0_16px_rgba(16,185,129,0.25)]"
+                      : "border-[#303649] bg-[#0e1017] text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Zap className={`h-3.5 w-3.5 ${autoSave ? "animate-pulse" : ""}`} />
+                  {autoSave ? "AUTO-SAVE: ON" : "AUTO-SAVE"}
+                </button>
 
-                      <div className="mt-1 text-[10px] text-slate-400">
-                        SELECTED:{" "}
-                        <span className="font-bold text-cyan-300">
-                          {selectedTargets.length}
-                        </span>{" "}
-                        / {targets.length} SAVED RECORDS
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={toggleSelectAllFiltered}
-                      disabled={filteredTargets.length === 0}
-                      className="rounded border border-cyan-500/40 px-3 py-2 text-[9px] font-bold tracking-wider text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40"
-                    >
-                      {allFilteredSelected ? "UNSELECT FILTERED" : "SELECT ALL"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={clearTargetSelection}
-                      disabled={selectedTargetKeys.length === 0}
-                      className="rounded border border-[#303649] px-3 py-2 text-[9px] font-bold tracking-wider text-slate-400 hover:text-white disabled:opacity-40"
-                    >
-                      CLEAR SELECTION
-                    </button>
-                  </div>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="ค้นหา IP / host / service..."
+                    className="w-56 rounded border border-[#303649] bg-[#090a0f] py-1.5 pl-8 pr-2 text-xs text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
+                  />
                 </div>
 
-                <span className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[9px] text-cyan-400">
-                  MYSQL / saved_ports
-                </span>
-              </div>
-
-              <span className="text-[9px] text-slate-500">
-                {filteredTargets.length} MATCHING RECORDS
-              </span>
-            </div>
-
-            <div className="grid gap-2 md:grid-cols-4">
-              <div className="relative md:col-span-2">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search IP / hostname / service..."
-                  style={{ paddingLeft: "2.25rem" }}
-                  className="w-full rounded border border-[#303649] bg-[#090a0f] py-2 pl-9 pr-3 text-[11px] text-white outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <select
-                value={serviceFilter}
-                onChange={(event) => setServiceFilter(event.target.value)}
-                className="rounded border border-[#303649] bg-[#090a0f] px-3 py-2 text-[11px] text-white outline-none"
-              >
-                <option value="">All services</option>
-
-                {services.map((service) => (
-                  <option key={service} value={service}>
-                    {service}
-                  </option>
-                ))}
-              </select>
-
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  value={portFilter}
-                  onChange={(event) =>
-                    setPortFilter(event.target.value.replace(/\D/g, ""))
+                <select
+                  value={severityFilter}
+                  onChange={(e) =>
+                    setSeverityFilter(e.target.value as SeverityFilter)
                   }
-                  placeholder="Port"
-                  inputMode="numeric"
-                  className="min-w-0 rounded border border-[#303649] bg-[#090a0f] px-3 py-2 text-[11px] text-white outline-none focus:border-cyan-500"
-                />
+                  className="rounded border border-[#303649] bg-[#090a0f] px-2 py-1.5 text-xs text-slate-200 focus:outline-none"
+                >
+                  <option value="ALL">ทุกความรุนแรง</option>
+                  {SEVERITIES.map((s) => (
+                    <option key={s} value={s}>
+                      {SEVERITY_META[s].label}
+                    </option>
+                  ))}
+                </select>
 
                 <select
                   value={cveFilter}
-                  onChange={(event) => setCveFilter(event.target.value)}
-                  className="min-w-0 rounded border border-[#303649] bg-[#090a0f] px-2 py-2 text-[10px] text-white outline-none"
+                  onChange={(e) => setCveFilter(e.target.value as CveFilter)}
+                  className="rounded border border-[#303649] bg-[#090a0f] px-2 py-1.5 text-xs text-slate-200 focus:outline-none"
                 >
-                  <option value="all">All CVE</option>
-                  <option value="with">With CVE</option>
-                  <option value="without">No CVE</option>
+                  <option value="all">CVE: ทั้งหมด</option>
+                  <option value="with">มี CVE</option>
+                  <option value="without">ไม่มี CVE</option>
                 </select>
               </div>
             </div>
 
-            {targetMessage && (
-              <div className="mt-3 flex items-center gap-2 rounded border border-amber-500/30 bg-amber-500/5 p-3 text-[10px] text-amber-400">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                {targetMessage}
-              </div>
-            )}
-
-            <div className="mt-3 max-h-72 overflow-auto rounded border border-[#252b3b]">
-              <table className="w-full min-w-[620px] text-left text-[10px]">
-                <thead className="sticky top-0 bg-[#171b27] text-[9px] tracking-wider text-slate-500">
-                  <tr>
-                    <th className="px-3 py-2">IP ADDRESS</th>
-                    <th className="px-3 py-2">PORT</th>
-                    <th className="px-3 py-2">SERVICE</th>
-                    <th className="px-3 py-2">CVE COUNT</th>
-                    <th className="px-3 py-2">HOSTNAME</th>
-                    <th className="px-3 py-2">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={allFilteredSelected}
-                          onChange={toggleSelectAllFiltered}
-                          disabled={filteredTargets.length === 0}
-                          aria-label="Select all filtered targets"
-                          className="accent-cyan-400"
-                        />
-                        <span>SELECT</span>
-                      </label>
-                    </th>
+            <div className="max-h-[520px] overflow-auto rounded border border-[#1c2130]">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead className="sticky top-0 z-10 bg-[#0b0d14]">
+                  <tr className="text-[9px] font-bold tracking-widest text-slate-500">
+                    <th className="px-3 py-2.5">IP / HOST</th>
+                    <th className="px-3 py-2.5">PORT</th>
+                    <th className="px-3 py-2.5">SERVICE</th>
+                    <th className="px-3 py-2.5">EXPOSURE</th>
+                    <th className="px-3 py-2.5 text-center">CVEs</th>
+                    <th className="px-3 py-2.5">SEVERITY</th>
+                    <th className="px-3 py-2.5 text-center">SCORE</th>
+                    <th className="px-3 py-2.5">REMEDIATION</th>
                   </tr>
                 </thead>
-
                 <tbody>
-                  {filteredTargets.map((target, index) => {
-                    const selected =
-                      selectedTarget !== null &&
-                      targetKey(selectedTarget) === targetKey(target);
-
-                    return (
-                      <tr
-                        key={`${target.ip}:${target.port}:${index}`}
-                        className={`border-t border-[#252b3b] ${
-                          selected ? "bg-cyan-500/5" : "hover:bg-white/5"
-                        }`}
-                      >
-                        <td className="px-3 py-2 font-mono text-cyan-300">
-                          {target.ip}
-                        </td>
-
-                        <td className="px-3 py-2 font-mono text-white">
-                          {target.port}
-                        </td>
-
-                        <td className="px-3 py-2 text-slate-300">
-                          {target.service ?? "unknown"}
-                        </td>
-
-                        <td className="px-3 py-2">
-                          <span
-                            className={
-                              target.cves > 0
-                                ? "text-amber-400"
-                                : "text-slate-500"
-                            }
-                          >
-                            {target.cves}
-                          </span>
-                        </td>
-
-                        <td className="max-w-[180px] truncate px-3 py-2 text-slate-500">
-                          {target.hostname ?? "—"}
-                        </td>
-
-                        <td className="px-3 py-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedTargetKeys.includes(
-                              targetKey(target),
-                            )}
-                            onChange={() => toggleTargetSelection(target)}
-                            aria-label={`Select ${target.ip}:${target.port}`}
-                            className="h-4 w-4 cursor-pointer accent-cyan-400"
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {!loading && filteredTargets.length === 0 && (
+                  {filtered.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={8}
                         className="px-3 py-10 text-center text-slate-500"
                       >
-                        No saved port records found.
+                        {loading ? "กำลังโหลด..." : "ไม่พบ asset ที่ตรงเงื่อนไข"}
                       </td>
                     </tr>
-                  )}
-
-                  {loading && (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="px-3 py-10 text-center text-cyan-400"
-                      >
-                        Loading saved targets...
-                      </td>
-                    </tr>
+                  ) : (
+                    filtered.map((a) => {
+                      const meta = SEVERITY_META[a.severity];
+                      return (
+                        <tr
+                          key={a.key}
+                          className="border-t border-[#161b28] align-top hover:bg-[#11141d]"
+                        >
+                          <td className="px-3 py-2.5">
+                            <div className="font-mono text-slate-200">
+                              {a.target.ip}
+                            </div>
+                            {a.target.hostname ? (
+                              <div className="text-[10px] text-slate-500">
+                                {a.target.hostname}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-slate-300">
+                            {a.target.port}
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-300">
+                            {a.serviceLabel}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="text-[10px] uppercase tracking-wider text-slate-400">
+                              {a.exposureTier}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {a.target.vulnIds.length > 0 ? (
+                              <div className="flex max-w-[220px] flex-wrap gap-1">
+                                {a.target.vulnIds.slice(0, 6).map((cve) => (
+                                  <a
+                                    key={cve}
+                                    href={`https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cve)}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-[9px] text-amber-300 hover:bg-amber-500/20"
+                                  >
+                                    {cve}
+                                  </a>
+                                ))}
+                                {a.target.vulnIds.length > 6 ? (
+                                  <span className="font-mono text-[9px] text-slate-500">
+                                    +{a.target.vulnIds.length - 6}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span
+                                className={`font-mono ${
+                                  a.target.cves > 0
+                                    ? "text-amber-400"
+                                    : "text-slate-600"
+                                }`}
+                                title={
+                                  a.target.cves > 0
+                                    ? "มีจำนวน CVE แต่ยังไม่มี CVE-ID — กด SCAN เพื่อดึงรายการจริง"
+                                    : undefined
+                                }
+                              >
+                                {a.target.cves}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded border ${meta.border} ${meta.bg} px-2 py-0.5 text-[10px] font-bold ${meta.text}`}
+                            >
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${meta.dot}`}
+                              />
+                              {meta.label}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-center font-mono text-slate-300">
+                            {a.score}
+                          </td>
+                          <td className="px-3 py-2.5 text-[11px] leading-relaxed text-slate-400">
+                            {a.remediation}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
             </div>
+
+            {agentMessage ? (
+              <p className="mt-2 text-[10px] text-slate-600">{agentMessage}</p>
+            ) : null}
           </section>
-
-          {/* Main workspace */}
-
-          <TakeoverWorkspace
-            agents={agents}
-            selectedAgents={selectedAgents}
-            selectedAgentIds={selectedAgentIds}
-            selectedLeader={selectedLeader}
-            savingTask={savingTask}
-            teamLeaderId={teamLeaderId}
-            agentMessage={agentMessage}
-            handleLeaderChange={handleLeaderChange}
-            clearTeamSelection={clearTeamSelection}
-            toggleAgent={toggleAgent}
-            taskType={taskType}
-            setTaskType={setTaskType}
-            selectedTarget={selectedTarget}
-            authorized={authorized}
-            setAuthorized={setAuthorized}
-            tasks={tasks}
-            tasksHydrated={tasksHydrated}
-            taskStorageError={taskStorageError}
-            prepareTask={prepareTask}
-            cancelTask={cancelTask}
-            cancelAllTasks={cancelAllTasks}
-            experimentId={experimentId}
-            setExperimentId={setExperimentId}
-            creatingRun={creatingRun}
-            labRunCreated={labRunCreated}
-            runMessage={runMessage}
-            handleCreateLabRun={handleCreateLabRun}
-            loading={loading}
-            targetMessage={targetMessage}
-            remoteSession={remoteSession}
-            remoteLoading={remoteLoading}
-            remoteMessage={remoteMessage}
-            remoteConnected={remoteConnected}
-            remoteDisconnected={remoteDisconnected}
-            setRemoteSession={setRemoteSession}
-            setRemoteMessage={setRemoteMessage}
-            handleCreateRemoteSession={handleCreateRemoteSession}
-            handleRefreshRemoteStatus={handleRefreshRemoteStatus}
-            events={events}
-            setEvents={setEvents}
-          />
         </main>
       </div>
     </div>

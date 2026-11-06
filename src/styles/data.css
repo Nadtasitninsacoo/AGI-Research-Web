@@ -86,6 +86,30 @@
   border-color: var(--warn);
 }
 
+/* idle agent that is online = available/ready → lit green */
+.dot-ready {
+  background: var(--ok);
+  border-color: var(--ok);
+  box-shadow: 0 0 0 3px rgba(66, 199, 129, 0.18);
+}
+
+.dot-retired {
+  background: transparent;
+  border-color: #55555e;
+  opacity: 0.6;
+}
+
+/* agent status label tones */
+.reg-state {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.s-ready { color: var(--ok); }
+.s-running { color: var(--red-hot); }
+.s-paused { color: var(--warn); }
+.s-error { color: var(--red-hot); }
+.s-retired { color: var(--faint); }
+
 /* ============================================================
    12 / TABLES AND STATUS TAGS
    ============================================================ */
