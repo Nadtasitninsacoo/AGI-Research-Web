@@ -41,6 +41,21 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
+  /* Exception: keep the slow, non-flashing ambient identity motion. A 60s globe
+     turn and 150–240s starfield drift are gentle and continuous — outside what
+     prefers-reduced-motion is meant to suppress (fast, large, flashing motion).
+     Higher specificity + !important re-asserts them over the blanket rule above
+     and over the per-element `animation: none` in cosmos.css / map.css. */
+  .recon-globe::before {
+    animation: earth-spin 60s linear infinite !important;
+  }
+  .cosmos::before {
+    animation: cosmos-drift 150s linear infinite alternate !important;
+  }
+  .cosmos::after {
+    animation: cosmos-drift 240s linear infinite alternate-reverse !important;
+  }
 }
 
 /* ============================================================
