@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 
 import { parseTargets } from "@/lib/targets";
+import { usePersistentState } from "@/lib/usePersistentState";
 
 import {
   pullIpsFromPorts,
@@ -112,7 +113,7 @@ const CAT_META: Record<Cat, { label: string; dot: string }> = {
 };
 
 export function Recon() {
-  const [raw, setRaw] = useState("");
+  const [raw, setRaw] = usePersistentState("recon:raw", "");
 
   const parsed = useMemo(() => parseTargets(raw), [raw]);
 
@@ -124,11 +125,7 @@ export function Recon() {
 
   const [filter, setFilter] = useState<Filter>({});
 
-  const [stats, setStats] = useState<ReconStats | null>({
-    total: 1337,
-    scanned: 1330,
-    unscanned: 7,
-  });
+  const [stats, setStats] = useState<ReconStats | null>(null);
 
   const [count, setCount] = useState("50");
 
@@ -144,17 +141,24 @@ export function Recon() {
 
   const [scanning, setScanning] = useState(false);
 
-  const [results, setResults] = useState<ExposureRow[] | null>(null);
+  // Scan results persist so a refresh keeps the last sweep instead of blanking.
+  const [results, setResults] = usePersistentState<ExposureRow[] | null>(
+    "recon:results",
+    null,
+  );
 
-  const [cat, setCat] = useState<Cat | "all">("all");
+  const [cat, setCat] = usePersistentState<Cat | "all">("recon:cat", "all");
 
   const [q, setQ] = useState("");
 
-  const [view, setView] = useState<"port" | "ip">("port");
+  const [view, setView] = usePersistentState<"port" | "ip">("recon:view", "port");
 
   // pull source: IPs from saved_ips, or IPs that have saved ports
 
-  const [source, setSource] = useState<"ips" | "ports">("ips");
+  const [source, setSource] = usePersistentState<"ips" | "ports">(
+    "recon:source",
+    "ips",
+  );
 
   const [pf, setPf] = useState<PortFilter>({});
 

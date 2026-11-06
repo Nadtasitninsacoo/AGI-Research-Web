@@ -566,7 +566,7 @@ export function MapAutoAgent() {
                   <CheckCircle2 size={12} />
                   บันทึกเป้าหมายลง DB อัตโนมัติ
                 </span>
-                <Link href="/ports" style={pill}>
+                <Link href="/recon?tab=ports" style={pill}>
                   <Database size={11} />
                   Ports
                 </Link>

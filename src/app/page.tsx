@@ -5,7 +5,6 @@ import { HeroCosmos } from "@/components/hud/HeroCosmos";
 import { Navbar } from "@/components/hud/Navbar";
 import { Nexus } from "@/components/hud/Nexus";
 import { OsintOverview } from "@/components/hud/OsintOverview";
-import Link from "next/link";
 import { Sidebar } from "@/components/hud/Sidebar";
 import { getDashboardData, type DashboardData } from "@/lib/queries";
 import { agentStatusMeta } from "@/lib/agentStatus";
@@ -205,31 +204,6 @@ async function DashboardFrame() {
                 {online ? "SYSTEM OPERATIONAL" : "DATABASE OFFLINE"}
               </span>
 
-              <Link
-                href="/execute"
-                aria-label="Open Run Execution"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "10px",
-                  marginTop: "22px",
-                  padding: "12px 20px",
-                  border: "1px solid rgba(255, 65, 85, 0.65)",
-                  borderRadius: "4px",
-                  background: "rgba(180, 20, 40, 0.16)",
-                  color: "#ff6677",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  letterSpacing: "1.5px",
-                  textDecoration: "none",
-                  transition: "all 180ms ease",
-                }}
-              >
-                <Icon name="send" />
-                LAUNCH RUN
-                <span aria-hidden="true">→</span>
-              </Link>
             </div>
 
             <div className="hero-tagline" aria-hidden="true">

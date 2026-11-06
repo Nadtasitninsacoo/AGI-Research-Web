@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import type { SavedPortTarget } from "@/app/recon/actions";
 import type { ActiveRun } from "@/app/runs/actions";
+import { assessTarget, SEVERITY_META } from "@/app/takeover/utils/risk";
+import { SeveritySparkline } from "@/components/SeveritySparkline";
 
 type RowRun = { id: number; status: string };
 
@@ -116,6 +118,16 @@ export default function SavedPortTargetPicker({
     });
   }, [query, targets]);
 
+  // Compute each target's severity ONCE per target set (not per render/selection).
+  const severityByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const target of targets) {
+      const key = getTargetKey(target);
+      map.set(key, assessTarget(target, key).severity);
+    }
+    return map;
+  }, [targets]);
+
   const selectedTargets = useMemo(
     () =>
       targets.filter((target) => selectedKeys.has(getTargetKey(target))),
@@ -180,10 +192,10 @@ export default function SavedPortTargetPicker({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold tracking-wide text-slate-100">
-            SAVED IP / PORT TARGETS
+            เป้าหมายที่มีช่องโหว่ (ALL VULNERABILITIES)
           </h2>
           <p className="mt-1 text-xs text-slate-400">
-            เลือกเป้าหมายได้มากกว่าหนึ่งรายการ
+            โหลดทุกเป้าหมายที่มี CVE · เลือกได้มากกว่าหนึ่งรายการ
           </p>
         </div>
 
@@ -251,6 +263,9 @@ export default function SavedPortTargetPicker({
             const locked = rowRun
               ? ACTIVE_STATUSES.has(rowRun.status.toLowerCase())
               : false;
+            const sev = (severityByKey.get(key) ??
+              "INFO") as keyof typeof SEVERITY_META;
+            const sevMeta = SEVERITY_META[sev];
 
             return (
               <label
@@ -264,6 +279,10 @@ export default function SavedPortTargetPicker({
                       }`
                     : undefined
                 }
+                style={{
+                  contentVisibility: "auto",
+                  containIntrinsicSize: "auto 34px",
+                }}
                 className={`flex items-center gap-3 border-b border-slate-800 px-3 py-1.5 last:border-b-0 ${
                   locked
                     ? "cursor-not-allowed opacity-60"
@@ -329,6 +348,18 @@ export default function SavedPortTargetPicker({
                   }`}
                 >
                   {target.authorized ? "Authorized" : "Unauthorized"}
+                </span>
+
+                <span
+                  className={`shrink-0 inline-flex items-center gap-1 rounded border ${sevMeta.border} ${sevMeta.bg} px-1.5 py-0.5 text-[10px] font-bold ${sevMeta.text}`}
+                  title={`ระดับความรุนแรง: ${sevMeta.label}`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${sevMeta.dot}`} />
+                  {sevMeta.label}
+                </span>
+
+                <span className="shrink-0 rounded bg-black/30 px-1 py-0.5">
+                  <SeveritySparkline seed={key} severity={sev} width={64} height={16} />
                 </span>
 
                 <span className="shrink-0 text-xs text-slate-500">

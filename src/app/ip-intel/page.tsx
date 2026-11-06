@@ -1,6 +1,7 @@
-// IP Intel & Map Recon page
-// - Lists saved IP coordinate intelligence with filtering and export.
-// - Provides an offline fallback with sample telemetry if the DB is unavailable.
+// IP Vault page
+// - Manage the saved_ips vault: list, search, filter, export and delete.
+// - OSINT acquisition/visualization lives on the Map page; this is the vault.
+// - No fabricated data: on a DB error it reports the real state, never samples.
 
 import Link from "next/link";
 import { connection } from "next/server";
@@ -26,7 +27,7 @@ import {
 } from "./query";
 import { ClearAllButton, DeleteByPlaceBar, IpTable } from "./IpActions";
 
-export const metadata = { title: "IP Intel & Map Recon" };
+export const metadata = { title: "IP Vault // AGI Research" };
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
@@ -58,6 +59,7 @@ async function Content({ searchParams }: { searchParams: SP }) {
     topCity: Breakdown;
   } | null = null;
   let noTable: false | "missing" | "outdated" = false;
+  let online = true;
 
   try {
     const [stats, total, rows, topCountry, topRegion, topCity] =
@@ -74,48 +76,23 @@ async function Content({ searchParams }: { searchParams: SP }) {
     if (e instanceof NoSavedIpsTable) {
       noTable = e.reason;
     } else {
-      // Offline fallback: provide sample telemetry if the DB is unavailable
-      data = {
-        stats: {
-          total: 1337,
-          countries: 42,
-          regions: 128,
-          cities: 512,
-          latest: new Date().toISOString().slice(0, 19).replace("T", " "),
-        },
-        total: 1,
-        rows: [
-          {
-            id: 1337,
-            ip: "133.7.133.7",
-            city: "Sample City",
-            region: "Sample Region",
-            country: "XX",
-            lat: 0.0,
-            lon: 0.0,
-            source: "sample_probe",
-            note: "Offline fallback sample record",
-            created_at: new Date().toISOString().slice(0, 19).replace("T", " "),
-          },
-        ],
-        topCountry: [{ label: "XX", n: 1337 }],
-        topRegion: [{ label: "Sample Region", n: 1337 }],
-        topCity: [{ label: "Sample City", n: 1337 }],
-      };
+      // DB unreachable — report the real offline state, never fabricated data.
+      online = false;
+      data = null;
     }
   }
 
   const exportHref = `/ip-intel/export?${new URLSearchParams({ ...(q ? { q } : {}), ...(country ? { country } : {}) }).toString()}`;
 
   return (
-    <PageFrame title="IP INTEL" online={true}>
+    <PageFrame title="IP VAULT" online={online}>
       <PageHero
-        kicker="MAP RECON & OSINT VAULT"
-        title="IP Intel"
-        strong="& Map"
+        kicker="OSINT IP VAULT"
+        title="IP"
+        strong="Vault"
         note={
           data
-            ? `${data.stats.total.toLocaleString()} targets mapped`
+            ? `${data.stats.total.toLocaleString()} IP ในคลัง`
             : undefined
         }
       />
@@ -132,10 +109,24 @@ async function Content({ searchParams }: { searchParams: SP }) {
           fontFamily: "monospace",
         }}
       >
-        🌐 IP Intel — saved coordinate intelligence and vulnerability heatmap
+        🗄️ IP Vault — คลัง saved_ips (ค้นหา · กรอง · ส่งออก · ลบ) · เก็บพิกัดใหม่ได้จากหน้า{" "}
+        <Link href="/map" style={{ color: "#ff6677" }}>
+          Map
+        </Link>
       </div>
 
-      {noTable ? (
+      {!online ? (
+        <section className="panel span-12">
+          <header className="panel-head">
+            <span>01 // SAVED IPS</span>
+            <em>OFFLINE</em>
+          </header>
+          <Notice>
+            เชื่อมต่อฐานข้อมูลไม่ได้ — ตรวจสอบ MySQL แล้วรีเฟรชอีกครั้ง
+            (ไม่แสดงข้อมูลตัวอย่างปลอม)
+          </Notice>
+        </section>
+      ) : noTable ? (
         <section className="panel span-12">
           <header className="panel-head">
             <span>01 // SAVED IPS</span>
@@ -244,7 +235,7 @@ async function Content({ searchParams }: { searchParams: SP }) {
 
           <section className="panel span-4">
             <header className="panel-head">
-              <span>02 // RECON BREAKDOWN</span>
+              <span>02 // VAULT BREAKDOWN</span>
               <em>TOP</em>
             </header>
             <BreakdownBlock

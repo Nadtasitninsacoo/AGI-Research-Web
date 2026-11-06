@@ -246,6 +246,43 @@ function getLatestObservation(
     })[0];
 }
 
+function MiniBars({
+  title,
+  rows,
+  accent = "#f81e36",
+}: {
+  title: string;
+  rows: { label: string; n: number }[];
+  accent?: string;
+}) {
+  const max = rows.reduce((m, r) => Math.max(m, r.n), 0) || 1;
+  return (
+    <div className="sr-chart">
+      <div className="sr-chart-title">{title}</div>
+      {rows.length === 0 ? (
+        <p className="sr-chart-empty">—</p>
+      ) : (
+        rows.map((r) => (
+          <div key={r.label} className="sr-chart-row">
+            <span className="sr-chart-label" title={r.label}>
+              {r.label}
+            </span>
+            <span className="sr-chart-bar">
+              <i
+                style={{
+                  width: `${Math.max(4, (r.n / max) * 100)}%`,
+                  background: accent,
+                }}
+              />
+            </span>
+            <span className="sr-chart-n">{r.n.toLocaleString()}</span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 export default function SuccessfulResultsPage() {
   const [items, setItems] = useState<SuccessfulItem[]>([]);
   const [httpObservations, setHttpObservations] = useState<HttpObservation[]>(
@@ -458,6 +495,32 @@ export default function SuccessfulResultsPage() {
   );
 
   const portRecords = items.filter((item) => item.port !== null).length;
+
+  // Analytics breakdowns over the loaded successful results (real data only).
+  const analytics = useMemo(() => {
+    const tally = <T,>(arr: T[], keyFn: (x: T) => string | null) => {
+      const m = new Map<string, number>();
+      for (const x of arr) {
+        const k = keyFn(x);
+        if (!k) continue;
+        m.set(k, (m.get(k) ?? 0) + 1);
+      }
+      return [...m.entries()]
+        .map(([label, n]) => ({ label, n }))
+        .sort((a, b) => b.n - a.n);
+    };
+    return {
+      byCountry: tally(items, (i) => i.country?.trim() || null).slice(0, 8),
+      byService: tally(items, (i) => i.service?.trim() || null).slice(0, 8),
+      byPort: tally(
+        items.filter((i) => i.port != null),
+        (i) => String(i.port),
+      ).slice(0, 8),
+      byStatus: tally(visibleObservations, (o) =>
+        o.status_code != null ? String(o.status_code) : null,
+      ).slice(0, 8),
+    };
+  }, [items, visibleObservations]);
 
   const PER_PAGE = 20;
 
@@ -697,6 +760,21 @@ export default function SuccessfulResultsPage() {
               </div>
             </article>
           </section>
+
+          {items.length > 0 && (
+            <section className="op-panel">
+              <div className="op-head">
+                <h2 className="op-title">ANALYTICS · การกระจายของผลสำเร็จ</h2>
+                <span className="op-count">{items.length} records</span>
+              </div>
+              <div className="sr-charts">
+                <MiniBars title="ตามประเทศ" rows={analytics.byCountry} accent="#f81e36" />
+                <MiniBars title="ตามบริการ" rows={analytics.byService} accent="#5fd38a" />
+                <MiniBars title="ตามพอร์ต" rows={analytics.byPort} accent="#f5c451" />
+                <MiniBars title="ตาม HTTP status" rows={analytics.byStatus} accent="#4aa3ff" />
+              </div>
+            </section>
+          )}
 
           <section className="op-panel op-panelOk">
             <div className="op-head">

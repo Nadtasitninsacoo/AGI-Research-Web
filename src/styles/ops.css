@@ -465,3 +465,52 @@
   font-size: 9.5px;
   letter-spacing: 0.12em;
 }
+
+/* Successful Results — analytics mini bar charts */
+.sr-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  padding: 14px 16px;
+}
+.sr-chart { display: flex; flex-direction: column; gap: 6px; }
+.sr-chart-title {
+  margin-bottom: 4px;
+  color: var(--faint);
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.sr-chart-empty { color: var(--faint); font-size: 11px; }
+.sr-chart-row { display: flex; align-items: center; gap: 8px; }
+.sr-chart-label {
+  flex: 0 0 72px;
+  overflow: hidden;
+  color: #c8ccd3;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sr-chart-bar {
+  flex: 1 1 auto;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.sr-chart-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 240ms ease;
+}
+.sr-chart-n {
+  flex: 0 0 auto;
+  min-width: 34px;
+  color: #fff;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  text-align: right;
+}

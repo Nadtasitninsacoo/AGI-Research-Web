@@ -326,3 +326,94 @@
   .usb-auto-btn::after,
   .usb-feed-panel .panel-head em.usb-feed-live { animation: none; }
 }
+
+/* USB Lab — real-agent team roster (Full Auto crew) */
+.usb-roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.usb-roster-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+}
+.usb-roster-glyph {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.usb-roster-id { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.usb-roster-id b {
+  overflow: hidden;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usb-roster-id small {
+  color: var(--faint, #8a92a0);
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+}
+.usb-roster-st { text-transform: uppercase; }
+.usb-roster-st.s-running { color: #3ddc84; }
+.usb-roster-st.s-error { color: #f84646; }
+.usb-roster-st.s-paused { color: #f5c451; }
+.usb-roster-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--faint, #8a92a0);
+  font-size: 11px;
+}
+.usb-roster-empty a { color: #4cc9f0; }
+.usb-feed-role { color: var(--faint, #8a92a0); font-size: 9px; letter-spacing: 0.04em; }
+
+/* USB Lab — RECON (pre-crack weakness analysis) panel */
+.usb-recon-btn { border-color: rgba(76, 201, 240, 0.4); color: #8fdcff; }
+.usb-recon {
+  margin-top: 12px;
+  border: 1px solid rgba(76, 201, 240, 0.25);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(76, 201, 240, 0.05), rgba(10, 12, 18, 0.5));
+  padding: 12px 14px;
+}
+.usb-recon-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+  color: #8fdcff; text-transform: uppercase;
+}
+.usb-recon-feasible {
+  padding: 2px 8px; border-radius: 999px; font-size: 9px;
+  border: 1px solid currentColor;
+}
+.usb-recon-feasible.f-fast { color: #3ddc84; }
+.usb-recon-feasible.f-feasible { color: #f5c451; }
+.usb-recon-feasible.f-hard { color: #ff8a4c; }
+.usb-recon-feasible.f-infeasible { color: #f84646; }
+.usb-recon-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px;
+}
+.usb-recon-grid > div { display: flex; flex-direction: column; gap: 2px; }
+.usb-recon-grid small { color: #8a92a0; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+.usb-recon-grid b { color: #e6e8ee; font-size: 12px; font-family: var(--font-geist-mono), monospace; }
+.usb-recon-hit { color: #3ddc84 !important; }
+.usb-recon-warn { color: #f5c451 !important; }
+.usb-recon-rec {
+  margin: 10px 0 0; padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: #cfe9ff; font-size: 11px; line-height: 1.5;
+}

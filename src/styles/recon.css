@@ -99,6 +99,14 @@
   border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
 }
 .rc-tabs button.is-active { color: #fff; border-color: var(--line-hot); background: rgba(242, 27, 50, 0.12); }
+.rc-tabs a.rc-tab {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; font-size: 10px; letter-spacing: 0.04em;
+  color: #c8ccd3; background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+  text-decoration: none;
+}
+.rc-tabs a.rc-tab.is-active { color: #fff; border-color: var(--line-hot); background: rgba(242, 27, 50, 0.12); }
 .rc-dot { width: 7px; height: 7px; border-radius: 50%; }
 .rc-search { position: relative; display: flex; align-items: center; flex: 1 1 240px; min-width: 0; }
 .rc-search svg { position: absolute; left: 10px; width: 14px; height: 14px; color: #6b7686; }

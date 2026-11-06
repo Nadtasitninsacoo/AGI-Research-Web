@@ -51,8 +51,7 @@
   gap: 22px;
   height: 100vh;
   padding: 16px 10px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   color: var(--on-dark);
   background:
     linear-gradient(
@@ -82,6 +81,7 @@
 
 .brand {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 11px;
   padding: 4px 7px 14px;
@@ -133,33 +133,55 @@
   text-transform: uppercase;
 }
 
-.sidebar-cta {
-  display: flex;
+.sidebar-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.sidebar-status {
+  display: inline-flex;
+  flex: none;
+  align-self: flex-start;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin: 2px 8px 12px;
-  padding: 10px 12px;
-  border: 1px solid rgba(248, 30, 54, 0.5);
-  border-radius: 8px;
-  background: linear-gradient(135deg, rgba(248, 30, 54, 0.18), rgba(248, 30, 54, 0.08));
-  color: #fff;
-  font-size: 9px;
-  font-weight: 700;
+  gap: 7px;
+  margin: -4px 8px 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--line-dark);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 8.5px;
+  font-weight: 600;
   letter-spacing: 0.18em;
-  text-decoration: none;
-  text-transform: uppercase;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04), 0 8px 18px rgba(248,30,54,0.18);
-  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
 }
 
-.sidebar-cta:hover {
-  transform: translateY(-1px);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 10px 20px rgba(248,30,54,0.22);
-  border-color: rgba(248, 30, 54, 0.85);
+.sidebar-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #55555e;
 }
 
-.sidebar-cta svg { width: 14px; height: 14px; }
+.sidebar-status-text { color: var(--on-dark-dim); }
+
+.sidebar-status.is-on .sidebar-status-dot {
+  background: #3ddc84;
+  box-shadow: 0 0 7px rgba(61, 220, 132, 0.8);
+  animation: sidebarPulse 2s ease-in-out infinite;
+}
+.sidebar-status.is-on .sidebar-status-text { color: #8ff0bb; }
+
+.sidebar-status.is-off .sidebar-status-dot {
+  background: var(--red-hot);
+  box-shadow: 0 0 7px rgba(242, 27, 50, 0.7);
+}
+.sidebar-status.is-off .sidebar-status-text { color: #ff8a97; }
+
+@keyframes sidebarPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
 
 .nav-item {
   position: relative;

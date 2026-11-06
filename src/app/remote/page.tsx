@@ -26,8 +26,8 @@ import {
   disconnectRemoteSession,
   getActiveRemoteSessionId,
   getRemoteSessionStatus,
-} from "@/app/takeover/actions";
-import type { RemoteActionResult } from "@/app/takeover/actions";
+} from "./actions";
+import type { RemoteActionResult } from "./actions";
 
 type RemoteStatus = "WAITING" | "CONNECTED" | "DISCONNECTED" | "ERROR";
 

@@ -51,6 +51,29 @@ const EXTRA_TABLES: { name: string; sql: string }[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    name: "vuln_findings",
+    sql: `CREATE TABLE IF NOT EXISTS vuln_findings (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      ip VARCHAR(45) NOT NULL,
+      port INT UNSIGNED NOT NULL,
+      service VARCHAR(60) NULL,
+      hostname VARCHAR(255) NULL,
+      severity VARCHAR(16) NOT NULL,
+      score INT NOT NULL DEFAULT 0,
+      cves INT UNSIGNED NOT NULL DEFAULT 0,
+      vuln_ids TEXT NULL,
+      exposure VARCHAR(64) NULL,
+      remediation TEXT NULL,
+      status VARCHAR(24) NOT NULL DEFAULT 'VULNERABLE',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uniq_ip_port (ip, port),
+      KEY idx_status (status),
+      KEY idx_severity (severity)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     name: "cve_intel",
     sql: `CREATE TABLE IF NOT EXISTS cve_intel (
       cve_id VARCHAR(32) NOT NULL,

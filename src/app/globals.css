@@ -20,6 +20,7 @@
 @import "../styles/recon.css";
 @import "../styles/threat-intel.css";
 @import "../styles/usb.css";
+@import "../styles/command-hud.css";
 
 .status-disconnected-override {
   background-color: rgba(239, 68, 68, 0.15);

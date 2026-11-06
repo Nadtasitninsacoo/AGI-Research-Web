@@ -10,6 +10,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
       { label: "Overview", icon: "overview", href: "/", match: "/" },
       { label: "Nexus", icon: "nexus", href: "/nexus", match: "/nexus" },
       { label: "Command", icon: "command", href: "/command", match: "/command" },
+      { label: "Execute", icon: "rocket", href: "/execute", match: "/execute" },
       { label: "Map", icon: "map", href: "/map", match: "/map" },
     ],
   },
@@ -23,10 +24,9 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Intel",
     items: [
-      { label: "IP Intel", icon: "globe", href: "/ip-intel", match: "/ip-intel" },
+      { label: "IP Vault", icon: "globe", href: "/ip-intel", match: "/ip-intel" },
       { label: "Threat Intel", icon: "radar", href: "/threat-intel", match: "/threat-intel" },
       { label: "Recon", icon: "scan", href: "/recon", match: "/recon" },
-      { label: "Ports", icon: "ports", href: "/ports", match: "/ports" },
       { label: "USB Lab", icon: "usb", href: "/usb", match: "/usb" },
     ],
   },
@@ -41,8 +41,6 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     ],
   },
 ];
-
-const WORKSPACE: NavItem[] = [{ label: "Datasets", icon: "datasets" }];
 
 function Group({ title, items }: { title: string; items: NavItem[] }) {
   return (
@@ -68,6 +66,14 @@ export function Sidebar({ online }: { online: boolean }) {
         </span>
       </div>
 
+      <div
+        className={`sidebar-status ${online ? "is-on" : "is-off"}`}
+        title={online ? "ระบบออนไลน์" : "ระบบออฟไลน์"}
+      >
+        <span className="sidebar-status-dot" />
+        <span className="sidebar-status-text">{online ? "ONLINE" : "OFFLINE"}</span>
+      </div>
+
       <nav aria-label="Primary" className="sidebar-nav">
         {GROUPS.map((g) => (
           <Group key={g.title} title={g.title} items={g.items} />
@@ -75,9 +81,6 @@ export function Sidebar({ online }: { online: boolean }) {
 
         <div className="nav-group">
           <span className="nav-title">Workspace</span>
-          <Suspense fallback={<NavStatic items={WORKSPACE} />}>
-            <NavLinks items={WORKSPACE} />
-          </Suspense>
           <SettingsNav />
         </div>
       </nav>

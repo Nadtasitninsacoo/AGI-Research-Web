@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import SavedPortTargetPicker from "./SavedPortTargetPicker";
-import { AlertTriangle, CheckCircle2, Play, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Play, RefreshCw, Zap } from "lucide-react";
 
 import { AgentSelector } from "@/components/execution/AgentSelector";
 import { AgentTeamPanel } from "@/components/execution/AgentTeamPanel";
@@ -69,6 +69,12 @@ export function RunExecution() {
   const [loading, setLoading] = useState(true);
   const [targetsLoading, setTargetsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Auto-run mode: watch for NEW vulnerable targets and fire a run automatically.
+  const [autoMode, setAutoMode] = usePersistentState("execute.autoMode", false);
+  const [autoStatus, setAutoStatus] = useState("");
+  const knownVulnKeysRef = useRef<Set<string>>(new Set());
+  const autoFiringRef = useRef(false);
 
   const [error, setError] = useState("");
   const [targetsError, setTargetsError] = useState("");
@@ -145,11 +151,13 @@ export function RunExecution() {
       setTargetsError("");
 
       try {
-        const result = await fetchRunQueueTargets({}, 100);
+        const result = await fetchRunQueueTargets({}, 1000);
 
         if (controller.signal.aborted) return;
 
-        setSavedTargets(result.targets);
+        // Loop ALL vulnerabilities into this page: every saved target that has
+        // at least one CVE (no 100-row cap).
+        setSavedTargets(result.targets.filter((t) => (t.cves ?? 0) > 0));
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
 
@@ -348,6 +356,115 @@ export function RunExecution() {
     }
   }
 
+  // Create a run for a given set of targets WITHOUT navigating away (used by the
+  // auto-run watcher). Returns the run id on success, or null if prerequisites
+  // aren't met / it failed — callers must not mark targets "seen" on null.
+  async function fireRunForTargets(
+    targetsToRun: SavedPortTarget[],
+  ): Promise<string | null> {
+    if (!experimentId || !agentId) {
+      setAutoStatus("ออโต้: ต้องเลือก experiment + agent ก่อนถึงจะยิงอัตโนมัติได้");
+      return null;
+    }
+    const coordinator = agents.find((agent) => String(agent.id) === agentId);
+    if (!coordinator || isAgentUnavailable(coordinator)) {
+      setAutoStatus("ออโต้: agent ที่เลือกไม่พร้อมใช้งาน");
+      return null;
+    }
+    if (runMode === "team" && (teamAgentIds.length < 2 || !teamAgentIds.includes(agentId))) {
+      setAutoStatus("ออโต้: Team Mode ต้องมีอย่างน้อย 2 agent และรวม coordinator");
+      return null;
+    }
+    const parsedParams = parseJsonObject(params);
+    if (parsedParams === null) {
+      setAutoStatus("ออโต้: params ไม่ใช่ JSON ที่ถูกต้อง");
+      return null;
+    }
+    try {
+      const runId = await createRun({
+        experimentId,
+        agentId,
+        params: buildRunParams(runMode, parsedParams, agentId, teamAgentIds),
+      });
+      const numericRunId = Number(runId);
+      if (Number.isInteger(numericRunId) && targetsToRun.length > 0) {
+        const keys = targetsToRun.map((t) => `${t.ip}:${t.port}`);
+        setTargetRuns((prev) => {
+          const next = { ...prev };
+          for (const key of keys) next[key] = numericRunId;
+          return next;
+        });
+        try {
+          const raw = window.localStorage.getItem(TARGET_RUNS_KEY);
+          const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+          for (const key of keys) map[key] = numericRunId;
+          window.localStorage.setItem(TARGET_RUNS_KEY, JSON.stringify(map));
+        } catch {
+          /* storage unavailable — state update above still applies */
+        }
+      }
+      return String(runId);
+    } catch (err) {
+      setAutoStatus(
+        `ออโต้: ยิงรันไม่สำเร็จ — ${err instanceof Error ? err.message : "error"}`,
+      );
+      return null;
+    }
+  }
+
+  // Auto-run watcher: poll vulnerable targets; when genuinely-new ones appear,
+  // fire a run for just those. Baseline is seeded when auto mode turns on (or its
+  // config changes), so existing rows don't trigger a run.
+  useEffect(() => {
+    if (!autoMode) {
+      setAutoStatus("");
+      return;
+    }
+    let cancelled = false;
+    knownVulnKeysRef.current = new Set(
+      savedTargets.map((t) => `${t.ip}:${t.port}`),
+    );
+    setAutoStatus("ออโต้: กำลังเฝ้าช่องโหว่ใหม่...");
+
+    const tick = async () => {
+      if (cancelled || autoFiringRef.current) return;
+      try {
+        const result = await fetchRunQueueTargets({}, 1000);
+        if (cancelled) return;
+        const vuln = result.targets.filter((t) => (t.cves ?? 0) > 0);
+        setSavedTargets(vuln);
+        const fresh = vuln.filter(
+          (t) => !knownVulnKeysRef.current.has(`${t.ip}:${t.port}`),
+        );
+        if (fresh.length === 0) return;
+        autoFiringRef.current = true;
+        try {
+          const runId = await fireRunForTargets(fresh);
+          if (runId) {
+            for (const t of fresh)
+              knownVulnKeysRef.current.add(`${t.ip}:${t.port}`);
+            setAutoStatus(
+              `ออโต้: พบช่องโหว่ใหม่ ${fresh.length} รายการ → ยิงรัน #${runId} แล้ว`,
+            );
+          }
+          // On null (prereq missing/failed) keep keys unseen so it retries later.
+        } finally {
+          autoFiringRef.current = false;
+        }
+      } catch {
+        /* transient — keep polling */
+      }
+    };
+
+    void tick();
+    const id = window.setInterval(() => void tick(), 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoMode, experimentId, agentId, runMode, params, teamAgentIds, agents]);
+
   if (loading) {
     return (
       <div className={s.loading}>
@@ -479,10 +596,42 @@ export function RunExecution() {
 
           <div className={s.footer}>
             <span className={s.footNote}>
-              {alreadySubmitted
-                ? "รันรายการนี้ไปแล้ว — เลือก/เปลี่ยนรายการเพื่อรันอีกครั้ง"
-                : "POST /experiments/:id/runs"}
+              {autoMode
+                ? autoStatus || "ออโต้: เปิดอยู่ — เฝ้าช่องโหว่ใหม่"
+                : alreadySubmitted
+                  ? "รันรายการนี้ไปแล้ว — เลือก/เปลี่ยนรายการเพื่อรันอีกครั้ง"
+                  : "POST /experiments/:id/runs"}
             </span>
+
+            <button
+              type="button"
+              onClick={() => setAutoMode((v) => !v)}
+              aria-pressed={autoMode}
+              title="เปิด/ปิดโหมดยิงรันอัตโนมัติเมื่อพบช่องโหว่ใหม่"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 14px",
+                marginRight: "8px",
+                borderRadius: "6px",
+                fontSize: "11px",
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                cursor: "pointer",
+                border: autoMode
+                  ? "1px solid rgba(61,220,132,0.7)"
+                  : "1px solid rgba(255,255,255,0.18)",
+                background: autoMode
+                  ? "rgba(61,220,132,0.14)"
+                  : "rgba(255,255,255,0.04)",
+                color: autoMode ? "#8ff0bb" : "#c8ccd3",
+                boxShadow: autoMode ? "0 0 18px rgba(61,220,132,0.18)" : "none",
+              }}
+            >
+              <Zap size={14} />
+              {autoMode ? "AUTO: ON" : "AUTO-RUN"}
+            </button>
 
             <button
               type="submit"

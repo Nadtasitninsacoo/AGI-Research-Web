@@ -2,21 +2,21 @@
    THREAT INTEL — alert dock + CVE detail modal
    ============================================================ */
 
-/* Persistent alert dock, fixed to the right edge, scrollable. */
+/* Persistent alert dock, fixed to the right edge, scrollable.
+   No container chrome — only the alert cards show (they float individually). */
 .ti-dock {
   position: fixed;
   top: 72px;
   right: 14px;
   z-index: 60;
-  width: 300px;
+  width: 312px;
   max-width: calc(100vw - 28px);
   max-height: calc(100vh - 92px);
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, rgba(14, 16, 23, 0.97), rgba(9, 11, 16, 0.98));
-  border: 1px solid rgba(248, 70, 70, 0.3);
-  border-radius: 12px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   overflow: hidden;
   animation: ti-slide-in 0.3s ease;
 }
@@ -26,59 +26,85 @@
 }
 .ti-dock-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(248, 70, 70, 0.08);
+  padding: 2px 6px 10px;
 }
 .ti-dock-title {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 11px; font-weight: 700; letter-spacing: 0.04em; color: #ff9aa2;
+  text-shadow: 0 0 10px rgba(248, 70, 70, 0.4);
 }
 .ti-dock-clear {
-  font-size: 10px; color: #8a92a0; background: transparent; border: 0;
-  cursor: pointer; letter-spacing: 0.03em;
+  font-size: 10px; color: #8a92a0; background: rgba(0,0,0,0.3); border: 0;
+  cursor: pointer; letter-spacing: 0.03em; padding: 4px 8px; border-radius: 6px;
+  backdrop-filter: blur(4px);
 }
 .ti-dock-clear:hover { color: #fff; }
 
 .ti-dock-list {
-  display: flex; flex-direction: column; gap: 9px;
-  padding: 10px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 11px;
+  padding: 2px; overflow-y: auto;
 }
-.ti-dock-list::-webkit-scrollbar { width: 8px; }
+.ti-dock-list::-webkit-scrollbar { width: 7px; }
 .ti-dock-list::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12); border-radius: 6px;
 }
 
 .ti-card {
   position: relative;
-  padding: 10px 11px 11px;
-  border-radius: 10px;
+  padding: 11px 12px 12px;
+  border-radius: 12px;
   border-width: 1px;
   border-style: solid;
+  background: linear-gradient(180deg, rgba(17, 20, 28, 0.92), rgba(10, 12, 18, 0.95));
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   animation: ti-card-in 0.25s ease;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.ti-card::before {
+  content: "";
+  position: absolute; top: 10px; bottom: 10px; left: 0; width: 3px;
+  border-radius: 3px; background: var(--sev, #f84646); opacity: 0.9;
+  box-shadow: 0 0 10px var(--sev, #f84646);
+}
+.ti-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 @keyframes ti-card-in {
   from { transform: translateY(-6px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 .ti-card-x {
-  position: absolute; top: 7px; right: 7px;
+  position: absolute; top: 8px; right: 8px; z-index: 2;
   color: #6b7686; background: transparent; border: 0; cursor: pointer;
   padding: 2px; border-radius: 4px;
 }
 .ti-card-x:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
-.ti-card-top { display: flex; align-items: center; gap: 6px; }
+.ti-card-top { display: flex; align-items: center; gap: 6px; padding-left: 8px; }
 .ti-card-sev { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; }
 .ti-card-time {
   margin-left: auto; margin-right: 16px; font-size: 9px; color: #6b7686;
   font-family: var(--font-geist-mono), monospace;
 }
 .ti-card-cve {
-  margin-top: 6px; font-family: var(--font-geist-mono), monospace;
+  margin-top: 6px; padding-left: 8px; font-family: var(--font-geist-mono), monospace;
   font-size: 13px; font-weight: 700; color: #fff;
 }
-.ti-card-meta { margin-top: 3px; font-size: 10px; color: #9aa0aa; }
+.ti-card-meta { margin-top: 3px; padding-left: 8px; font-size: 10px; color: #9aa0aa; }
+.ti-card-graph {
+  margin-top: 9px;
+  height: 46px;
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px) 0 0 / 22px 100%,
+    #05070b;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.ti-card-graph-svg { display: block; width: 100%; height: 100%; }
 .ti-card-btn {
-  margin-top: 8px; width: 100%; padding: 6px 0;
+  margin-top: 9px; width: 100%; padding: 7px 0;
   font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: #cfe9ff;
   background: rgba(45, 226, 230, 0.08);
   border: 1px solid rgba(45, 226, 230, 0.26); border-radius: 7px; cursor: pointer;

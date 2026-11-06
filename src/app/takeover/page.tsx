@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Database,
   RefreshCw,
   Radar,
+  Save,
   Search,
   Server,
   ShieldAlert,
   ShieldCheck,
+  Zap,
 } from "lucide-react";
 
 import { Navbar } from "@/components/hud/Navbar";
@@ -21,6 +23,7 @@ import { NotificationStack } from "./components/NotificationStack";
 import { useNotifications } from "./hooks/useNotifications";
 import { useTakeoverData } from "./hooks/useTakeoverData";
 import { scanIpsForVulns } from "./scan-actions";
+import { saveVulnFindings, type VulnFindingInput } from "./findings-actions";
 import { targetKey, formatTime } from "./utils";
 import {
   assessTarget,
@@ -33,6 +36,24 @@ import {
 
 type SeverityFilter = Severity | "ALL";
 type CveFilter = "all" | "with" | "without";
+
+// Map a risk assessment to a DB finding row (IP/port/severity/CVE list + status).
+function assessmentToFinding(a: RiskAssessment): VulnFindingInput {
+  const vulnerable = a.target.cves > 0 || a.target.vulnIds.length > 0;
+  return {
+    ip: a.target.ip,
+    port: a.target.port,
+    service: a.serviceLabel ?? a.target.service ?? null,
+    hostname: a.target.hostname ?? null,
+    severity: a.severity,
+    score: a.score,
+    cves: a.target.cves,
+    vulnIds: a.target.vulnIds,
+    exposure: a.exposureTier ?? null,
+    remediation: a.remediation ?? null,
+    status: vulnerable ? "VULNERABLE" : "CLEAN",
+  };
+}
 
 export default function VulnerabilityAnalysisPage() {
   const { notifications, notify, dismissNotification } = useNotifications();
@@ -55,6 +76,12 @@ export default function VulnerabilityAnalysisPage() {
   );
   const [clock, setClock] = useState("--:--:--");
   const [scanning, setScanning] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Auto-save mode: when new vulnerable findings appear, persist them to the DB.
+  const [autoSave, setAutoSave] = usePersistentState("vuln.autoSave", false);
+  const autoSaveKnownRef = useRef<Set<string>>(new Set());
+  const autoSavingRef = useRef(false);
 
   useEffect(() => {
     const tick = () => setClock(formatTime());
@@ -148,6 +175,73 @@ export default function VulnerabilityAnalysisPage() {
       setScanning(false);
     }
   }
+
+  // Save the currently-filtered findings to the DB (IP, port, severity, CVE list,
+  // and a VULNERABLE/CLEAN status). Respects the active search + filters.
+  async function handleSaveFindings() {
+    if (saving) return;
+    if (filtered.length === 0) {
+      notify("บันทึกไม่ได้", "ไม่มีข้อมูลในตาราง (ตามตัวกรองปัจจุบัน)", "warning");
+      return;
+    }
+    const findings: VulnFindingInput[] = filtered.map(assessmentToFinding);
+    const vulnCount = findings.filter((f) => f.status === "VULNERABLE").length;
+    setSaving(true);
+    notify("กำลังบันทึก", `บันทึก ${findings.length} รายการ (มีช่องโหว่ ${vulnCount})...`, "info");
+    try {
+      const res = await saveVulnFindings(findings);
+      notify(
+        res.ok ? "บันทึกสำเร็จ" : "บันทึกไม่สำเร็จ",
+        res.message,
+        res.ok ? "success" : "error",
+      );
+    } catch {
+      notify("บันทึกไม่สำเร็จ", "เกิดข้อผิดพลาดระหว่างบันทึกลงฐานข้อมูล", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // AUTO-SAVE · poll for fresh data while the mode is on.
+  useEffect(() => {
+    if (!autoSave) return;
+    const id = window.setInterval(() => {
+      void refreshData();
+    }, 20000);
+    return () => window.clearInterval(id);
+  }, [autoSave, refreshData]);
+
+  // AUTO-SAVE · whenever the assessed targets change, persist any NEW vulnerable
+  // findings to the DB (keyed by ip:port so nothing is saved twice).
+  useEffect(() => {
+    if (!autoSave || autoSavingRef.current) return;
+    const vulnerable = assessments.filter(
+      (a) => a.target.cves > 0 || a.target.vulnIds.length > 0,
+    );
+    const fresh = vulnerable.filter((a) => !autoSaveKnownRef.current.has(a.key));
+    if (fresh.length === 0) return;
+
+    autoSavingRef.current = true;
+    void (async () => {
+      try {
+        const res = await saveVulnFindings(fresh.map(assessmentToFinding));
+        if (res.ok) {
+          for (const a of fresh) autoSaveKnownRef.current.add(a.key);
+          notify(
+            "ออโต้เซฟช่องโหว่",
+            `บันทึกช่องโหว่ใหม่ ${fresh.length} รายการลงฐานข้อมูลแล้ว`,
+            "success",
+          );
+        } else {
+          notify("ออโต้เซฟไม่สำเร็จ", res.message, "error");
+        }
+      } catch {
+        notify("ออโต้เซฟไม่สำเร็จ", "เกิดข้อผิดพลาดระหว่างบันทึก", "error");
+      } finally {
+        autoSavingRef.current = false;
+      }
+    })();
+  }, [autoSave, assessments, notify]);
 
   const online = !targetMessage;
 
@@ -358,6 +452,32 @@ export default function VulnerabilityAnalysisPage() {
                 >
                   <Radar className={`h-3.5 w-3.5 ${scanning ? "animate-spin" : ""}`} />
                   {scanning ? "กำลังสแกน..." : "SCAN FOR CVEs"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleSaveFindings()}
+                  disabled={saving || filtered.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold tracking-wider text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  title="บันทึกช่องโหว่ที่กรองอยู่ลงฐานข้อมูล (IP, Port, รายละเอียด, สถานะมีช่องโหว่)"
+                >
+                  <Save className={`h-3.5 w-3.5 ${saving ? "animate-pulse" : ""}`} />
+                  {saving ? "กำลังบันทึก..." : `บันทึกช่องโหว่ (${filtered.length})`}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAutoSave((v) => !v)}
+                  aria-pressed={autoSave}
+                  title="เปิด/ปิดโหมดบันทึกช่องโหว่ใหม่ลงฐานข้อมูลอัตโนมัติ"
+                  className={`inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-[10px] font-bold tracking-wider transition ${
+                    autoSave
+                      ? "border-emerald-500/70 bg-emerald-500/15 text-emerald-300 shadow-[0_0_16px_rgba(16,185,129,0.25)]"
+                      : "border-[#303649] bg-[#0e1017] text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Zap className={`h-3.5 w-3.5 ${autoSave ? "animate-pulse" : ""}`} />
+                  {autoSave ? "AUTO-SAVE: ON" : "AUTO-SAVE"}
                 </button>
 
                 <div className="relative">

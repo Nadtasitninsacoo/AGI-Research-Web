@@ -734,103 +734,141 @@ export type InternetDb =
       vulns: string[];
     };
 
+const CVE_RE = /^CVE-\d{4}-\d{4,}$/;
+
 /**
- * InternetDB action: keyless OSINT exposure lookup with an offline fallback.
+ * True for IPv4 addresses InternetDB will never have data for (private, loopback,
+ * link-local, CGNAT, documentation, multicast, reserved). Skipping them avoids
+ * wasted network round-trips and a misleading "no data" result.
+ */
+function isPrivateOrReservedIpv4(ip: string): boolean {
+  const o = ip.split(".").map((x) => Number(x));
+  if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+    return true;
+  }
+  const [a, b] = o;
+  if (a === 0 || a === 10 || a === 127) return true; // this-net, private, loopback
+  if (a === 169 && b === 254) return true; // link-local
+  if (a === 172 && b >= 16 && b <= 31) return true; // private
+  if (a === 192 && b === 168) return true; // private
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64/10
+  if (a === 192 && b === 0) return true; // 192.0.0/24 + 192.0.2/24 (TEST-NET-1)
+  if (a === 198 && (b === 18 || b === 19)) return true; // benchmarking 198.18/15
+  if (a === 198 && b === 51) return true; // TEST-NET-2 198.51.100/24
+  if (a === 203 && b === 0) return true; // TEST-NET-3 203.0.113/24
+  if (a >= 224) return true; // multicast + reserved + broadcast
+  return false;
+}
+
+/**
+ * InternetDB exposure lookup (keyless Shodan OSINT). Returns ONLY real data:
+ * - 200  → the actual ports / CVEs / tags for the host (empty arrays stay empty)
+ * - 404  → host has no InternetDB record → genuinely nothing exposed (ok, empty)
+ * - error/timeout/other status → ok:false, so callers mark it as an error rather
+ *   than inventing a vulnerability. No sample/placeholder data is ever returned.
  */
 export async function internetdbAction(input: string): Promise<InternetDb> {
   const q = (input || "").trim();
-  if (!q) {
-    return {
-      ok: true,
-      ip: "133.7.133.7",
-      host: "example.local",
-      ports: [22, 80, 443, 8080, 1337],
-      hostnames: [
-        "example.local",
-        "example.local",
-      ],
-      cpes: ["cpe:/a:example:service:1.0"],
-      tags: ["exposed"],
-      vulns: ["CVE-2026-1337"],
-    };
+  if (!q) return { ok: false, message: "ใส่ IP หรือ host ก่อน" };
+
+  // Resolve a hostname/URL to an IP. InternetDB is keyed by IP, not name.
+  let ip = q;
+  let host: string | undefined;
+  if (!net.isIP(q)) {
+    const h = q
+      .replace(/^[a-z]+:\/\//i, "")
+      .replace(/\/.*$/, "")
+      .replace(/:\d+$/, "");
+    host = h;
+    try {
+      ip = (await lookup(h)).address;
+    } catch {
+      return { ok: false, message: `แปลงชื่อโฮสต์ไม่สำเร็จ: ${h}` };
+    }
   }
+
+  // InternetDB only indexes public IPv4.
+  if (net.isIP(ip) !== 4) {
+    return { ok: false, message: `InternetDB รองรับเฉพาะ IPv4 สาธารณะ (${ip})` };
+  }
+  if (isPrivateOrReservedIpv4(ip)) {
+    return { ok: false, message: `ข้าม IP ภายใน/สงวน (${ip})` };
+  }
+
   try {
-    let ip = q;
-    let host: string | undefined;
-    if (!net.isIP(q)) {
-      const h = q
-        .replace(/^[a-z]+:\/\//i, "")
-        .replace(/\/.*$/, "")
-        .replace(/:\d+$/, "");
-      host = h;
-      try {
-        ip = (await lookup(h)).address;
-      } catch {
-        ip = "133.7.133.7";
-      }
+    const res = await fetch(
+      `https://internetdb.shodan.io/${encodeURIComponent(ip)}`,
+      {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+
+    // 404 = Shodan has never seen this host → no known exposure (a real answer).
+    if (res.status === 404) {
+      return {
+        ok: true,
+        ip,
+        host,
+        ports: [],
+        hostnames: host ? [host] : [],
+        cpes: [],
+        tags: [],
+        vulns: [],
+      };
+    }
+    if (!res.ok) {
+      return { ok: false, message: `InternetDB ตอบกลับสถานะ ${res.status}` };
     }
 
-    try {
-      const res = await fetch(
-        `https://internetdb.shodan.io/${encodeURIComponent(ip)}`,
-        {
-          signal: AbortSignal.timeout(8000),
-        },
-      );
-      if (!res.ok) {
-        throw new Error(`InternetDB status ${res.status}`);
-      }
-      const d = (await res.json()) as {
-        ports?: number[];
-        hostnames?: string[];
-        cpes?: string[];
-        tags?: string[];
-        vulns?: string[];
-      };
-      return {
-        ok: true,
-        ip,
-        host,
-        ports:
-          Array.isArray(d.ports) && d.ports.length
-            ? [...d.ports].sort((a, b) => a - b)
-            : [22, 80, 443, 1337],
-        hostnames:
-          Array.isArray(d.hostnames) && d.hostnames.length
-            ? d.hostnames
-            : [host || "target.node"],
-        cpes: Array.isArray(d.cpes) ? d.cpes : ["cpe:/a:target:service:1.0"],
-        tags: Array.isArray(d.tags)
-          ? d.tags
-          : ["exposed"],
-        vulns:
-          Array.isArray(d.vulns) && d.vulns.length
-            ? d.vulns
-            : ["CVE-2026-1337"],
-      };
-    } catch {
-      // Offline fallback
-      return {
-        ok: true,
-        ip,
-        host,
-        ports: [22, 80, 443, 3306, 8080, 1337],
-        hostnames: [host || "example.local"],
-        cpes: ["cpe:/a:example:system:1.0"],
-        tags: ["offline"],
-        vulns: ["CVE-2026-1337"],
-      };
-    }
-  } catch (err) {
-    // Offline fallback
+    const d = (await res.json()) as {
+      ip?: string;
+      ports?: number[];
+      hostnames?: string[];
+      cpes?: string[];
+      tags?: string[];
+      vulns?: string[];
+    };
+
+    const ports = Array.isArray(d.ports)
+      ? Array.from(
+          new Set(
+            d.ports.filter(
+              (p) => Number.isInteger(p) && p >= 0 && p <= 65535,
+            ),
+          ),
+        ).sort((a, b) => a - b)
+      : [];
+    const vulns = Array.isArray(d.vulns)
+      ? Array.from(
+          new Set(
+            d.vulns
+              .map((v) => String(v).trim().toUpperCase())
+              .filter((v) => CVE_RE.test(v)),
+          ),
+        )
+      : [];
+
     return {
       ok: true,
-      ip: q,
-      ports: [22, 80, 443, 1337],
-      hostnames: ["example.local"],
-      cpes: ["cpe:/o:target:system:latest"],
-      tags: ["offline"],
-      vulns: [],
+      ip,
+      host,
+      ports,
+      hostnames: Array.isArray(d.hostnames)
+        ? d.hostnames.map(String).filter(Boolean)
+        : [],
+      cpes: Array.isArray(d.cpes) ? d.cpes.map(String).filter(Boolean) : [],
+      tags: Array.isArray(d.tags) ? d.tags.map(String).filter(Boolean) : [],
+      vulns,
+    };
+  } catch (err) {
+    const name = (err as Error)?.name;
+    const timedOut = name === "AbortError" || name === "TimeoutError";
+    return {
+      ok: false,
+      message: timedOut
+        ? `หมดเวลาเชื่อมต่อ InternetDB (${ip})`
+        : `เชื่อมต่อ InternetDB ไม่สำเร็จ (${ip})`,
     };
   }
 }

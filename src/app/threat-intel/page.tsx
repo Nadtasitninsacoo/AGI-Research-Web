@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   AlertTriangle,
   Bell,
@@ -13,6 +13,7 @@ import {
 import { Navbar } from "@/components/hud/Navbar";
 import { Sidebar } from "@/components/hud/Sidebar";
 
+import { usePersistentState } from "@/lib/usePersistentState";
 import { scanIpsForVulns } from "@/app/takeover/scan-actions";
 import {
   enrichCves,
@@ -102,6 +103,107 @@ const SEV_META: Record<
   },
 };
 
+// Primary line colour per severity for the card signature graph.
+const SEV_LINE: Record<Severity, string> = {
+  CRITICAL: "#f84646",
+  HIGH: "#ff8a4c",
+  MEDIUM: "#f5c451",
+  LOW: "#4aa3ff",
+  INFO: "#8a92a0",
+};
+
+// Relative volatility/height of the signature graph per severity (real severity
+// drives the shape — higher severity = taller, more volatile primary line).
+const SEV_WEIGHT: Record<Severity, number> = {
+  CRITICAL: 1,
+  HIGH: 0.82,
+  MEDIUM: 0.62,
+  LOW: 0.45,
+  INFO: 0.3,
+};
+
+// Deterministic PRNG seeded from a string, so a CVE's graph is stable across
+// renders/refreshes (never random noise that changes each paint).
+function seededRandom(seed: string): () => number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return () => {
+    h += 0x6d2b79f5;
+    let t = h;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Per-card severity signature: a stable multi-line sparkline whose primary line
+ * is coloured and scaled by the CVE's real NVD severity. Decorative, not telemetry.
+ */
+function SeveritySparkline({ cve, severity }: { cve: string; severity: Severity }) {
+  const W = 268;
+  const H = 46;
+  const N = 44;
+  const weight = SEV_WEIGHT[severity];
+  const rnd = seededRandom(cve);
+
+  const makeLine = (amp: number, drift: number) => {
+    let y = 0.5;
+    const pts: string[] = [];
+    for (let i = 0; i < N; i++) {
+      y += (rnd() - 0.5) * drift * (0.5 + weight);
+      y = Math.max(0.08, Math.min(0.92, y));
+      const x = (i / (N - 1)) * W;
+      const yy = H / 2 + (0.5 - y) * H * amp;
+      pts.push(`${x.toFixed(1)},${yy.toFixed(1)}`);
+    }
+    return pts.join(" ");
+  };
+
+  const lines = [
+    { color: "#5fd38a", amp: 0.72, drift: 0.22 },
+    { color: "#2de2e6", amp: 0.82, drift: 0.26 },
+    { color: SEV_LINE[severity], amp: 0.96, drift: 0.32, main: true },
+  ];
+
+  return (
+    <svg
+      className="ti-card-graph-svg"
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      role="img"
+      aria-label={`${severity} severity signature`}
+    >
+      {[0.25, 0.5, 0.75].map((g) => (
+        <line
+          key={g}
+          x1={0}
+          x2={W}
+          y1={H * g}
+          y2={H * g}
+          stroke="rgba(255,255,255,0.05)"
+          strokeWidth={0.5}
+        />
+      ))}
+      {lines.map((l) => (
+        <polyline
+          key={l.color}
+          points={makeLine(l.amp, l.drift)}
+          fill="none"
+          stroke={l.color}
+          strokeWidth={l.main ? 1.6 : 1}
+          strokeOpacity={l.main ? 1 : 0.55}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ))}
+    </svg>
+  );
+}
+
 type Alert = {
   id: string;
   cve: string;
@@ -130,16 +232,22 @@ export default function ThreatIntelPage() {
   const [loading, setLoading] = useState(true);
   const [enriching, setEnriching] = useState(false);
 
-  const [radarOn, setRadarOn] = useState(false);
-  const [intervalMs, setIntervalMs] = useState(20000);
+  // Auto-enrich mode: keep pulling real CVSS from NVD until every CVE is enriched.
+  const [autoEnrich, setAutoEnrich] = usePersistentState("ti:autoEnrich", false);
+  const autoEnrichRef = useRef(false);
+
+  // Radar toggle + cadence survive refresh so the sweep resumes automatically.
+  const [radarOn, setRadarOn] = usePersistentState("ti:radarOn", false);
+  const [intervalMs, setIntervalMs] = usePersistentState("ti:intervalMs", 20000);
   const [scanning, setScanning] = useState(false);
-  const [lastTick, setLastTick] = useState<string>("—");
-  const [sweeps, setSweeps] = useState(0);
+  const [lastTick, setLastTick] = usePersistentState<string>("ti:lastTick", "—");
+  const [sweeps, setSweeps] = usePersistentState("ti:sweeps", 0);
   // Per-sweep count of newly discovered CVEs — drives the activity sparkline.
-  const [history, setHistory] = useState<number[]>([]);
+  const [history, setHistory] = usePersistentState<number[]>("ti:history", []);
   const [blips, setBlips] = useState(0);
 
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  // Alert feed persists so the history isn't wiped on refresh.
+  const [alerts, setAlerts] = usePersistentState<Alert[]>("ti:alerts", []);
   const [detail, setDetail] = useState<{
     cve: string;
     loading: boolean;
@@ -284,6 +392,38 @@ export default function ThreatIntelPage() {
     }
   }, [enriching, loadCves, raiseAlerts]);
 
+  // Auto-enrich loop: while the mode is on, enrich a batch of un-enriched CVEs
+  // from NVD every few seconds (server-side throttled), until none remain — and
+  // keeps watching so CVEs the radar discovers later get enriched automatically.
+  useEffect(() => {
+    if (!autoEnrich) return;
+    let stopped = false;
+    const pass = async () => {
+      if (stopped || autoEnrichRef.current) return;
+      autoEnrichRef.current = true;
+      try {
+        const list = await loadCves(false);
+        const pending = list.filter((c) => !c.enriched).map((c) => c.cve);
+        if (pending.length) {
+          setEnriching(true);
+          await enrichCves(pending, 6);
+          await loadCves(false);
+        }
+      } catch {
+        /* transient NVD/DB issue — next tick retries */
+      } finally {
+        setEnriching(false);
+        autoEnrichRef.current = false;
+      }
+    };
+    void pass();
+    const id = window.setInterval(() => void pass(), 8000);
+    return () => {
+      stopped = true;
+      window.clearInterval(id);
+    };
+  }, [autoEnrich, loadCves]);
+
   // Radar loop.
   useEffect(() => {
     radarRef.current = radarOn;
@@ -401,10 +541,23 @@ export default function ThreatIntelPage() {
                 <button
                   type="button"
                   onClick={() => void enrichAll()}
-                  disabled={enriching || stats.enriched >= stats.totalCves}
+                  disabled={enriching || autoEnrich || stats.enriched >= stats.totalCves}
                   className="rounded border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-bold tracking-wider text-cyan-300 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {enriching ? "กำลัง enrich..." : "ENRICH จาก NVD"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAutoEnrich((v) => !v)}
+                  aria-pressed={autoEnrich}
+                  title="เปิด/ปิดโหมด enrich CVSS จาก NVD อัตโนมัติจนครบ"
+                  className={`inline-flex items-center gap-1 rounded border px-3 py-1.5 text-[10px] font-bold tracking-wider transition ${
+                    autoEnrich
+                      ? "border-emerald-500/70 bg-emerald-500/15 text-emerald-300 shadow-[0_0_14px_rgba(16,185,129,0.25)]"
+                      : "border-[#303649] bg-[#0e1017] text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {autoEnrich ? "AUTO-ENRICH: ON" : "AUTO-ENRICH"}
                 </button>
               </div>
             </div>
@@ -706,7 +859,11 @@ function AlertDock({
         {alerts.map((a) => {
           const meta = SEV_META[a.severity];
           return (
-            <div key={a.id} className={`ti-card ${meta.border} ${meta.bg}`}>
+            <div
+              key={a.id}
+              className={`ti-card ${meta.border} ${meta.bg}`}
+              style={{ "--sev": SEV_LINE[a.severity] } as CSSProperties}
+            >
               <button
                 type="button"
                 className="ti-card-x"
@@ -723,6 +880,9 @@ function AlertDock({
               <div className="ti-card-cve">{a.cve}</div>
               <div className="ti-card-meta">
                 {a.assets} asset · {a.services.slice(0, 3).join(", ") || "—"}
+              </div>
+              <div className="ti-card-graph">
+                <SeveritySparkline cve={a.cve} severity={a.severity} />
               </div>
               <button
                 type="button"

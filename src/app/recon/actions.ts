@@ -1,9 +1,11 @@
 "use server";
 
 import net from "node:net";
+import { revalidatePath } from "next/cache";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { db } from "@/lib/db";
 import { internetdbAction } from "@/app/map/actions";
+import { buildWhere as buildPortsWhere } from "./ports-query";
 
 const CAP = 200;
 const needInit = (c?: string) =>
@@ -603,4 +605,52 @@ export async function reconExpose(
   };
   await Promise.all(Array.from({ length: Math.min(8, clean.length) }, worker));
   return { ok: true, rows: out };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Saved-ports vault management (the "คลังพอร์ต" tab)
+// ─────────────────────────────────────────────────────────────
+
+type DeleteResult = { ok: boolean; message: string; affected?: number };
+
+/** Delete specific saved_ports rows by id. */
+export async function deletePorts(ids: number[]): Promise<DeleteResult> {
+  const clean = Array.from(
+    new Set(
+      (Array.isArray(ids) ? ids : [])
+        .map(Number)
+        .filter((n) => Number.isInteger(n) && n > 0),
+    ),
+  ).slice(0, 10000);
+  if (!clean.length) return { ok: false, message: "ไม่ได้เลือกรายการ" };
+  try {
+    const [r] = await db.query<ResultSetHeader>(
+      "DELETE FROM saved_ports WHERE id IN (?)",
+      [clean],
+    );
+    revalidatePath("/recon");
+    return { ok: true, message: `ลบ ${r.affectedRows} รายการ`, affected: r.affectedRows };
+  } catch {
+    return { ok: false, message: "ลบไม่สำเร็จ" };
+  }
+}
+
+/** Delete all saved_ports rows matching the active filter (or everything). */
+export async function clearPorts(
+  q?: string,
+  service?: string,
+  port?: string,
+  hasCve?: boolean,
+): Promise<DeleteResult> {
+  const { where, args } = buildPortsWhere(q, service, port, hasCve);
+  try {
+    const [r] = await db.query<ResultSetHeader>(
+      `DELETE FROM saved_ports ${where}`,
+      args,
+    );
+    revalidatePath("/recon");
+    return { ok: true, message: `ลบ ${r.affectedRows} รายการ`, affected: r.affectedRows };
+  } catch {
+    return { ok: false, message: "ลบไม่สำเร็จ" };
+  }
 }

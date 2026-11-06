@@ -141,18 +141,54 @@ async function NexusConsole() {
                 )}
                 {agents.map((a) => {
                   const stat = agentStatusMeta(a.status);
+                  const completion = pct(a.succeeded, a.runs);
                   return (
                     <li key={a.id}>
-                      <i className={`dot dot-${stat.tone}`} />
-                      <div className="nx-agent-id">
-                        <b>{a.name}</b>
-                        <small>
-                          {a.description?.split("\n")[0] ?? a.model ?? "—"}
-                        </small>
+                      <div className="nx-agent-head">
+                        <i className={`dot dot-${stat.tone}`} />
+                        <div className="nx-agent-id">
+                          <b>{a.name}</b>
+                          <small>
+                            {a.description?.split("\n")[0] ?? a.model ?? "—"}
+                          </small>
+                        </div>
+                        <span className={`nx-agent-state s-${stat.tone}`}>
+                          {stat.label}
+                        </span>
                       </div>
-                      <span className={`nx-agent-state s-${stat.tone}`}>
-                        {stat.label}
-                      </span>
+                      <div className="nx-agent-prog">
+                        <div
+                          className="hair"
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={completion}
+                          aria-label={`${a.name} completion`}
+                        >
+                          <i style={{ width: `${completion}%` }} />
+                        </div>
+                        <div className="nx-agent-meta">
+                          <span>
+                            <b className={completion >= 100 ? "is-ok" : ""}>
+                              {completion}%
+                            </b>{" "}
+                            สำเร็จ
+                          </span>
+                          <span>
+                            <b>{a.succeeded}</b>/{a.runs} run
+                          </span>
+                          {a.failed > 0 && (
+                            <span>
+                              <b>{a.failed}</b> fail
+                            </span>
+                          )}
+                          {a.avgScore != null && (
+                            <span>
+                              score <b>{a.avgScore.toFixed(2)}</b>
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </li>
                   );
                 })}

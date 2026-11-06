@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { SignalScan } from "@/components/hud/SignalScan";
-import { bruteForceAction } from "./actions";
+import { usePersistentState } from "@/lib/usePersistentState";
+import {
+  bruteForceAction,
+  analyzeHash,
+  listTeamAgents,
+  type TeamAgent,
+  type HashAnalysis,
+} from "./actions";
 
 export type CrackingJobItem = {
   id: string;
@@ -36,12 +44,17 @@ const LEVEL_META: Record<Level, { label: string; cls: string }> = {
 type FeedRole = "COORDINATOR" | "PLANNER" | "CRACKER" | "VERIFIER";
 type FeedMsg = { id: number; role: FeedRole; text: string; tone?: "ok" | "bad" | "warn"; ts: string };
 
-const ROLE_META: Record<FeedRole, { name: string; glyph: string; color: string }> = {
-  COORDINATOR: { name: "HYDRA · ผู้ประสานทีม", glyph: "◆", color: "#c77dff" },
-  PLANNER: { name: "ORACLE · วางแผน", glyph: "◈", color: "#4cc9f0" },
-  CRACKER: { name: "RECON · ลงมือแครก", glyph: "▶", color: "#f72585" },
-  VERIFIER: { name: "CERBERUS · ตรวจสอบ", glyph: "✓", color: "#3ad29f" },
+// Glyph/colour + plain role label per pipeline role. The display NAME now comes
+// from a real platform agent assigned to the role (see roleAgent); these labels
+// are the fallback only when no agents are registered.
+const ROLE_META: Record<FeedRole, { label: string; glyph: string; color: string }> = {
+  COORDINATOR: { label: "ผู้ประสานทีม", glyph: "◆", color: "#c77dff" },
+  PLANNER: { label: "วางแผน", glyph: "◈", color: "#4cc9f0" },
+  CRACKER: { label: "ลงมือแครก", glyph: "▶", color: "#f72585" },
+  VERIFIER: { label: "ตรวจสอบ", glyph: "✓", color: "#3ad29f" },
 };
+
+const ROLE_ORDER: FeedRole[] = ["COORDINATOR", "PLANNER", "CRACKER", "VERIFIER"];
 
 // Full-auto escalation: try the smallest keyspace first, widen on a miss.
 const AUTO_STRATEGY: { charset: string; name: string }[] = [
@@ -73,21 +86,59 @@ function formatCombinations(n: number): string {
 }
 
 export function UsbLab() {
-  const [targetHash, setTargetHash] = useState("");
-  const [algorithm, setAlgorithm] = useState("SHA256");
-  const [charset, setCharset] = useState("lower+numbers");
-  const [maxLength, setMaxLength] = useState(4);
+  // Inputs persist so a refresh keeps the operator's last configuration.
+  const [targetHash, setTargetHash] = usePersistentState("usb:targetHash", "");
+  const [algorithm, setAlgorithm] = usePersistentState("usb:algorithm", "SHA256");
+  const [charset, setCharset] = usePersistentState("usb:charset", "lower+numbers");
+  const [maxLength, setMaxLength] = usePersistentState("usb:maxLength", 4);
 
   const [cracking, setCracking] = useState(false);
   const [statusMsg, setStatusMsg] = useState("Password Cracking Engine ready");
-  const [history, setHistory] = useState<CrackingJobItem[]>([]);
+  // Cracking job history is durable — it must not vanish on refresh.
+  const [history, setHistory] = usePersistentState<CrackingJobItem[]>(
+    "usb:history",
+    [],
+  );
   const [selectedJob, setSelectedJob] = useState<CrackingJobItem | null>(null);
+
+  // RECON — pre-crack weakness analysis (identify → dictionary → feasibility).
+  const [analysis, setAnalysis] = useState<HashAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const [autoRunning, setAutoRunning] = useState(false);
   const [feed, setFeed] = useState<FeedMsg[]>([]);
   const autoCancel = useRef(false);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const feedIdRef = useRef(0);
+
+  // Real agents from the platform DB crew the team (no fabricated personas).
+  const [teamAgents, setTeamAgents] = useState<TeamAgent[]>([]);
+  useEffect(() => {
+    let live = true;
+    void listTeamAgents().then((a) => {
+      if (live) setTeamAgents(a);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Assign real agents to the four pipeline roles (running agents first).
+  const roleAgent = useMemo(() => {
+    const map: Record<FeedRole, TeamAgent | null> = {
+      COORDINATOR: null,
+      PLANNER: null,
+      CRACKER: null,
+      VERIFIER: null,
+    };
+    if (teamAgents.length) {
+      ROLE_ORDER.forEach((role, i) => {
+        map[role] = teamAgents[i % teamAgents.length];
+      });
+    }
+    return map;
+  }, [teamAgents]);
+  const hasTeam = teamAgents.length > 0;
 
   const pushFeed = (role: FeedRole, text: string, tone?: "ok" | "bad" | "warn") => {
     const id = ++feedIdRef.current;
@@ -110,6 +161,27 @@ export function UsbLab() {
   }, [charset, maxLength]);
   const levelMeta = LEVEL_META[level];
 
+  // RECON only — identify the hash + dictionary + feasibility, no brute-force.
+  async function runRecon(): Promise<HashAnalysis | null> {
+    const cleanHash = targetHash.trim();
+    if (!cleanHash) {
+      setStatusMsg("กรุณากรอก Target Hash ก่อนทำ RECON");
+      return null;
+    }
+    setAnalyzing(true);
+    try {
+      const res = await analyzeHash(cleanHash, algorithm, charset, maxLength);
+      setAnalysis(res);
+      setStatusMsg(res.recommendation || res.output);
+      return res;
+    } catch {
+      setStatusMsg("RECON ล้มเหลว");
+      return null;
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
   async function startCrackingJob() {
     const cleanHash = targetHash.trim();
     if (!cleanHash) {
@@ -118,10 +190,41 @@ export function UsbLab() {
     }
 
     setCracking(true);
-    setStatusMsg("กำลังประมวลผลการแครกและตรวจสอบแฮชเชิงโครงสร้าง...");
 
     try {
-      // เรียกใช้งาน Server Action สำหรับกระบวนการแครกรหัสผ่านจริง (รันในเครื่องนี้เท่านั้น)
+      // 1) RECON ก่อน — identify + dictionary/rules (วิธีของมืออาชีพ: ไม่แครกมั่ว)
+      setStatusMsg("RECON: วิเคราะห์ชนิด hash + ลอง dictionary ก่อน...");
+      const recon = await analyzeHash(cleanHash, algorithm, charset, maxLength);
+      setAnalysis(recon);
+      if (recon.ok && recon.dictionary.found) {
+        const job: CrackingJobItem = {
+          id: `dict_${Date.now()}`,
+          targetHash: cleanHash,
+          algorithm,
+          charset: "dictionary",
+          maxLength,
+          status: "SUCCESS",
+          recoveredPassword: recon.dictionary.password,
+          attempts: recon.dictionary.tested,
+          duration: 0,
+        };
+        setHistory((prev) => [job, ...prev]);
+        setSelectedJob(job);
+        setStatusMsg(
+          `[DICTIONARY] พบรหัสผ่านทันทีจาก wordlist: ${recon.dictionary.password} — รหัสอ่อนมาก ไม่ต้อง brute`,
+        );
+        return;
+      }
+      if (recon.ok && !recon.detected.matchesSelected && recon.detected.algorithms.length) {
+        setStatusMsg(
+          `⚠ อัลกอริทึมอาจไม่ตรง — hash นี้น่าจะเป็น ${recon.detected.algorithms.join("/")} (ที่เลือก: ${algorithm})`,
+        );
+      }
+
+      // 2) ไม่พบใน dictionary → brute-force (ทางเลือกสุดท้าย)
+      setStatusMsg(
+        `RECON: ไม่พบใน dictionary → เริ่ม brute-force (${recon.keyspace.feasibility})...`,
+      );
       const result = await bruteForceAction(cleanHash, algorithm, charset, maxLength);
 
       if (!result.ok) {
@@ -165,10 +268,45 @@ export function UsbLab() {
     setFeed([]);
     setStatusMsg("Full Auto · ทีมเอเจนต์กำลังวางแผนและลงมือ...");
     pushFeed("COORDINATOR", `รับภารกิจ: กู้คืนรหัสผ่านจากแฮช ${algorithm} (ยาวสูงสุด ${maxLength}) · แบ่งงานให้ทีม`);
-    pushFeed("PLANNER", `กลยุทธ์: ไล่ชุดอักขระจากเบาไปหนัก ${AUTO_STRATEGY.length} ระดับ หยุดทันทีที่เจอ`);
+    pushFeed("PLANNER", `กลยุทธ์: RECON ก่อน → ไล่ชุดอักขระจากเบาไปหนัก ${AUTO_STRATEGY.length} ระดับ หยุดทันทีที่เจอ`);
 
     let found = false;
+
+    // RECON phase — identify the hash + try dictionary/rules before brute.
+    pushFeed("PLANNER", "RECON: ระบุชนิด hash + ลอง dictionary/rules ก่อน brute");
+    const recon = await analyzeHash(cleanHash, algorithm, charset, maxLength);
+    setAnalysis(recon);
+    if (recon.ok) {
+      pushFeed(
+        "VERIFIER",
+        `hash คาดว่าเป็น ${recon.detected.algorithms.join("/") || "ไม่ทราบ"} · ${recon.detected.matchesSelected ? "ตรงกับที่เลือก" : "อาจไม่ตรง!"}`,
+        recon.detected.matchesSelected ? undefined : "warn",
+      );
+    }
+    if (recon.ok && recon.dictionary.found) {
+      const job: CrackingJobItem = {
+        id: `dict_${Date.now()}`,
+        targetHash: cleanHash,
+        algorithm,
+        charset: "dictionary",
+        maxLength,
+        status: "SUCCESS",
+        recoveredPassword: recon.dictionary.password,
+        attempts: recon.dictionary.tested,
+        duration: 0,
+      };
+      setHistory((prev) => [job, ...prev]);
+      setSelectedJob(job);
+      pushFeed("CRACKER", `พบรหัสผ่านใน dictionary ทันที: ${recon.dictionary.password}`, "ok");
+      pushFeed("COORDINATOR", "ภารกิจสำเร็จด้วย wordlist · ไม่ต้อง brute", "ok");
+      setStatusMsg(`[DICTIONARY] Full Auto พบรหัสผ่าน: ${recon.dictionary.password}`);
+      found = true;
+    } else if (recon.ok) {
+      pushFeed("CRACKER", "ไม่พบใน dictionary → เริ่ม brute-force escalation", "warn");
+    }
+
     for (let i = 0; i < AUTO_STRATEGY.length; i++) {
+      if (found) break;
       if (autoCancel.current) {
         pushFeed("COORDINATOR", "ยกเลิกภารกิจโดยผู้ควบคุม", "warn");
         break;
@@ -306,12 +444,23 @@ export function UsbLab() {
             <div className="usb-run-actions">
               <button
                 type="button"
+                className="btn btn-ghost usb-recon-btn"
+                disabled={busy || analyzing}
+                onClick={() => void runRecon()}
+                title="สแกนหาจุดอ่อนก่อนแครก: ระบุชนิด hash + ลอง dictionary/rules + ประเมินความเป็นไปได้"
+              >
+                <Icon name="search" />
+                {analyzing ? "กำลังวิเคราะห์..." : "RECON หาจุดอ่อน"}
+              </button>
+
+              <button
+                type="button"
                 className="btn btn-danger"
                 disabled={busy}
                 onClick={startCrackingJob}
               >
                 <Icon name="refresh" />
-                {cracking ? "กำลังแครก..." : "แครกแบบ Manual (Brute-force)"}
+                {cracking ? "กำลังแครก..." : "แครก (RECON→Dictionary→Brute)"}
               </button>
 
               <button
@@ -337,6 +486,42 @@ export function UsbLab() {
           <SignalScan label={autoRunning ? "FULL AUTO · TEAM ENGINE RUNNING" : "EXECUTING PASSWORD CRACKING ENGINE"} note={statusMsg} level={level} />
         ) : (
           <p className="usb-msg">{statusMsg}</p>
+        )}
+
+        {analysis && analysis.ok && (
+          <div className="usb-recon">
+            <div className="usb-recon-head">
+              <span>RECON · การวิเคราะห์จุดอ่อนก่อนแครก</span>
+              <span className={`usb-recon-feasible f-${analysis.keyspace.feasibility}`}>
+                {analysis.keyspace.feasibility.toUpperCase()}
+              </span>
+            </div>
+            <div className="usb-recon-grid">
+              <div>
+                <small>ชนิด hash (คาดการณ์)</small>
+                <b>{analysis.detected.algorithms.join(" / ") || "ไม่ทราบ"}</b>
+              </div>
+              <div>
+                <small>อัลกอริทึมที่เลือก</small>
+                <b className={analysis.detected.matchesSelected ? "" : "usb-recon-warn"}>
+                  {algorithm} {analysis.detected.matchesSelected ? "✓" : "⚠ อาจไม่ตรง"}
+                </b>
+              </div>
+              <div>
+                <small>Dictionary / Rules</small>
+                <b className={analysis.dictionary.found ? "usb-recon-hit" : ""}>
+                  {analysis.dictionary.found
+                    ? `พบ → ${analysis.dictionary.password}`
+                    : `ไม่พบ (ลอง ${analysis.dictionary.tested.toLocaleString("en-US")})`}
+                </b>
+              </div>
+              <div>
+                <small>Keyspace brute</small>
+                <b>~{analysis.keyspace.combos.toLocaleString("en-US")}</b>
+              </div>
+            </div>
+            <p className="usb-recon-rec">▸ {analysis.recommendation}</p>
+          </div>
         )}
 
         {/* กราฟสรุปจำนวนครั้งที่ทดสอบของแต่ละงาน (ล่าสุดอยู่ซ้าย) */}
@@ -417,6 +602,36 @@ export function UsbLab() {
             {autoRunning ? "● LIVE" : feed.length ? "IDLE" : "STANDBY"}
           </em>
         </header>
+        <div className="usb-roster">
+          {hasTeam ? (
+            ROLE_ORDER.map((role) => {
+              const a = roleAgent[role];
+              const r = ROLE_META[role];
+              return (
+                <div key={role} className="usb-roster-item">
+                  <span className="usb-roster-glyph" style={{ color: r.color, borderColor: r.color }}>
+                    {r.glyph}
+                  </span>
+                  <div className="usb-roster-id">
+                    <b>{a?.name ?? "—"}</b>
+                    <small>
+                      {r.label} ·{" "}
+                      <span className={`usb-roster-st s-${a?.status ?? "idle"}`}>
+                        {a?.status ?? "idle"}
+                      </span>
+                    </small>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <p className="usb-roster-empty">
+              ยังไม่มีเอเจนต์ในระบบ — ไปลงทะเบียนที่{" "}
+              <Link href="/agents">หน้า Agents</Link>{" "}
+              เพื่อให้ทีมจริงเข้าปฏิบัติการ (Full Auto ยังรัน engine จริงได้ แต่ feed จะแสดงเป็นชื่อ role)
+            </p>
+          )}
+        </div>
         <div className="usb-feed" ref={feedRef}>
           {feed.length === 0 ? (
             <p className="usb-feed-empty">
@@ -425,12 +640,15 @@ export function UsbLab() {
           ) : (
             feed.map((m) => {
               const r = ROLE_META[m.role];
+              const agent = roleAgent[m.role];
+              const displayName = agent ? agent.name : m.role;
               return (
                 <div key={m.id} className={`usb-feed-row tone-${m.tone ?? "none"}`}>
                   <span className="usb-feed-ava" style={{ color: r.color, borderColor: r.color }}>{r.glyph}</span>
                   <div className="usb-feed-body">
                     <div className="usb-feed-meta">
-                      <b style={{ color: r.color }}>{r.name}</b>
+                      <b style={{ color: r.color }}>{displayName}</b>
+                      <span className="usb-feed-role">· {r.label}</span>
                       <time>{m.ts}</time>
                     </div>
                     <p>{m.text}</p>
