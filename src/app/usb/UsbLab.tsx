@@ -3,196 +3,250 @@
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { SignalScan } from "@/components/hud/SignalScan";
-import { MidiControl } from "./MidiControl";
-import { HidUsbLab } from "./HidUsbLab";
-import { AdbPanel } from "./AdbPanel";
-import { dfuList, usbInspect, usbScan, wslLsusb, type UsbDevice, type UsbProp } from "./actions";
 
-const WIN = typeof navigator !== "undefined" && /Win/i.test(navigator.platform);
+export type CrackingJobItem = {
+  id: string;
+  targetHash: string;
+  algorithm: string;
+  charset: string;
+  maxLength: number;
+  status: string;
+  recoveredPassword: string | null;
+  attempts: number;
+  duration: number;
+};
 
 export function UsbLab() {
-  const [devices, setDevices] = useState<UsbDevice[] | null>(null);
-  const [usbipd, setUsbipd] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [scanMsg, setScanMsg] = useState("");
+  const [targetHash, setTargetHash] = useState("");
+  const [algorithm, setAlgorithm] = useState("SHA256");
+  const [charset, setCharset] = useState("lower+numbers");
+  const [maxLength, setMaxLength] = useState(4);
 
-  const [sel, setSel] = useState<UsbDevice | null>(null);
-  const [props, setProps] = useState<UsbProp[] | null>(null);
-  const [inspecting, setInspecting] = useState(false);
+  const [cracking, setCracking] = useState(false);
+  const [statusMsg, setStatusMsg] = useState("Password Cracking Engine ready");
+  const [history, setHistory] = useState<CrackingJobItem[]>([]);
+  const [selectedJob, setSelectedJob] = useState<CrackingJobItem | null>(null);
 
-  const [dfu, setDfu] = useState<{ found: boolean; output: string } | null>(null);
-  const [dfuBusy, setDfuBusy] = useState(false);
+  async function startCrackingJob() {
+    const cleanHash = targetHash.trim();
+    if (!cleanHash) {
+      setStatusMsg("กรุณากรอก Target Hash ที่ต้องการตรวจสอบก่อนเริ่มกระบวนการแครก");
+      return;
+    }
 
-  const [lsusb, setLsusb] = useState<string | null>(null);
-  const [lsusbBusy, setLsusbBusy] = useState(false);
+    setCracking(true);
+    setStatusMsg("กำลังประมวลผลการแครกและตรวจสอบแฮชเชิงโครงสร้าง...");
 
-  async function scan() {
-    setScanning(true);
-    setScanMsg("กำลังอ่านอุปกรณ์ที่เสียบอยู่...");
-    setProps(null);
-    setSel(null);
-    const r = await usbScan();
-    setScanning(false);
-    setUsbipd(r.usbipd);
-    if (!r.ok) { setDevices([]); setScanMsg(r.message ?? "อ่านไม่สำเร็จ"); return; }
-    setDevices(r.devices);
-    setScanMsg(r.message ?? `พบ ${r.devices.length} อุปกรณ์${r.usbipd ? "" : " · ไม่พบ usbipd (attach เข้า WSL ไม่ได้จนกว่าจะติดตั้ง)"}`);
+    try {
+      // เรียกใช้งาน Server Action หรือ API สำหรับกระบวนการแครกรหัสผ่านจริง
+      const response = await fetch("/api/crack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetHash: cleanHash,
+          algorithm,
+          charset,
+          maxLength,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("ไม่สามารถเชื่อมต่อกับระบบประมวลผลการแครกได้");
+      }
+
+      const data = await response.json();
+
+      const newJob: CrackingJobItem = {
+        id: `job_${Date.now()}`,
+        targetHash: cleanHash,
+        algorithm,
+        charset,
+        maxLength,
+        status: data.success ? "SUCCESS" : "FAILED",
+        recoveredPassword: data.password ?? null,
+        attempts: data.attempts ?? 0,
+        duration: data.duration ?? 0,
+      };
+
+      setHistory((prev) => [newJob, ...prev]);
+      setSelectedJob(newJob);
+      setStatusMsg(data.success ? `[SUCCESS] กู้คืนรหัสผ่านสำเร็จ: ${data.password}` : "ไม่พบรหัสผ่านที่ตรงกับค่าแฮชเป้าหมายในเงื่อนไขที่กำหนด");
+    } catch (error: unknown) {
+      setStatusMsg(`เกิดข้อผิดพลาด: ${(error as Error).message}`);
+    } finally {
+      setCracking(false);
+    }
   }
-
-  async function inspect(d: UsbDevice) {
-    setSel(d);
-    setProps(null);
-    setInspecting(true);
-    const r = await usbInspect(d.instanceId);
-    setInspecting(false);
-    setProps(r.ok ? r.props : [{ key: "error", value: r.message ?? "ไม่สำเร็จ" }]);
-  }
-
-  async function checkDfu() {
-    setDfuBusy(true);
-    setDfu(null);
-    const r = await dfuList();
-    setDfuBusy(false);
-    setDfu({ found: r.found, output: r.output });
-  }
-
-  async function checkLsusb() {
-    setLsusbBusy(true);
-    setLsusb(null);
-    const r = await wslLsusb();
-    setLsusbBusy(false);
-    setLsusb(r.output);
-  }
-
-  const copy = (t: string) => navigator.clipboard?.writeText(t).catch(() => {});
-  const attachCmds = (busid: string) =>
-    `usbipd bind --busid ${busid}\nusbipd attach --wsl --busid ${busid}\n# เสร็จแล้วถอดคืน: usbipd detach --busid ${busid}`;
 
   return (
     <>
+      {/* ส่วนควบคุมหลัก: Password Cracking & Hash Decryption Control Panel */}
       <section className="panel span-12" id="usb-scan">
         <header className="panel-head">
-          <span>01 // อุปกรณ์ USB ที่เสียบอยู่</span>
-          <em>{devices ? `${devices.length} อุปกรณ์` : "—"}</em>
+          <span>01 // Password Cracking & Hash Decryption Engine</span>
+          <em>{cracking ? "กำลังประมวลผล..." : "พร้อมใช้งาน"}</em>
         </header>
 
-        {!WIN && <p className="notice notice-error">หน้านี้ทำงานเต็มที่บน Windows (ใช้ PnP + usbipd) · บน OS อื่นจะได้แค่ lsusb</p>}
+        <p className="notice">
+          ระบบเครื่องมือทางไซเบอร์เพื่อสุ่มรหัสผ่าน ถอดรหัสแฮช และตรวจสอบความปลอดภัยเชิงรุก (Brute-force / Dictionary Recovery Utility)
+        </p>
 
-        <div className="usb-bar">
-          <button type="button" className="btn btn-danger" disabled={scanning} onClick={scan}>
-            <Icon name="refresh" /> {scanning ? "กำลังสแกน..." : "สแกนอุปกรณ์ USB"}
+        {/* ฟอร์มตั้งค่าพารามิเตอร์การแครก */}
+        <div className="usb-bar" style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "10px 0" }}>
+          <div>
+            <label style={{ display: "block", marginBottom: "5px", fontSize: "12px", color: "#ccc" }}>Target Hash / Encrypted String:</label>
+            <input
+              type="text"
+              className="input-field"
+              style={{ width: "100%", padding: "10px", background: "#111", color: "#0f0", border: "1px solid #333", fontFamily: "monospace" }}
+              placeholder="วางค่าแฮชเป้าหมายที่ต้องการแครกที่นี่ (เช่น MD5, SHA256)..."
+              value={targetHash}
+              onChange={(e) => setTargetHash(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: "10px" }}>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", fontSize: "12px", color: "#ccc" }}>Algorithm:</label>
+              <select
+                className="select-field"
+                style={{ width: "100%", padding: "8px", background: "#111", color: "#fff", border: "1px solid #333" }}
+                value={algorithm}
+                onChange={(e) => setAlgorithm(e.target.value)}
+              >
+                <option value="MD5">MD5</option>
+                <option value="SHA1">SHA1</option>
+                <option value="SHA256">SHA256</option>
+                <option value="SHA512">SHA512</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", fontSize: "12px", color: "#ccc" }}>Character Set:</label>
+              <select
+                className="select-field"
+                style={{ width: "100%", padding: "8px", background: "#111", color: "#fff", border: "1px solid #333" }}
+                value={charset}
+                onChange={(e) => setCharset(e.target.value)}
+              >
+                <option value="lower+numbers">Lowercase + Numbers (a-z, 0-9)</option>
+                <option value="full-alpha">Full Alphanumeric (A-Z, a-z, 0-9)</option>
+                <option value="symbols">Include Symbols (!@#$)</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", fontSize: "12px", color: "#ccc" }}>Max Length:</label>
+              <input
+                type="number"
+                className="input-field"
+                style={{ width: "100%", padding: "8px", background: "#111", color: "#fff", border: "1px solid #333" }}
+                value={maxLength}
+                onChange={(e) => setMaxLength(Number(e.target.value))}
+                min={1}
+                max={8}
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-danger"
+            disabled={cracking}
+            onClick={startCrackingJob}
+            style={{ padding: "12px", fontWeight: "bold", cursor: "pointer", marginTop: "5px" }}
+          >
+            <Icon name="refresh" />
+            {cracking ? "กำลังดำเนินการแครกรหัสผ่าน..." : "เริ่มกระบวนการแครก / สุ่มรหัสผ่าน (Brute-force)"}
           </button>
-          {usbipd ? (
-            <span className="usb-tag ok">usbipd พร้อม</span>
-          ) : devices ? (
-            <span className="usb-tag warn">ไม่มี usbipd</span>
-          ) : null}
         </div>
-        {scanning ? <SignalScan label="SCANNING USB BUS" note={scanMsg} /> : scanMsg && <p className="usb-msg">{scanMsg}</p>}
 
-        {devices && devices.length > 0 && (
-          <div className="table-scroll">
+        {cracking ? (
+          <SignalScan label="EXECUTING PASSWORD CRACKING ENGINE" note={statusMsg} />
+        ) : (
+          <p className="usb-msg" style={{ padding: "10px", background: "#151515", borderLeft: "3px solid #00ffcc", color: "#00ffcc" }}>
+            {statusMsg}
+          </p>
+        )}
+
+        {/* ตารางแสดงประวัติผลการแครก (Cracking Job History) */}
+        {history.length > 0 && (
+          <div className="table-scroll" style={{ marginTop: "15px" }}>
             <table className="grid-table usb-table">
               <thead>
-                <tr><th>อุปกรณ์</th><th>VID:PID</th><th>คลาส</th><th>ไดรเวอร์</th><th>สถานะ</th><th>BusID</th><th></th></tr>
+                <tr>
+                  <th>Job ID</th>
+                  <th>Target Hash</th>
+                  <th>Algorithm</th>
+                  <th>Status</th>
+                  <th>Recovered Password</th>
+                  <th>Attempts</th>
+                  <th>Duration</th>
+                </tr>
               </thead>
               <tbody>
-                {devices.map((d) => (
-                  <tr key={d.instanceId} className={sel?.instanceId === d.instanceId ? "is-sel" : ""}>
-                    <td className="usb-name">{d.name}</td>
-                    <td className="usb-vid">{d.vidpid ?? "—"}</td>
-                    <td>{d.cls ?? "—"}</td>
-                    <td className="muted">{d.service ?? "—"}</td>
-                    <td>{d.status === "OK" ? <span className="usb-ok">● OK</span> : <span className="usb-bad">{d.status ?? "—"}</span>}</td>
-                    <td>{d.busid ? <span className="usb-busid">{d.busid}{d.attached ? " ·attached" : ""}</span> : <span className="muted">—</span>}</td>
-                    <td className="usb-actions">
-                      <button type="button" className="lf-mini" onClick={() => inspect(d)}><Icon name="search" /> ตรวจลึก</button>
-                      {d.busid && <button type="button" className="lf-mini" onClick={() => copy(attachCmds(d.busid!))}><Icon name="copy" /> attach→WSL</button>}
+                {history.map((job) => (
+                  <tr
+                    key={job.id}
+                    className={selectedJob?.id === job.id ? "is-sel" : ""}
+                    onClick={() => setSelectedJob(job)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <td className="usb-name">{job.id}</td>
+                    <td className="usb-vid" style={{ maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {job.targetHash}
                     </td>
+                    <td>{job.algorithm}</td>
+                    <td>
+                      {job.status === "SUCCESS" ? (
+                        <span className="usb-ok" style={{ color: "#00ff00" }}>● SUCCESS</span>
+                      ) : (
+                        <span className="usb-bad" style={{ color: "#ff4444" }}>● FAILED</span>
+                      )}
+                    </td>
+                    <td style={{ color: "#00ffcc", fontWeight: "bold" }}>{job.recoveredPassword || "—"}</td>
+                    <td>{job.attempts.toLocaleString()}</td>
+                    <td className="muted">{job.duration.toFixed(2)}s</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <p className="hint">อ่านอย่างเดียว (enumerate) — ไม่เขียน ไม่ flash firmware ไม่แตะค่าในอุปกรณ์ · ปุ่ม attach→WSL คัดลอกคำสั่ง usbipd ให้ (ต้องรันใน PowerShell แบบ Admin)</p>
+
+        <p className="hint">
+          ระบบประมวลผลการแครกรหัสผ่านและตรวจสอบค่าแฮชเชิงโครงสร้าง · พร้อมเก็บบันทึกประวัติการทดสอบ
+        </p>
       </section>
 
-      {sel && (
-        <section className="panel span-12" id="usb-detail">
+      {/* ส่วนแสดงรายละเอียดงานแครกที่เลือก (Selected Cracking Job Detail) */}
+      {selectedJob && (
+        <section className="panel span-12" id="usb-detail" style={{ marginTop: "20px" }}>
           <header className="panel-head">
-            <span>02 // รายละเอียด · {sel.name}</span>
-            <em>{sel.vidpid ?? ""}</em>
+            <span>02 // รายละเอียดผลลัพธ์การแครก · {selectedJob.id}</span>
+            <em>{selectedJob.algorithm}</em>
           </header>
-          <div className="usb-idrow">
-            <code className="usb-idval">{sel.instanceId}</code>
-            <button type="button" className="lf-mini" onClick={() => copy(sel.instanceId)}><Icon name="copy" /> คัดลอก id</button>
+
+          <div className="usb-idrow" style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px" }}>
+            <code className="usb-idval" style={{ flex: 1, padding: "10px", background: "#111", color: "#00ff00" }}>
+              Target: {selectedJob.targetHash}
+            </code>
           </div>
-          {inspecting ? (
-            <SignalScan label="READING DESCRIPTORS" />
-          ) : props && (props.length === 0 ? (
-            <p className="muted">อุปกรณ์นี้ไม่คืนค่า property (มักเป็น composite child) — ลองตรวจตัวแม่ หรือ attach เข้า WSL แล้วใช้ lsusb -v</p>
-          ) : (
-            <div className="table-scroll">
-              <table className="grid-table usb-prop">
-                <tbody>
-                  {props.map((p, i) => (
-                    <tr key={`${p.key}-${i}`}><td className="usb-pk">{p.key.replace(/^DEVPKEY_Device_/, "")}</td><td className="usb-pv">{p.value}</td></tr>
-                  ))}
-                </tbody>
-              </table>
+
+          <div style={{ background: "#151515", padding: "15px", borderRadius: "6px", fontFamily: "monospace" }}>
+            <p style={{ color: "#aaa", marginBottom: "8px" }}>&gt; สถานะการกู้คืนรหัสผ่าน:</p>
+            <p style={{ color: selectedJob.recoveredPassword ? "#00ff00" : "#ff4444", fontSize: "16px", fontWeight: "bold" }}>
+              {selectedJob.recoveredPassword ? `รหัสผ่านที่ถอดได้: [ ${selectedJob.recoveredPassword} ]` : "ไม่พบรหัสผ่านในเงื่อนไขการค้นหาปัจจุบัน"}
+            </p>
+            <div style={{ marginTop: "12px", borderTop: "1px solid #333", paddingTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "12px", color: "#ccc" }}>
+              <div>จำนวนครั้งที่ทดสอบ (Attempts): <strong>{selectedJob.attempts.toLocaleString()}</strong></div>
+              <div>เวลาที่ใช้ประมวลผล (Duration): <strong>{selectedJob.duration.toFixed(2)} วินาที</strong></div>
+              <div>รูปแบบชุดตัวอักษร (Charset): <strong>{selectedJob.charset}</strong></div>
+              <div>ความยาวสูงสุด (Max Length): <strong>{selectedJob.maxLength}</strong></div>
             </div>
-          ))}
-          {sel.busid && (
-            <div className="usb-attach">
-              <span className="usb-attach-h">แนบเข้า WSL/Kali เพื่อใช้ lsusb / dfu-util (รันใน PowerShell Admin):</span>
-              <pre className="usb-pre">{attachCmds(sel.busid)}</pre>
-              <button type="button" className="btn btn-sm" onClick={() => copy(attachCmds(sel.busid!))}><Icon name="copy" /> คัดลอกคำสั่ง</button>
-            </div>
-          )}
+          </div>
         </section>
       )}
-
-      <MidiControl />
-
-      <section className="panel span-6" id="usb-dfu">
-        <header className="panel-head"><span>03 // DFU / BOOTLOADER</span><em>firmware mode</em></header>
-        <div className="usb-bar">
-          <button type="button" className="btn btn-sm" disabled={dfuBusy} onClick={checkDfu}>
-            <Icon name="search" /> {dfuBusy ? "กำลังตรวจ..." : "เช็ค DFU (dfu-util -l)"}
-          </button>
-          {dfu && (dfu.found ? <span className="usb-tag ok">พบโหมด DFU</span> : <span className="usb-tag warn">ไม่พบ DFU</span>)}
-        </div>
-        {dfuBusy && <SignalScan label="PROBING DFU" />}
-        {dfu && <pre className="usb-pre">{dfu.output}</pre>}
-        <p className="hint">เพดัล/อุปกรณ์เสียงหลายรุ่นเข้าโหมดอัปเดต (STM32 DFU) ได้ด้วยการกดปุ่มค้างตอนเสียบ · ถ้าเจอ จะ dump/วิเคราะห์ firmware ต่อได้</p>
-      </section>
-
-      <section className="panel span-6" id="usb-wsl">
-        <header className="panel-head"><span>04 // WSL · lsusb</span><em>ฝั่ง Linux</em></header>
-        <div className="usb-bar">
-          <button type="button" className="btn btn-sm" disabled={lsusbBusy} onClick={checkLsusb}>
-            <Icon name="refresh" /> {lsusbBusy ? "กำลังอ่าน..." : "lsusb ใน WSL"}
-          </button>
-        </div>
-        {lsusbBusy && <SignalScan label="READING WSL BUS" />}
-        {lsusb && <pre className="usb-pre">{lsusb}</pre>}
-        <p className="hint">ต้อง <b>attach</b> อุปกรณ์เข้า WSL ก่อน (ปุ่ม attach→WSL ด้านบน) ไม่งั้น lsusb จะไม่เห็นอุปกรณ์ที่เสียบบน Windows</p>
-      </section>
-
-      <section className="panel span-12" id="usb-capture">
-        <header className="panel-head"><span>05 // ดักโปรโตคอล (attack surface จริง)</span><em>USBPcap / Wireshark</em></header>
-        <ol className="usb-steps">
-          <li>ติดตั้ง <b>Wireshark</b> + เลือกติดตั้ง <b>USBPcap</b> ตอน setup</li>
-          <li>เปิดแอปตั้งค่าของเพดัล แล้วจับทราฟฟิกที่ interface <code>USBPcap</code> — จะเห็นว่าแอปส่งคำสั่งอะไรไปหาอุปกรณ์</li>
-          <li>มองหา control transfer / bulk ที่เป็นคำสั่งเขียนค่า, เปลี่ยน preset, หรือ handshake firmware</li>
-          <li>เข้าใจรูปแบบแล้วค่อย replay / fuzz ด้วยสคริปต์ (pyusb) บนอุปกรณ์ของคุณเอง</li>
-        </ol>
-        <p className="hint">ขั้นนี้ทำเองนอกเว็บ (ต้องใช้สิทธิ์ไดรเวอร์จับ USB) — เว็บนี้ช่วยส่วน enumerate + DFU ให้</p>
-      </section>
-
-      <HidUsbLab />
-      <AdbPanel />
     </>
   );
 }

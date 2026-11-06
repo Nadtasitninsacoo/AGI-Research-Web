@@ -5,6 +5,7 @@ import { HeroCosmos } from "@/components/hud/HeroCosmos";
 import { Navbar } from "@/components/hud/Navbar";
 import { Nexus } from "@/components/hud/Nexus";
 import { OsintOverview } from "@/components/hud/OsintOverview";
+import Link from "next/link";
 import { Sidebar } from "@/components/hud/Sidebar";
 import { getDashboardData, type DashboardData } from "@/lib/queries";
 
@@ -26,8 +27,7 @@ const EMPTY: DashboardData = {
   benchmarks: [],
 };
 
-const pct = (n: number, d: number) =>
-  d > 0 ? Math.round((n / d) * 100) : 0;
+const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
 const hhmm = (value: string) => {
   const date = new Date(value);
@@ -90,7 +90,13 @@ async function DashboardFrame() {
   const maxRuns = Math.max(1, ...agents.map((agent) => agent.runs));
 
   const kpis: {
-    label: string; value: string; sub: string; fill: number; index: string; accent: string; icon: IconName;
+    label: string;
+    value: string;
+    sub: string;
+    fill: number;
+    index: string;
+    accent: string;
+    icon: IconName;
   }[] = [
     {
       label: "AGENTS",
@@ -161,9 +167,15 @@ async function DashboardFrame() {
           <header className="hero mission-hero hero-banner">
             <HeroCosmos />
             <span className="hero-planet" aria-hidden="true">
-              <span className="orbit orbit-1"><i className="star" /></span>
-              <span className="orbit orbit-2"><i className="star" /></span>
-              <span className="orbit orbit-3"><i className="star" /></span>
+              <span className="orbit orbit-1">
+                <i className="star" />
+              </span>
+              <span className="orbit orbit-2">
+                <i className="star" />
+              </span>
+              <span className="orbit orbit-3">
+                <i className="star" />
+              </span>
             </span>
             <div className="hero-copy">
               <div className="eyebrow">
@@ -174,17 +186,50 @@ async function DashboardFrame() {
               <h1>Dashboard</h1>
 
               <p className="hero-description">
-                Monitor your agents, experiments and research progress in real-time.
+                Monitor your agents, experiments and research progress in
+                real-time.
               </p>
 
-              <span className={`system-indicator ${online ? "is-online" : "is-offline"}`}>
+              <span
+                className={`system-indicator ${online ? "is-online" : "is-offline"}`}
+              >
                 <i />
                 {online ? "SYSTEM OPERATIONAL" : "DATABASE OFFLINE"}
               </span>
+
+              <Link
+                href="/execute"
+                aria-label="Open Run Execution"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  marginTop: "22px",
+                  padding: "12px 20px",
+                  border: "1px solid rgba(255, 65, 85, 0.65)",
+                  borderRadius: "4px",
+                  background: "rgba(180, 20, 40, 0.16)",
+                  color: "#ff6677",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  letterSpacing: "1.5px",
+                  textDecoration: "none",
+                  transition: "all 180ms ease",
+                }}
+              >
+                <Icon name="send" />
+                LAUNCH RUN
+                <span aria-hidden="true">→</span>
+              </Link>
             </div>
 
             <div className="hero-tagline" aria-hidden="true">
-              BUILDING<br />INTELLIGENT<br />TOMORROW
+              BUILDING
+              <br />
+              INTELLIGENT
+              <br />
+              TOMORROW
             </div>
           </header>
 
@@ -384,7 +429,10 @@ async function DashboardFrame() {
                         <td className="run-experiment" title={run.experiment}>
                           {run.experiment}
                         </td>
-                        <td className="muted run-agent" title={run.agent ?? "—"}>
+                        <td
+                          className="muted run-agent"
+                          title={run.agent ?? "—"}
+                        >
                           {run.agent ?? "—"}
                         </td>
                         <td className="run-accuracy">
@@ -476,7 +524,9 @@ async function DashboardFrame() {
 
           <footer className="dashboard-footer">
             <span>AGI RESEARCH SYSTEM</span>
-            <span>MISSION CONTROL <i>{"///"}</i> OVERVIEW</span>
+            <span>
+              MISSION CONTROL <i>{"///"}</i> OVERVIEW
+            </span>
             <a href="#top">BACK TO TOP ↑</a>
           </footer>
         </main>

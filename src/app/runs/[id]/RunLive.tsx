@@ -1,7 +1,16 @@
+
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useActionState, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useActionState,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import { StatusTag } from "@/components/hud/StatusTag";
 import { Radar } from "@/components/hud/Radar";
 import { FlowPanel } from "@/components/hud/FlowPanel";
@@ -13,22 +22,48 @@ import { cancelRunAction } from "../actions";
 
 const POLL_MS = 4000;
 
-// Finding severity (from the engine's report_finding: critical→info).
-const SEV = ["info", "low", "medium", "high", "critical"] as const;
-const sevRank = (s: string) => Math.max(0, SEV.indexOf((s || "info").toLowerCase() as (typeof SEV)[number]));
-const SEV_LABEL: Record<string, string> = { critical: "วิกฤต", high: "สูง", medium: "กลาง", low: "ต่ำ", info: "ข้อมูล" };
-function detailStr(d: unknown, k: string): string {
-  if (!d || typeof d !== "object") return "";
-  const v = (d as Record<string, unknown>)[k];
-  return v == null ? "" : String(v);
+const SEVERITIES = [
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "info",
+] as const;
+
+type Severity = (typeof SEVERITIES)[number];
+
+const SEVERITY_LABEL: Record<Severity, string> = {
+  critical: "วิกฤต",
+  high: "สูง",
+  medium: "ปานกลาง",
+  low: "ต่ำ",
+  info: "ข้อมูล",
+};
+
+function detailStr(details: unknown, key: string): string {
+  if (!details || typeof details !== "object") return "";
+
+  const value = (details as Record<string, unknown>)[key];
+
+  return value == null ? "" : String(value);
 }
 
-/**
- * Cosmetic cells (experiment/agent name, prompt, params) are passed in as
- * already-rendered slots. They are async server components streamed via
- * Suspense from the page, so the live panels below render from the snapshot
- * immediately and these fill in a moment later without blocking first paint.
- */
+function normalizeSeverity(value: string): Severity {
+  const normalized = value.toLowerCase();
+
+  return SEVERITIES.includes(normalized as Severity)
+    ? (normalized as Severity)
+    : "info";
+}
+
+function isRunning(status: string): boolean {
+  return status.toLowerCase() === "running";
+}
+
+function isQueued(status: string): boolean {
+  return status.toLowerCase() === "queued";
+}
+
 export function RunLive({
   initial,
   experimentCell,
@@ -42,195 +77,466 @@ export function RunLive({
 }) {
   const [snap, setSnap] = useState(initial);
   const [stale, setStale] = useState(false);
+
   const { run, logs, logsTotal, evaluations } = snap;
+
   const final = isRunFinal(run.status);
+  const running = isRunning(run.status);
+  const queued = isQueued(run.status);
   const id = run.id;
 
-  const pipeline = buildPipeline(logs, run.status, evaluations.length);
-  const modelLabel = `#${run.experimentId}`;
+  const pipeline = buildPipeline(
+    logs,
+    run.status,
+    evaluations.length,
+  );
 
-  // Toasts: pop one per new finding, and one when the run reaches a final state.
+  const modelLabel = "AGI Research";
+
+  // Toast notifications
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastSeq = useRef(0);
   const prevFindings = useRef(evaluations.length);
   const prevStatus = useRef(run.status);
-  const pushToast = useCallback((t: Omit<ToastItem, "id">) => {
-    setToasts((cur) => [...cur, { ...t, id: ++toastSeq.current }].slice(-4));
+
+  const pushToast = useCallback((toast: Omit<ToastItem, "id">) => {
+    setToasts((current) =>
+      [
+        ...current,
+        {
+          ...toast,
+          id: ++toastSeq.current,
+        },
+      ].slice(-4),
+    );
   }, []);
-  const dismissToast = useCallback((tid: number) => setToasts((cur) => cur.filter((t) => t.id !== tid)), []);
+
+  const dismissToast = useCallback((toastId: number) => {
+    setToasts((current) =>
+      current.filter((toast) => toast.id !== toastId),
+    );
+  }, []);
 
   useEffect(() => {
     const added = evaluations.length - prevFindings.current;
+
     if (added > 0) {
       const latest = evaluations[0];
+
       pushToast({
         tone: "find",
-        title: added === 1 ? "New result found" : `${added} new results`,
-        body: latest ? `${latest.benchmark} · score ${latest.score.toFixed(2)}` : undefined,
+        title:
+          added === 1
+            ? "พบผลการประเมินใหม่"
+            : `พบผลการประเมินใหม่ ${added} รายการ`,
+        body: latest
+          ? `${latest.benchmark} · Score ${latest.score.toFixed(2)}`
+          : undefined,
       });
     }
+
     prevFindings.current = evaluations.length;
 
-    if (run.status !== prevStatus.current && isRunFinal(run.status)) {
+    if (
+      run.status !== prevStatus.current &&
+      isRunFinal(run.status)
+    ) {
       pushToast({
         tone: run.status === "succeeded" ? "done" : "info",
-        title: `Run ${run.status}`,
-        body: `${evaluations.length} result${evaluations.length === 1 ? "" : "s"} · ${fmtDuration(run.startedAt, run.finishedAt)}`,
+        title: `Run ${run.status.toUpperCase()}`,
+        body: `${evaluations.length} evaluation result(s)`,
       });
     }
-    prevStatus.current = run.status;
-  }, [evaluations, run.status, run.startedAt, run.finishedAt, pushToast]);
 
+    prevStatus.current = run.status;
+  }, [
+    evaluations,
+    run.status,
+    pushToast,
+  ]);
+
+  // Load latest Run snapshot
   const load = useCallback(
     async (signal?: AbortSignal) => {
       try {
-        const res = await fetch(`/api/runs/${id}/live`, { cache: "no-store", signal });
-        if (!res.ok) return setStale(true);
-        setSnap((await res.json()) as RunSnapshot);
+        const response = await fetch(
+          `/api/runs/${id}/live`,
+          {
+            cache: "no-store",
+            signal,
+          },
+        );
+
+        if (!response.ok) {
+          setStale(true);
+          return;
+        }
+
+        const next = (await response.json()) as RunSnapshot;
+
+        if (!next || !next.run) {
+          setStale(true);
+          return;
+        }
+
+        setSnap(next);
         setStale(false);
       } catch {
-        if (!signal?.aborted) setStale(true);
+        if (!signal?.aborted) {
+          setStale(true);
+        }
       }
     },
     [id],
   );
 
+  // Poll only while Run is not in a final state
   useEffect(() => {
     if (final) return;
-    let ctl = new AbortController();
+
+    let controller = new AbortController();
+
     const tick = () => {
       if (document.visibilityState !== "visible") return;
-      ctl.abort();
-      ctl = new AbortController();
-      void load(ctl.signal);
+
+      controller.abort();
+      controller = new AbortController();
+
+      void load(controller.signal);
     };
-    const timer = setInterval(tick, POLL_MS);
+
+    const timer = window.setInterval(tick, POLL_MS);
+
     document.addEventListener("visibilitychange", tick);
+
     return () => {
-      clearInterval(timer);
+      window.clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
-      ctl.abort();
+      controller.abort();
     };
   }, [final, load]);
 
-  const [cancelState, cancelAction, cancelling] = useActionState(async (prev: FormState, fd: FormData) => {
-    const res = await cancelRunAction(prev, fd);
-    if (res?.ok) await load();
-    return res;
-  }, null);
+  // Cancel Run
+  const [cancelState, cancelAction, cancelling] = useActionState(
+    async (previous: FormState, formData: FormData) => {
+      const result = await cancelRunAction(previous, formData);
+
+      if (result?.ok) {
+        await load();
+      }
+
+      return result;
+    },
+    null,
+  );
 
   return (
     <>
+      {/* Header */}
       <header className="hero">
         <div>
-          <small>AGI RESEARCH // RUN</small>
-          <h1>Run <em>#{id}</em></h1>
+          <small>AGI RESEARCH // RUN EXECUTION</small>
+
+          <h1>
+            Run <em>#{id}</em>
+          </h1>
         </div>
+
         <p>
-          {final ? "finished" : stale ? "connection lost · retrying" : "auto-refresh · 4s"}
+          {final
+            ? "Execution finished"
+            : running
+              ? "Processing"
+              : queued
+                ? "Waiting in queue"
+                : "Execution status"}
         </p>
       </header>
 
+      {stale && (
+        <section
+          className="notice notice-error"
+          role="alert"
+        >
+          ไม่สามารถดึงข้อมูล Run ล่าสุดจาก Backend ได้
+          ข้อมูลบนหน้านี้อาจไม่เป็นปัจจุบัน
+        </section>
+      )}
+
+      {/* Status */}
       <section className="panel span-5">
-        <header className="panel-head"><span>01 // STATUS</span><em><StatusTag status={run.status} /></em></header>
-        {!final && (
+        <header className="panel-head">
+          <span>01 // EXECUTION STATUS</span>
+
+          <em>
+            <StatusTag status={run.status} />
+          </em>
+        </header>
+
+        {running && (
           <>
             <Radar
-              active={run.status === "running"}
-              label={run.status === "running" ? "SCANNING" : "STANDBY"}
+              active={true}
+              label="PROCESSING"
               findings={evaluations.length}
             />
-            {run.status === "running" && (
-              <p className="run-working" role="status">
-                <span className="run-working-dot" />
-                MODEL ACTIVE · {modelLabel} is working
-                <span className="run-working-ellipsis"><i>.</i><i>.</i><i>.</i></span>
-              </p>
-            )}
+
+            <p className="run-working" role="status">
+              <span className="run-working-dot" />
+              Agent is processing the assigned task
+            </p>
           </>
         )}
+
+        {queued && (
+          <p className="muted hint" role="status">
+            Run อยู่ในคิวและกำลังรอการประมวลผล
+          </p>
+        )}
+
+        {!running && !queued && !final && (
+          <p className="muted">
+            สถานะ Run: {run.status}
+          </p>
+        )}
+
         <dl className="kv">
           <dt>EXPERIMENT</dt>
           <dd>{experimentCell}</dd>
+
           <dt>AGENT</dt>
           <dd>{agentCell}</dd>
+
           <dt>CREATED</dt>
           <dd>{fmtDate(run.createdAt)}</dd>
+
           <dt>STARTED</dt>
           <dd>{fmtDate(run.startedAt)}</dd>
+
           <dt>FINISHED</dt>
           <dd>{fmtDate(run.finishedAt)}</dd>
+
           <dt>DURATION</dt>
           <dd>{fmtDuration(run.startedAt, run.finishedAt)}</dd>
         </dl>
-        {run.status === "queued" && (
+
+        {queued && (
           <form action={cancelAction} className="form-foot">
-            <input type="hidden" name="runId" value={id} />
-            <button type="submit" className="btn btn-danger" disabled={cancelling}>
+            <input
+              type="hidden"
+              name="runId"
+              value={id}
+            />
+
+            <button
+              type="submit"
+              className="btn btn-danger"
+              disabled={cancelling}
+            >
               {cancelling ? "CANCELLING..." : "CANCEL RUN"}
             </button>
-            {cancelState && !cancelState.ok && <p className="notice notice-error" role="alert">{cancelState.message}</p>}
+
+            {cancelState && !cancelState.ok && (
+              <p className="notice notice-error" role="alert">
+                {cancelState.message}
+              </p>
+            )}
           </form>
         )}
-        {run.status === "queued" && <p className="muted hint">waiting in queue — the runner has not picked this up yet</p>}
-        <p><Link href="/runs" className="link">back to runs</Link></p>
+
+        <p>
+          <Link href="/runs" className="link">
+            Back to Runs
+          </Link>
+        </p>
       </section>
 
+      {/* Input / Output */}
       <section className="panel span-7">
-        <header className="panel-head"><span>02 // INPUT / OUTPUT</span><em>PARAMS · METRICS</em></header>
+        <header className="panel-head">
+          <span>02 // INPUT / OUTPUT</span>
+          <em>RUN DATA</em>
+        </header>
+
+        <h3 className="sub">INPUT PARAMETERS</h3>
+
         {paramsCell}
+
         {run.errorMessage && (
           <>
             <h3 className="sub">ERROR</h3>
-            <pre className="block block-error">{run.errorMessage}</pre>
+
+            <pre className="block block-error">
+              {run.errorMessage}
+            </pre>
           </>
         )}
+
         <h3 className="sub">OUTPUT</h3>
-        {run.metrics?.output ? <pre className="block">{run.metrics.output}</pre> : <p className="muted">no output yet</p>}
+
+        {run.metrics?.output ? (
+          <pre className="block">
+            {run.metrics.output}
+          </pre>
+        ) : (
+          <p className="muted">
+            Backend ยังไม่มี Output สำหรับ Run นี้
+          </p>
+        )}
+
         {run.metrics && (
           <dl className="kv kv-inline">
-            {run.metrics.accuracy != null && <><dt>ACCURACY</dt><dd>{run.metrics.accuracy}</dd></>}
-            {run.metrics.latencyMs != null && <><dt>LATENCY</dt><dd>{run.metrics.latencyMs}ms</dd></>}
-            {run.metrics.inputTokens != null && <><dt>TOKENS IN</dt><dd>{run.metrics.inputTokens}</dd></>}
-            {run.metrics.outputTokens != null && <><dt>TOKENS OUT</dt><dd>{run.metrics.outputTokens}</dd></>}
+            {run.metrics.accuracy != null && (
+              <>
+                <dt>ACCURACY</dt>
+                <dd>{run.metrics.accuracy}</dd>
+              </>
+            )}
+
+            {run.metrics.latencyMs != null && (
+              <>
+                <dt>LATENCY</dt>
+                <dd>{run.metrics.latencyMs}ms</dd>
+              </>
+            )}
+
+            {run.metrics.inputTokens != null && (
+              <>
+                <dt>TOKENS IN</dt>
+                <dd>{run.metrics.inputTokens}</dd>
+              </>
+            )}
+
+            {run.metrics.outputTokens != null && (
+              <>
+                <dt>TOKENS OUT</dt>
+                <dd>{run.metrics.outputTokens}</dd>
+              </>
+            )}
           </dl>
         )}
       </section>
 
+      {/* Findings */}
       <section className="panel span-5">
         <header className="panel-head">
-          <span>03 // FINDINGS (รายงาน)</span>
+          <span>03 // FINDINGS</span>
           <em>{evaluations.length}</em>
         </header>
+
         {evaluations.length === 0 ? (
-          <p className="muted">ยังไม่มี findings</p>
+          <p className="muted">
+            ยังไม่มีผลการประเมินจาก Backend
+          </p>
         ) : (
           <>
             <div className="sev-tally">
-              {(["critical", "high", "medium", "low", "info"] as const).map((s) => {
-                const n = evaluations.filter((e) => detailStr(e.details, "severity").toLowerCase() === s || (!detailStr(e.details, "severity") && s === "info")).length;
-                return n > 0 ? <span key={s} className={`sev-chip sev-${s}`}>{SEV_LABEL[s]} {n}</span> : null;
+              {SEVERITIES.map((severity) => {
+                const count = evaluations.filter((item) => {
+                  const value = detailStr(
+                    item.details,
+                    "severity",
+                  );
+
+                  return normalizeSeverity(value) === severity;
+                }).length;
+
+                if (count === 0) return null;
+
+                return (
+                  <span
+                    key={severity}
+                    className={`sev-chip sev-${severity}`}
+                  >
+                    {SEVERITY_LABEL[severity]} {count}
+                  </span>
+                );
               })}
             </div>
+
             <div className="findings">
               {[...evaluations]
-                .sort((a, b) => sevRank(detailStr(b.details, "severity")) - sevRank(detailStr(a.details, "severity")) || b.score - a.score)
-                .map((e) => {
-                  const sev = (detailStr(e.details, "severity") || "info").toLowerCase();
-                  const target = detailStr(e.details, "target");
-                  const evidence = detailStr(e.details, "evidence");
-                  const remediation = detailStr(e.details, "remediation");
+                .sort((a, b) => {
+                  const severityA = normalizeSeverity(
+                    detailStr(a.details, "severity"),
+                  );
+
+                  const severityB = normalizeSeverity(
+                    detailStr(b.details, "severity"),
+                  );
+
                   return (
-                    <article key={e.id} className={`finding sev-border-${sev}`}>
+                    SEVERITIES.indexOf(severityB) -
+                      SEVERITIES.indexOf(severityA) ||
+                    b.score - a.score
+                  );
+                })
+                .map((item) => {
+                  const severity = normalizeSeverity(
+                    detailStr(item.details, "severity"),
+                  );
+
+                  const target = detailStr(
+                    item.details,
+                    "target",
+                  );
+
+                  const evidence = detailStr(
+                    item.details,
+                    "evidence",
+                  );
+
+                  const remediation = detailStr(
+                    item.details,
+                    "remediation",
+                  );
+
+                  return (
+                    <article
+                      key={item.id}
+                      className={`finding sev-border-${severity}`}
+                    >
                       <div className="finding-top">
-                        <span className={`sev-badge sev-${sev}`}>{SEV_LABEL[sev] ?? sev}</span>
-                        <span className="finding-title">{e.benchmark}</span>
-                        <span className="finding-score" title="score">{e.score.toFixed(1)}</span>
+                        <span
+                          className={`sev-badge sev-${severity}`}
+                        >
+                          {SEVERITY_LABEL[severity]}
+                        </span>
+
+                        <span className="finding-title">
+                          {item.benchmark}
+                        </span>
+
+                        <span
+                          className="finding-score"
+                          title="Score"
+                        >
+                          {item.score.toFixed(1)}
+                        </span>
                       </div>
-                      {target && <div className="finding-row"><b>เป้าหมาย</b> <span className="mono">{target}</span></div>}
-                      {evidence && <div className="finding-row"><b>หลักฐาน</b> {evidence}</div>}
-                      {remediation && <div className="finding-row finding-fix"><b>วิธีแก้</b> {remediation}</div>}
-                      <div className="finding-when">{fmtDate(e.createdAt)}</div>
+
+                      {target && (
+                        <div className="finding-row">
+                          <b>เป้าหมาย</b>{" "}
+                          <span className="mono">{target}</span>
+                        </div>
+                      )}
+
+                      {evidence && (
+                        <div className="finding-row">
+                          <b>หลักฐาน</b> {evidence}
+                        </div>
+                      )}
+
+                      {remediation && (
+                        <div className="finding-row finding-fix">
+                          <b>แนวทางแก้ไข</b> {remediation}
+                        </div>
+                      )}
+
+                      <div className="finding-when">
+                        {fmtDate(item.createdAt)}
+                      </div>
                     </article>
                   );
                 })}
@@ -239,25 +545,50 @@ export function RunLive({
         )}
       </section>
 
+      {/* Logs */}
       <section className="panel span-7">
-        <header className="panel-head"><span>04 // LOG</span><em>{logsTotal} ENTRIES</em></header>
+        <header className="panel-head">
+          <span>04 // EXECUTION LOGS</span>
+          <em>{logsTotal} ENTRIES</em>
+        </header>
+
         {logs.length === 0 ? (
-          <p className="muted">log is empty</p>
+          <p className="muted">
+            ยังไม่มี Log จาก Backend
+          </p>
         ) : (
           <ul className="log log-tall">
-            {logs.map((l) => (
-              <li key={l.id} className={`log-${l.level}`}>
-                <time>{fmtDate(l.createdAt).slice(11, 19)}</time>
-                <b>{l.level.toUpperCase()}</b>
-                <span>{l.message}</span>
+            {logs.map((item) => (
+              <li
+                key={item.id}
+                className={`log-${item.level}`}
+              >
+                <time>
+                  {fmtDate(item.createdAt).slice(11, 19)}
+                </time>
+
+                <b>{item.level.toUpperCase()}</b>
+
+                <span>{item.message}</span>
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      {!final && <FlowPanel pipeline={pipeline} running={run.status === "running"} modelLabel={modelLabel} />}
-      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      {/* Pipeline */}
+      {!final && (
+        <FlowPanel
+          pipeline={pipeline}
+          running={running}
+          modelLabel={modelLabel}
+        />
+      )}
+
+      <ToastStack
+        toasts={toasts}
+        onDismiss={dismissToast}
+      />
     </>
   );
 }

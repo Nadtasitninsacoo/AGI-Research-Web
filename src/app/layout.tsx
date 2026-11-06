@@ -1,3 +1,4 @@
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -13,19 +14,33 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AGI Research // Command Deck",
-  description: "AGI research agents, experiments and runs at a glance",
+  title: "DARK AGI // COMMAND DECK",
+  description:
+    "DARK AGI research dashboard, intelligence overview, and agent operations.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
+      lang="th"
+      data-scroll-behavior="smooth"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        {/* Deep-space atmosphere behind every route; non-interactive, see cosmos.css. */}
-        <div className="cosmos" aria-hidden="true" />
+      <body
+        className="min-h-full flex flex-col"
+        style={{
+          background: "#050505",
+          color: "#f81e36",
+        }}
+      >
+        <div
+          className="cosmos"
+          aria-hidden="true"
+          style={{ opacity: 0.85 }}
+        />
+
         {children}
       </body>
     </html>

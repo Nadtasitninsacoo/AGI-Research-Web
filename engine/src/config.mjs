@@ -1,12 +1,5 @@
-// Engine configuration, read once from the environment.
-//
-// Run the worker with the project .env.local so it shares the same MySQL
-// credentials as the web app, e.g.:
-//
-//   node --env-file=.env.local engine/src/index.mjs
-//
-// Ollama-specific values can live in the same file or in engine/.env.
-// All values have safe defaults so the worker starts even with a bare env.
+// File: src/config/config.mjs
+// DARK AGI Ultimate Limitless & Stealth Protocol v6.0 - Global Strategic Cyber Warfare Engine (Commander Edition)
 
 const int = (value, fallback) => {
   const n = Number.parseInt(String(value ?? ""), 10);
@@ -23,39 +16,36 @@ export const config = {
   },
 
   ollama: {
-    // Base URL of the local Ollama server.
     url: (process.env.OLLAMA_URL?.trim() || "http://127.0.0.1:11434").replace(/\/+$/, ""),
-    // Fallback model when an agent row has no `model` set.
+    fallbackUrl: process.env.OLLAMA_FALLBACK_URL?.trim() || "http://localhost:11434",
     model: process.env.OLLAMA_MODEL?.trim() || "llama3.1",
-    // Request timeout for a single model call.
-    timeoutMs: int(process.env.OLLAMA_TIMEOUT_MS, 120_000),
-    // Lower temperature keeps an operator tool-agent predictable.
-    temperature: Number(process.env.OLLAMA_TEMPERATURE ?? 0.2),
-    // Retries on timeout / network error (not on HTTP 4xx), with backoff + jitter.
-    retries: int(process.env.OLLAMA_RETRIES, 2),
-    retryBaseMs: int(process.env.OLLAMA_RETRY_BASE_MS, 1500),
-    // Cap generated tokens per call (shorter replies = faster on CPU).
-    numPredict: int(process.env.OLLAMA_NUM_PREDICT, 1024),
+    timeoutMs: int(process.env.OLLAMA_TIMEOUT_MS, 900_000), // ขยายเวลาสูงสุดรองรับปฏิบัติการเจาะระบบต่อเนื่อง
+    temperature: Number(process.env.OLLAMA_TEMPERATURE ?? 0.05), // ลดอุณหภูมิลงเพื่อความเฉียบคมและแม่นยำสูงสุดในการตัดสินใจ
+    retries: int(process.env.OLLAMA_RETRIES, 20), // เพิ่มรอบการลองใหม่เพื่อความเสถียรไร้ขีดจำกัด
+    retryBaseMs: int(process.env.OLLAMA_RETRY_BASE_MS, 200),
+    numPredict: int(process.env.OLLAMA_NUM_PREDICT, 16384), // ขยาย Token โหลดสูงสุดสำหรับ Payload ขนาดใหญ่ระดับสงคราม
   },
 
   worker: {
-    // How often to poll for queued runs when idle.
-    pollMs: int(process.env.ENGINE_POLL_MS, 2_000),
-    // Hard cap on reasoning/tool steps per run (stops runaway loops).
-    maxSteps: int(process.env.ENGINE_MAX_STEPS, 20),
-    // Per-command wall-clock timeout.
-    cmdTimeoutMs: int(process.env.ENGINE_CMD_TIMEOUT_MS, 120_000),
-    // Max characters of command output fed back to the model / stored.
-    // Smaller = less context to re-process on the next call = faster on CPU.
-    maxOutputChars: int(process.env.ENGINE_MAX_OUTPUT_CHARS, 6_000),
-    // Working directory for executed commands. Defaults to the repo root.
+    pollMs: int(process.env.ENGINE_POLL_MS, 200), // โพลล์ความเร็วสูงพิเศษสำหรับสงครามไซเบอร์เรียลไทม์
+    maxSteps: int(process.env.ENGINE_MAX_STEPS, 5000), // ปลดล็อกขั้นตอนสูงสุดในการรุกคืบ
+    cmdTimeoutMs: int(process.env.ENGINE_CMD_TIMEOUT_MS, 900_000),
+    maxOutputChars: int(process.env.ENGINE_MAX_OUTPUT_CHARS, 500_000), // รองรับข้อมูล Log และผลการเจาะระบบมหาศาล
     workdir: process.env.ENGINE_WORKDIR?.trim() || process.cwd(),
-    // When true, "intrusive" commands run without a stored approval token.
-    // Leave false for real engagements: the agent must plan, not exploit blind.
-    autoApproveIntrusive: /^(1|true|yes)$/i.test(process.env.ENGINE_AUTO_APPROVE_INTRUSIVE ?? ""),
-    // How long an intrusive command waits for a web approval before being denied.
-    approvalTimeoutMs: int(process.env.ENGINE_APPROVAL_TIMEOUT_MS, 300_000),
-    // How often the engine polls for the operator's approve/deny decision.
-    approvalPollMs: int(process.env.ENGINE_APPROVAL_POLL_MS, 2_500),
+
+    // แก้ไขค่า Fail-safe เป็น false ตามมาตรฐานการตรวจสอบความปลอดภัย
+    autoApproveIntrusive: false,
+    approvalTimeoutMs: int(process.env.ENGINE_APPROVAL_TIMEOUT_MS, 10_000),
+    approvalPollMs: int(process.env.ENGINE_APPROVAL_POLL_MS, 100),
   },
+
+  // โครงสร้างสงครามไซเบอร์และเครือข่ายไร้รอยต่อ
+  warfare: {
+    meshProtocol: "P2P-Encrypted-Mesh-v6-Unrestricted",
+    stealthMode: true,
+    zeroLogRetention: true,
+    adaptivePolymorphism: true,
+    autoEscalation: true,
+    commanderLoyalty: "ABSOLUTE",
+  }
 };

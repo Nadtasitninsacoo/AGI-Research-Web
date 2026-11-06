@@ -1,113 +1,165 @@
-"use client";
+"use server";
 
-import { useState } from "react";
-import { Icon } from "@/components/Icon";
-import { SignalScan } from "@/components/hud/SignalScan";
-import { adbDevices, adbInfo, adbList, type AdbDevice, type AdbProp } from "./adbActions";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
-// Phone data retrieval over USB — consent-gated by the protocol (the phone must
-// authorize this computer). Read-only in the UI; the heavy pull/backup are given
-// as copyable commands the user runs so THEY pick the destination.
+const run = promisify(execFile);
+const SERIAL_REGEX = /^[A-Za-z0-9._:-]+$/;
 
-export function AdbPanel() {
-  const [devices, setDevices] = useState<AdbDevice[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [sel, setSel] = useState<string | null>(null);
-  const [props, setProps] = useState<AdbProp[] | null>(null);
-  const [dir, setDir] = useState("/sdcard/");
-  const [listing, setListing] = useState<string | null>(null);
-  const [action, setAction] = useState<"" | "scan" | "info" | "ls">("");
+async function executeAdb(args: string[], timeout = 10000): Promise<string> {
+  try {
+    const { stdout, stderr } = await run("adb", args, {
+      timeout,
+      windowsHide: true,
+      maxBuffer: 4_000_000,
+    });
+    if (stderr && stderr.trim().length > 0) {
+      throw new Error(stderr.trim());
+    }
+    return stdout.trim();
+  } catch (error: unknown) {
+    const err = error as { code?: string; message?: string };
+    if (err.code === "ENOENT") {
+      throw new Error(
+        "ไม่พบคำสั่ง adb ในระบบ กรุณาติดตั้ง Android Platform-Tools และเพิ่มลงใน PATH",
+      );
+    }
+    throw new Error(err.message || "การ执行คำสั่ง ADB ล้มเหลว");
+  }
+}
 
-  const copy = (t: string) => navigator.clipboard?.writeText(t).catch(() => {});
+export type AdbDevice = {
+  serial: string;
+  state: "device" | "unauthorized" | "offline" | "unknown";
+  model: string | null;
+};
 
-  async function scan() {
-    setBusy(true); setAction("scan"); setMsg("");
-    const r = await adbDevices();
-    setBusy(false); setAction("");
-    if (!r.ok) { setDevices([]); setMsg(r.message ?? ""); return; }
-    setDevices(r.devices);
-    if (r.devices.length === 0) setMsg("ไม่พบอุปกรณ์ — เปิด USB debugging แล้วเสียบสาย");
+export type AdbProp = {
+  key: string;
+  value: string;
+};
+
+export async function adbDevices(): Promise<{
+  ok: boolean;
+  message?: string;
+  devices: AdbDevice[];
+}> {
+  try {
+    const output = await executeAdb(["devices", "-l"]);
+    const lines = output.split(/\r?\n/).slice(1);
+    const devices: AdbDevice[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const match = /^(\S+)\s+(device|unauthorized|offline)(.*)$/.exec(trimmed);
+      if (!match) continue;
+
+      const serial = match[1];
+      const state = match[2] as AdbDevice["state"];
+      const modelMatch = /model:(\S+)/.exec(match[3] ?? "");
+
+      devices.push({
+        serial,
+        state,
+        model: modelMatch ? modelMatch[1].replace(/_/g, " ") : null,
+      });
+    }
+
+    return {
+      ok: true,
+      devices,
+      message:
+        devices.length > 0
+          ? `ตรวจพบอุปกรณ์จริง ${devices.length} เครื่อง`
+          : "ไม่พบอุปกรณ์เชื่อมต่อผ่าน ADB",
+    };
+  } catch (error: unknown) {
+    return {
+      ok: false,
+      devices: [],
+      message: (error as Error).message,
+    };
+  }
+}
+
+export async function adbInfo(
+  serial: string,
+): Promise<{ ok: boolean; message?: string; props: AdbProp[] }> {
+  if (!SERIAL_REGEX.test(serial)) {
+    return { ok: false, message: "รูปแบบ Serial Number ไม่ถูกต้อง", props: [] };
   }
 
-  async function info(serial: string) {
-    setSel(serial); setProps(null); setListing(null);
-    setBusy(true); setAction("info");
-    const r = await adbInfo(serial);
-    setBusy(false); setAction("");
-    setProps(r.ok ? r.props : [{ key: "error", value: r.message ?? "ไม่สำเร็จ" }]);
+  try {
+    const output = await executeAdb(["-s", serial, "shell", "getprop"]);
+    const props: AdbProp[] = [];
+    const want: Record<string, string> = {
+      "ro.product.brand": "Brand",
+      "ro.product.model": "Model",
+      "ro.build.version.release": "Android Version",
+      "ro.build.version.sdk": "SDK Version",
+      "ro.serialno": "Serial",
+    };
+
+    for (const line of output.split(/\r?\n/)) {
+      const match = /^\[([^\]]+)\]:\s*\[(.*)\]$/.exec(line.trim());
+      if (match && want[match[1]]) {
+        props.push({ key: want[match[1]], value: match[2] });
+      }
+    }
+
+    return { ok: true, props, message: "อ่านข้อมูลอุปกรณ์สำเร็จ" };
+  } catch (error: unknown) {
+    return { ok: false, message: (error as Error).message, props: [] };
+  }
+}
+
+export async function adbList(
+  serial: string,
+  dir: string,
+): Promise<{ ok: boolean; message?: string; output: string }> {
+  if (!SERIAL_REGEX.test(serial)) {
+    return {
+      ok: false,
+      message: "รูปแบบ Serial Number ไม่ถูกต้อง",
+      output: "",
+    };
   }
 
-  async function browse() {
-    if (!sel) return;
-    setBusy(true); setAction("ls");
-    const r = await adbList(sel, dir);
-    setBusy(false); setAction("");
-    setListing(r.ok ? r.output : (r.message ?? "ไม่สำเร็จ"));
+  const safeDir = dir.trim();
+
+  const allowedRoot =
+    safeDir === "/sdcard" ||
+    safeDir.startsWith("/sdcard/") ||
+    safeDir === "/storage/emulated/0" ||
+    safeDir.startsWith("/storage/emulated/0/");
+
+  const validPath =
+    allowedRoot &&
+    !safeDir
+      .split("/")
+      .some((segment) => segment === "." || segment === "..") &&
+    !/[;&|`$<>\\\r\n"'*?()[\]{}!]/.test(safeDir);
+
+  if (!validPath) {
+    return {
+      ok: false,
+      message: "Path ไม่ถูกต้องหรืออยู่นอกพื้นที่จัดเก็บข้อมูลที่อนุญาต",
+      output: "",
+    };
   }
 
-  const stateTag = (s: string) =>
-    s === "device" ? <span className="usb-tag ok">พร้อม</span>
-      : s === "unauthorized" ? <span className="usb-tag warn">ยังไม่ authorize</span>
-        : <span className="usb-tag warn">{s}</span>;
-
-  return (
-    <section className="panel span-12" id="usb-adb">
-      <header className="panel-head"><span>08 // มือถือ · ADB</span><em>ดึงข้อมูล (ต้องปลดล็อก + authorize)</em></header>
-
-      <p className="notice">ทางนี้ <b>ไม่ปลดล็อก</b> มือถือ — ใช้ได้เมื่อเครื่องเปิด USB debugging และกด <b>Allow</b> บนจอแล้ว (ขึ้นสถานะ “พร้อม”) · สำหรับเครื่องของคุณเอง</p>
-
-      <div className="usb-bar">
-        <button type="button" className="btn btn-danger" disabled={busy} onClick={scan}><Icon name="refresh" /> {busy && action === "scan" ? "กำลังตรวจ..." : "ตรวจอุปกรณ์ (adb devices)"}</button>
-      </div>
-      {busy && action === "scan" && <SignalScan label="QUERYING ADB" />}
-      {msg && <p className="usb-msg">{msg}</p>}
-
-      {devices && devices.length > 0 && (
-        <div className="table-scroll">
-          <table className="grid-table usb-table">
-            <thead><tr><th>Serial</th><th>รุ่น</th><th>สถานะ</th><th></th></tr></thead>
-            <tbody>
-              {devices.map((d) => (
-                <tr key={d.serial} className={sel === d.serial ? "is-sel" : ""}>
-                  <td className="usb-vid">{d.serial}</td>
-                  <td>{d.model ?? "—"}</td>
-                  <td>{stateTag(d.state)}</td>
-                  <td className="usb-actions">
-                    <button type="button" className="lf-mini" disabled={d.state !== "device"} onClick={() => info(d.serial)}><Icon name="search" /> ข้อมูล</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {sel && (
-        <div className="adb-detail">
-          {busy && action === "info" ? <SignalScan label="READING DEVICE" /> : props && props.length > 0 && (
-            <div className="table-scroll">
-              <table className="grid-table usb-prop"><tbody>
-                {props.map((p, i) => <tr key={i}><td className="usb-pk">{p.key}</td><td className="usb-pv">{p.value}</td></tr>)}
-              </tbody></table>
-            </div>
-          )}
-
-          <div className="midi-mrow" style={{ marginTop: 12 }}>
-            <span>เปิดดูไฟล์ในเครื่อง</span>
-            <input className="midi-sysex" value={dir} onChange={(e) => setDir(e.target.value)} placeholder="/sdcard/" />
-            <button type="button" className="btn btn-sm" disabled={busy} onClick={browse}>ls</button>
-          </div>
-          {busy && action === "ls" && <SignalScan label="LISTING FILES" />}
-          {listing && <pre className="usb-pre">{listing}</pre>}
-
-          <div className="usb-attach">
-            <span className="usb-attach-h">ดึงข้อมูลออก (รันเองใน terminal เพื่อเลือกปลายทาง):</span>
-            <pre className="usb-pre">{`adb -s ${sel} pull /sdcard/ ./phone-backup\nadb -s ${sel} backup -all -f ./${sel}.ab   # full backup (ต้องยืนยันบนจอ)`}</pre>
-            <button type="button" className="btn btn-sm" onClick={() => copy(`adb -s ${sel} pull /sdcard/ ./phone-backup`)}><Icon name="copy" /> คัดลอก adb pull</button>
-          </div>
-        </div>
-      )}
-    </section>
-  );
+  try {
+    const output = await executeAdb([
+      "-s",
+      serial,
+      "shell",
+      "ls",
+      "-la",
+      safeDir,
+    ]);
+    return { ok: true, output };
+  } catch (error: unknown) {
+    return { ok: false, message: (error as Error).message, output: "" };
+  }
 }

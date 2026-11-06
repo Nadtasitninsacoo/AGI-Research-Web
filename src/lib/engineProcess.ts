@@ -1,10 +1,3 @@
-// Server-side manager for the engine worker child process, so the dashboard
-// can start/stop `node --env-file=.env.local engine/src/index.mjs` with a button
-// instead of a terminal. The child is tracked in a globalThis singleton so it
-// survives dev HMR module reloads (but NOT a full server restart).
-//
-// Local admin convenience only. It spawns a FIXED command (no user input), and
-// the worker it launches still enforces scope.mjs + policy.mjs on every action.
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
