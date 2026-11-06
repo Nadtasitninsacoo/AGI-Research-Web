@@ -18,6 +18,7 @@
 @import "../styles/map.css";
 @import "../styles/ip-intel.css";
 @import "../styles/recon.css";
+@import "../styles/threat-intel.css";
 @import "../styles/usb.css";
 
 .status-disconnected-override {

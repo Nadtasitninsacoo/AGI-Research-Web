@@ -164,6 +164,49 @@ export function Recon() {
 
   const [saveMsg, setSaveMsg] = useState("");
 
+  // Command-center global metrics (unfiltered snapshot of the whole surface).
+  const [cmd, setCmd] = useState<{
+    ip: number;
+    scanned: number;
+    unscanned: number;
+    ports: number;
+    portIps: number;
+    vulnPorts: number;
+    vulnIps: number;
+  } | null>(null);
+  const [cmdLoading, setCmdLoading] = useState(true);
+
+  const loadCommandMetrics = useMemo(
+    () => async () => {
+      setCmdLoading(true);
+      try {
+        const [ipStats, portAll, portVuln] = await Promise.all([
+          reconStats({}),
+          savedPortsStats({}),
+          savedPortsStats({ cve: "with" }),
+        ]);
+        setCmd({
+          ip: ipStats.ok ? (ipStats.stats?.total ?? 0) : 0,
+          scanned: ipStats.ok ? (ipStats.stats?.scanned ?? 0) : 0,
+          unscanned: ipStats.ok ? (ipStats.stats?.unscanned ?? 0) : 0,
+          ports: portAll.ok ? (portAll.stats?.total ?? 0) : 0,
+          portIps: portAll.ok ? (portAll.stats?.ips ?? 0) : 0,
+          vulnPorts: portVuln.ok ? (portVuln.stats?.total ?? 0) : 0,
+          vulnIps: portVuln.ok ? (portVuln.stats?.ips ?? 0) : 0,
+        });
+      } catch {
+        setCmd(null);
+      } finally {
+        setCmdLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    void loadCommandMetrics();
+  }, [loadCommandMetrics]);
+
   useEffect(() => {
     reconFacets()
       .then(setFacets)
@@ -475,8 +518,74 @@ export function Recon() {
       }));
   }, [results, cat, q]);
 
+  const scanPct =
+    cmd && cmd.ip > 0 ? Math.round((cmd.scanned / cmd.ip) * 100) : 0;
+
   return (
     <>
+      {/* ── Command center bar ───────────────────────────────── */}
+      <section className="panel span-12 rc-cmd">
+        <div className="rc-cmd-head">
+          <div className="rc-cmd-title">
+            <span className="rc-cmd-live" aria-hidden />
+            <div>
+              <h2>RECON COMMAND CENTER</h2>
+              <p>ATTACK-SURFACE DISCOVERY · OSINT INGESTION · LIVE</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={cmdLoading}
+            onClick={() => void loadCommandMetrics()}
+          >
+            <Icon name="refresh" />{" "}
+            {cmdLoading ? "กำลังรีเฟรช..." : "รีเฟรช"}
+          </button>
+        </div>
+
+        <div className="rc-cmd-grid">
+          <CmdMetric
+            label="IP ในฐาน"
+            value={cmd?.ip}
+            tone="cyan"
+            loading={cmdLoading}
+          />
+          <CmdMetric
+            label="สแกนแล้ว"
+            value={cmd?.scanned}
+            sub={cmd ? `${scanPct}%` : undefined}
+            tone="green"
+            loading={cmdLoading}
+          />
+          <CmdMetric
+            label="ยังไม่สแกน"
+            value={cmd?.unscanned}
+            tone="amber"
+            loading={cmdLoading}
+          />
+          <CmdMetric
+            label="พอร์ตที่เก็บ"
+            value={cmd?.ports}
+            sub={cmd ? `${cmd.portIps.toLocaleString()} IP` : undefined}
+            tone="cyan"
+            loading={cmdLoading}
+          />
+          <CmdMetric
+            label="IP มีช่องโหว่"
+            value={cmd?.vulnIps}
+            sub={cmd ? `${cmd.vulnPorts.toLocaleString()} พอร์ต` : undefined}
+            tone="red"
+            loading={cmdLoading}
+          />
+        </div>
+
+        <div className="rc-cmd-progress" title={`สแกนแล้ว ${scanPct}%`}>
+          <div className="rc-cmd-progress-fill" style={{ width: `${scanPct}%` }} />
+        </div>
+      </section>
+
       <section className="panel span-12" id="recon">
         <header className="panel-head">
           <span>01 // เป้าหมาย</span>
@@ -967,6 +1076,30 @@ export function Recon() {
         </section>
       )}
     </>
+  );
+}
+
+function CmdMetric({
+  label,
+  value,
+  sub,
+  tone,
+  loading,
+}: {
+  label: string;
+  value?: number;
+  sub?: string;
+  tone: "cyan" | "green" | "amber" | "red";
+  loading?: boolean;
+}) {
+  return (
+    <div className={`rc-cmd-tile rc-tone-${tone}`}>
+      <div className="rc-cmd-tile-label">{label}</div>
+      <div className="rc-cmd-tile-value">
+        {loading || value == null ? "—" : value.toLocaleString()}
+      </div>
+      {sub ? <div className="rc-cmd-tile-sub">{sub}</div> : null}
+    </div>
   );
 }
 

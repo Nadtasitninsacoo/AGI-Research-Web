@@ -20,6 +20,7 @@ const PATHS = {
   ports: "M8 7V3M16 7V3M6 7h12v3a6 6 0 0 1-12 0zM12 16v5",
   usb: "M12 21V5M12 5l-3 3M12 5l3 3M12 14l-4-2.5V9M8 11.5a1 1 0 1 0 0-.1M12 11l4-2.5 0-1.5M16 6.5l1.5-1.5 1.5 1.5-1.5 1.5z",
   shield: "M12 3l8 3v5c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6zM9 12l2 2 4-4",
+  radar: "M12 12l6-3M12 3a9 9 0 1 0 9 9M12 7a5 5 0 1 0 5 5",
 } as const;
 
 export type IconName = keyof typeof PATHS;

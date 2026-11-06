@@ -1,0 +1,606 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  Bell,
+  ExternalLink,
+  Radar,
+  ShieldAlert,
+  X,
+} from "lucide-react";
+
+import { Navbar } from "@/components/hud/Navbar";
+import { Sidebar } from "@/components/hud/Sidebar";
+
+import { scanIpsForVulns } from "@/app/takeover/scan-actions";
+import {
+  getCveDetail,
+  getEnvironmentCves,
+  getRadarBatch,
+  type CveDetail,
+  type EnvCve,
+} from "./actions";
+
+// Services whose exposure makes any attached CVE a "severe" finding.
+const CRITICAL_SVC = new Set([
+  "mysql",
+  "postgres",
+  "postgresql",
+  "mssql",
+  "ms-sql-s",
+  "mongodb",
+  "mongo",
+  "redis",
+  "elasticsearch",
+  "memcached",
+  "rdp",
+  "ms-wbt-server",
+  "vnc",
+  "smb",
+  "microsoft-ds",
+  "telnet",
+  "ldap",
+  "nfs",
+]);
+
+type Severity = "CRITICAL" | "HIGH" | "MEDIUM";
+
+function severityOf(cve: EnvCve): Severity {
+  const hasCritical = cve.services.some((s) =>
+    CRITICAL_SVC.has(s.toLowerCase()),
+  );
+  if (hasCritical) return "CRITICAL";
+  if (cve.assets >= 5) return "HIGH";
+  return "MEDIUM";
+}
+
+const SEV_META: Record<
+  Severity,
+  { label: string; text: string; bg: string; border: string; dot: string }
+> = {
+  CRITICAL: {
+    label: "CRITICAL",
+    text: "text-red-300",
+    bg: "bg-red-500/10",
+    border: "border-red-500/40",
+    dot: "bg-red-400",
+  },
+  HIGH: {
+    label: "HIGH",
+    text: "text-orange-300",
+    bg: "bg-orange-500/10",
+    border: "border-orange-500/40",
+    dot: "bg-orange-400",
+  },
+  MEDIUM: {
+    label: "MEDIUM",
+    text: "text-amber-300",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/40",
+    dot: "bg-amber-400",
+  },
+};
+
+type Alert = {
+  id: string;
+  cve: string;
+  severity: Severity;
+  assets: number;
+  services: string[];
+  time: string;
+};
+
+const INTERVALS = [
+  { label: "10 วิ", ms: 10000 },
+  { label: "20 วิ", ms: 20000 },
+  { label: "45 วิ", ms: 45000 },
+  { label: "90 วิ", ms: 90000 },
+];
+
+export default function ThreatIntelPage() {
+  const [cves, setCves] = useState<EnvCve[]>([]);
+  const [stats, setStats] = useState({
+    totalCves: 0,
+    affected: 0,
+    critical: 0,
+  });
+  const [message, setMessage] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+
+  const [radarOn, setRadarOn] = useState(false);
+  const [intervalMs, setIntervalMs] = useState(20000);
+  const [scanning, setScanning] = useState(false);
+  const [lastTick, setLastTick] = useState<string>("—");
+  const [sweeps, setSweeps] = useState(0);
+
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [detail, setDetail] = useState<{
+    cve: string;
+    loading: boolean;
+    data: CveDetail | null;
+  } | null>(null);
+
+  const seenRef = useRef<Set<string>>(new Set());
+  const radarRef = useRef(false);
+  const tickingRef = useRef(false);
+
+  const applyCves = useCallback((list: EnvCve[]) => {
+    setCves(list);
+    setStats({
+      totalCves: list.length,
+      affected: list.reduce((m, c) => Math.max(m, c.assets), 0),
+      critical: list.filter((c) => severityOf(c) === "CRITICAL").length,
+    });
+  }, []);
+
+  const loadCves = useCallback(
+    async (seedSeen: boolean) => {
+      const res = await getEnvironmentCves();
+      if (!res.ok) {
+        setMessage(res.message);
+        return [];
+      }
+      setMessage("");
+      applyCves(res.cves);
+      if (seedSeen) {
+        seenRef.current = new Set(res.cves.map((c) => c.cve));
+      }
+      return res.cves;
+    },
+    [applyCves],
+  );
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      await loadCves(true);
+      setLoading(false);
+    })();
+  }, [loadCves]);
+
+  const pushAlert = useCallback((cve: EnvCve) => {
+    const sev = severityOf(cve);
+    setAlerts((prev) => {
+      if (prev.some((a) => a.cve === cve.cve)) return prev;
+      return [
+        {
+          id: `${cve.cve}-${Date.now()}`,
+          cve: cve.cve,
+          severity: sev,
+          assets: cve.assets,
+          services: cve.services,
+          time: new Date().toLocaleTimeString("en-GB", { hour12: false }),
+        },
+        ...prev,
+      ].slice(0, 60);
+    });
+  }, []);
+
+  // One radar sweep: pick targets, passive-scan, refresh, raise alerts.
+  const tick = useCallback(async () => {
+    if (tickingRef.current) return;
+    tickingRef.current = true;
+    setScanning(true);
+    try {
+      const batch = await getRadarBatch(12);
+      if (batch.ok && batch.ips.length) {
+        await scanIpsForVulns(batch.ips);
+      }
+      const list = await loadCves(false);
+      // New CVEs discovered since last seen → alert the severe ones.
+      for (const c of list) {
+        if (!seenRef.current.has(c.cve)) {
+          seenRef.current.add(c.cve);
+          if (severityOf(c) === "CRITICAL" || severityOf(c) === "HIGH") {
+            pushAlert(c);
+          }
+        }
+      }
+      setLastTick(new Date().toLocaleTimeString("en-GB", { hour12: false }));
+      setSweeps((n) => n + 1);
+    } finally {
+      setScanning(false);
+      tickingRef.current = false;
+    }
+  }, [loadCves, pushAlert]);
+
+  // Radar loop.
+  useEffect(() => {
+    radarRef.current = radarOn;
+    if (!radarOn) return;
+    let stopped = false;
+    const run = async () => {
+      if (stopped || !radarRef.current) return;
+      await tick();
+    };
+    void run();
+    const id = window.setInterval(() => void run(), intervalMs);
+    return () => {
+      stopped = true;
+      window.clearInterval(id);
+    };
+  }, [radarOn, intervalMs, tick]);
+
+  function startRadar() {
+    // Seed current severe CVEs as alerts so the operator sees them immediately.
+    const severe = cves
+      .filter((c) => severityOf(c) === "CRITICAL")
+      .slice(0, 5);
+    severe.forEach(pushAlert);
+    setRadarOn(true);
+  }
+
+  async function openDetail(cve: string) {
+    setDetail({ cve, loading: true, data: null });
+    const data = await getCveDetail(cve);
+    setDetail({ cve, loading: false, data });
+  }
+
+  const online = !message;
+
+  return (
+    <div className="shell" style={{ background: "#090a0f" }}>
+      <Sidebar online={online} />
+
+      {/* ── Alert dock (persistent, scrollable) ─────────────── */}
+      <AlertDock
+        alerts={alerts}
+        onOpen={openDetail}
+        onDismiss={(id) => setAlerts((p) => p.filter((a) => a.id !== id))}
+        onClear={() => setAlerts([])}
+      />
+
+      <div className="takeover-page main flex min-w-0 flex-col bg-[#090a0f] text-slate-100">
+        <Navbar online={online} title="THREAT INTEL" link="FEED" />
+
+        <main className="flex-1 space-y-4 p-4 md:p-6">
+          <header className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Radar className="h-5 w-5 text-cyan-400" />
+                <h1 className="text-lg font-bold tracking-widest text-white">
+                  THREAT INTEL FEED
+                </h1>
+              </div>
+              <p className="mt-1 text-[10px] tracking-wider text-slate-500">
+                FLEET CVE AGGREGATION · AUTO RADAR · LIVE ALERTING
+              </p>
+            </div>
+
+            {/* Radar control */}
+            <div className="flex items-center gap-2 rounded border border-[#252b3b] bg-[#0e1017] px-3 py-2">
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  radarOn
+                    ? scanning
+                      ? "animate-ping bg-cyan-400"
+                      : "bg-cyan-400"
+                    : "bg-slate-600"
+                }`}
+              />
+              <div className="mr-1">
+                <div
+                  className={`text-[10px] font-bold ${
+                    radarOn ? "text-cyan-300" : "text-slate-400"
+                  }`}
+                >
+                  {radarOn ? (scanning ? "SCANNING..." : "RADAR ACTIVE") : "RADAR IDLE"}
+                </div>
+                <div className="text-[9px] text-slate-500">
+                  sweep #{sweeps} · {lastTick}
+                </div>
+              </div>
+
+              <select
+                value={intervalMs}
+                onChange={(e) => setIntervalMs(Number(e.target.value))}
+                className="rounded border border-[#303649] bg-[#090a0f] px-1.5 py-1 text-[10px] text-slate-300 focus:outline-none"
+                title="ความถี่ในการสแกน"
+              >
+                {INTERVALS.map((i) => (
+                  <option key={i.ms} value={i.ms}>
+                    {i.label}
+                  </option>
+                ))}
+              </select>
+
+              {radarOn ? (
+                <button
+                  type="button"
+                  onClick={() => setRadarOn(false)}
+                  className="rounded border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-[10px] font-bold tracking-wider text-red-300 hover:bg-red-500/20"
+                >
+                  หยุดเรดาร์
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={startRadar}
+                  className="inline-flex items-center gap-1.5 rounded border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-bold tracking-wider text-cyan-300 hover:bg-cyan-500/20"
+                >
+                  <Radar className="h-3.5 w-3.5" /> เริ่มเรดาร์
+                </button>
+              )}
+            </div>
+          </header>
+
+          {message ? (
+            <div className="rounded border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
+              {message}
+            </div>
+          ) : null}
+
+          {/* KPIs */}
+          <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Kpi label="CVE ในระบบ" value={stats.totalCves} tone="cyan" />
+            <Kpi label="ระดับ CRITICAL" value={stats.critical} tone="red" />
+            <Kpi
+              label="ALERT ค้างอยู่"
+              value={alerts.length}
+              tone="amber"
+            />
+            <Kpi
+              label="เรดาร์สแกนรอบ"
+              value={sweeps}
+              tone="green"
+            />
+          </section>
+
+          {/* CVE table */}
+          <section className="rounded border border-[#303649] bg-[#0e1017] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4 text-slate-400" />
+              <h2 className="text-xs font-bold tracking-widest text-white">
+                CVE ที่พบในระบบ (เรียงตามจำนวน asset ที่กระทบ)
+              </h2>
+            </div>
+
+            <div className="max-h-[560px] overflow-auto rounded border border-[#1c2130]">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead className="sticky top-0 z-10 bg-[#0b0d14]">
+                  <tr className="text-[9px] font-bold tracking-widest text-slate-500">
+                    <th className="px-3 py-2.5">CVE</th>
+                    <th className="px-3 py-2.5">SEVERITY</th>
+                    <th className="px-3 py-2.5 text-center">ASSETS</th>
+                    <th className="px-3 py-2.5">SERVICES</th>
+                    <th className="px-3 py-2.5">PORTS</th>
+                    <th className="px-3 py-2.5">พบล่าสุด</th>
+                    <th className="px-3 py-2.5"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cves.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-10 text-center text-slate-500">
+                        {loading
+                          ? "กำลังโหลด..."
+                          : "ยังไม่พบ CVE — เริ่มเรดาร์เพื่อสแกนหาช่องโหว่"}
+                      </td>
+                    </tr>
+                  ) : (
+                    cves.slice(0, 500).map((c) => {
+                      const sev = severityOf(c);
+                      const meta = SEV_META[sev];
+                      return (
+                        <tr
+                          key={c.cve}
+                          className="border-t border-[#161b28] align-top hover:bg-[#11141d]"
+                        >
+                          <td className="px-3 py-2.5 font-mono text-cyan-300">
+                            {c.cve}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded border ${meta.border} ${meta.bg} px-2 py-0.5 text-[10px] font-bold ${meta.text}`}
+                            >
+                              <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+                              {meta.label}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-center font-mono text-slate-200">
+                            {c.assets}
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-300">
+                            {c.services.slice(0, 4).join(", ") || "—"}
+                            {c.services.length > 4 ? ` +${c.services.length - 4}` : ""}
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-slate-400">
+                            {c.ports.slice(0, 6).join(", ") || "—"}
+                          </td>
+                          <td className="px-3 py-2.5 text-[10px] text-slate-500">
+                            {c.lastSeen
+                              ? new Date(c.lastSeen).toLocaleString("en-GB", {
+                                  hour12: false,
+                                })
+                              : "—"}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <button
+                              type="button"
+                              onClick={() => void openDetail(c.cve)}
+                              className="rounded border border-[#303649] px-2 py-1 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:text-cyan-300"
+                            >
+                              รายละเอียด
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </main>
+      </div>
+
+      {detail ? (
+        <CveDetailModal
+          state={detail}
+          onClose={() => setDetail(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "cyan" | "red" | "amber" | "green";
+}) {
+  const color =
+    tone === "cyan"
+      ? "text-cyan-400"
+      : tone === "red"
+        ? "text-red-400"
+        : tone === "amber"
+          ? "text-amber-400"
+          : "text-emerald-400";
+  return (
+    <div className="rounded border border-[#252b3b] bg-[#0e1017] p-3">
+      <div className="text-[9px] font-bold tracking-widest text-slate-500">
+        {label}
+      </div>
+      <div className={`mt-1 font-mono text-2xl font-bold ${color}`}>
+        {value.toLocaleString()}
+      </div>
+    </div>
+  );
+}
+
+function AlertDock({
+  alerts,
+  onOpen,
+  onDismiss,
+  onClear,
+}: {
+  alerts: Alert[];
+  onOpen: (cve: string) => void;
+  onDismiss: (id: string) => void;
+  onClear: () => void;
+}) {
+  if (alerts.length === 0) return null;
+  return (
+    <div className="ti-dock">
+      <div className="ti-dock-head">
+        <span className="ti-dock-title">
+          <Bell className="h-3.5 w-3.5" />
+          แจ้งเตือนช่องโหว่ ({alerts.length})
+        </span>
+        <button type="button" onClick={onClear} className="ti-dock-clear">
+          ล้างทั้งหมด
+        </button>
+      </div>
+      <div className="ti-dock-list">
+        {alerts.map((a) => {
+          const meta = SEV_META[a.severity];
+          return (
+            <div key={a.id} className={`ti-card ${meta.border} ${meta.bg}`}>
+              <button
+                type="button"
+                className="ti-card-x"
+                onClick={() => onDismiss(a.id)}
+                aria-label="ปิด"
+              >
+                <X className="h-3 w-3" />
+              </button>
+              <div className="ti-card-top">
+                <AlertTriangle className={`h-3.5 w-3.5 ${meta.text}`} />
+                <span className={`ti-card-sev ${meta.text}`}>{meta.label}</span>
+                <span className="ti-card-time">{a.time}</span>
+              </div>
+              <div className="ti-card-cve">{a.cve}</div>
+              <div className="ti-card-meta">
+                {a.assets} asset · {a.services.slice(0, 3).join(", ") || "—"}
+              </div>
+              <button
+                type="button"
+                className="ti-card-btn"
+                onClick={() => onOpen(a.cve)}
+              >
+                ดูรายละเอียด →
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CveDetailModal({
+  state,
+  onClose,
+}: {
+  state: { cve: string; loading: boolean; data: CveDetail | null };
+  onClose: () => void;
+}) {
+  const d = state.data;
+  return (
+    <div className="ti-modal-backdrop" onClick={onClose}>
+      <div className="ti-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="ti-modal-head">
+          <span className="ti-modal-cve">{state.cve}</span>
+          <button type="button" onClick={onClose} className="ti-modal-x">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {state.loading ? (
+          <p className="ti-modal-loading">กำลังดึงข้อมูลจาก NVD...</p>
+        ) : d && d.ok ? (
+          <div className="ti-modal-body">
+            <div className="ti-modal-metrics">
+              <div>
+                <span className="ti-modal-k">CVSS</span>
+                <span className="ti-modal-v">
+                  {d.cvss != null ? d.cvss.toFixed(1) : "N/A"}
+                </span>
+              </div>
+              <div>
+                <span className="ti-modal-k">SEVERITY</span>
+                <span className="ti-modal-v">{d.severity ?? "N/A"}</span>
+              </div>
+              <div>
+                <span className="ti-modal-k">PUBLISHED</span>
+                <span className="ti-modal-v">
+                  {d.published ? d.published.slice(0, 10) : "N/A"}
+                </span>
+              </div>
+            </div>
+            {d.vector ? (
+              <p className="ti-modal-vector">{d.vector}</p>
+            ) : null}
+            <p className="ti-modal-desc">{d.description}</p>
+            <a
+              className="ti-modal-link"
+              href={`https://nvd.nist.gov/vuln/detail/${encodeURIComponent(state.cve)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              เปิดใน NVD <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        ) : (
+          <div className="ti-modal-body">
+            <p className="ti-modal-err">{d?.message ?? "ไม่พบข้อมูล"}</p>
+            <a
+              className="ti-modal-link"
+              href={`https://nvd.nist.gov/vuln/detail/${encodeURIComponent(state.cve)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              ลองเปิดใน NVD <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

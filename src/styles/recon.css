@@ -116,6 +116,85 @@
 .rc-cve { color: #f84646; font-weight: 600; }
 .rc-row.rc-vuln td { background: rgba(248, 30, 54, 0.05); }
 
+/* ============================================================
+   RECON — Command Center bar
+   ============================================================ */
+.rc-cmd {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(45, 226, 230, 0.08), transparent 55%),
+    radial-gradient(120% 140% at 100% 0%, rgba(248, 30, 54, 0.08), transparent 55%),
+    linear-gradient(180deg, rgba(16, 20, 28, 0.9), rgba(9, 11, 16, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.rc-cmd-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.rc-cmd-title { display: flex; align-items: center; gap: 12px; }
+.rc-cmd-title h2 {
+  margin: 0; font-size: 15px; font-weight: 800; letter-spacing: 0.12em; color: #fff;
+}
+.rc-cmd-title p {
+  margin: 2px 0 0; font-size: 9px; letter-spacing: 0.18em; color: #6b7686;
+  font-family: var(--font-geist-mono), monospace;
+}
+.rc-cmd-live {
+  width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto;
+  background: #5fd38a; box-shadow: 0 0 0 0 rgba(95, 211, 138, 0.6);
+  animation: rc-pulse 2s infinite;
+}
+@keyframes rc-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(95, 211, 138, 0.5); }
+  70% { box-shadow: 0 0 0 9px rgba(95, 211, 138, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(95, 211, 138, 0); }
+}
+
+.rc-cmd-grid {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px;
+}
+.rc-cmd-tile {
+  position: relative; padding: 13px 14px; border-radius: 11px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.rc-cmd-tile::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--tone, #2de2e6);
+}
+.rc-tone-cyan { --tone: #2de2e6; }
+.rc-tone-green { --tone: #5fd38a; }
+.rc-tone-amber { --tone: #f5c451; }
+.rc-tone-red { --tone: #f84646; }
+.rc-cmd-tile-label {
+  font-size: 9px; letter-spacing: 0.1em; color: #8a92a0; text-transform: uppercase;
+}
+.rc-cmd-tile-value {
+  margin-top: 6px; font-size: 24px; font-weight: 800; line-height: 1; color: #fff;
+  font-family: var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--tone) 35%, transparent);
+}
+.rc-cmd-tile-sub {
+  margin-top: 5px; font-size: 10px; color: var(--tone);
+  font-family: var(--font-geist-mono), monospace;
+}
+
+.rc-cmd-progress {
+  margin-top: 14px; height: 6px; border-radius: 999px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+.rc-cmd-progress-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, #2de2e6, #5fd38a);
+  box-shadow: 0 0 12px rgba(95, 211, 138, 0.5);
+  transition: width 0.5s ease;
+}
+
+@media (max-width: 1100px) {
+  .rc-cmd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 1000px) {
   .rc-filters { grid-template-columns: 1fr; }
 }

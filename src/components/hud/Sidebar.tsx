@@ -24,6 +24,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Intel",
     items: [
       { label: "IP Intel", icon: "globe", href: "/ip-intel", match: "/ip-intel" },
+      { label: "Threat Intel", icon: "radar", href: "/threat-intel", match: "/threat-intel" },
       { label: "Recon", icon: "scan", href: "/recon", match: "/recon" },
       { label: "Ports", icon: "ports", href: "/ports", match: "/ports" },
       { label: "USB Lab", icon: "usb", href: "/usb", match: "/usb" },
