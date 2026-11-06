@@ -15,8 +15,30 @@ import { runOrchestrator } from "./orchestrator.mjs";
 import { checkModel } from "./ollama.mjs";
 import { notifyRunFinished } from "./notify.mjs";
 import { printBanner, check, printReady } from "./banner.mjs";
+import fs from "node:fs";
+import path from "node:path";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Write a pidfile so the web app can detect this engine as "running" however it
+// was started — standalone (`npm run engine`) or spawned from the Command page.
+// isPidAlive in src/lib/engineProcess.ts guards against a stale file.
+const PID_PATH = path.join(process.cwd(), "engine-runtime.pid");
+try {
+  fs.writeFileSync(PID_PATH, String(process.pid));
+} catch {
+  /* non-fatal: the engine still runs, the web just can't auto-detect it */
+}
+function clearPidFile() {
+  try {
+    if (Number(fs.readFileSync(PID_PATH, "utf8").trim()) === process.pid) {
+      fs.unlinkSync(PID_PATH);
+    }
+  } catch {
+    /* already gone or unreadable */
+  }
+}
+process.on("exit", clearPidFile);
 let running = true;
 
 /** mysql2 usually returns JSON columns parsed; be defensive if it returns text. */

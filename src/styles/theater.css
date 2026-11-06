@@ -10,9 +10,9 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 12px 14px;
-  margin-bottom: 12px;
+  gap: 12px 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
   border: 1px solid rgba(150, 170, 200, 0.12);
   border-radius: 12px;
   background: linear-gradient(180deg, rgba(20, 24, 33, 0.72), rgba(10, 12, 18, 0.72));
@@ -123,13 +123,15 @@
 /* ---- Stat tiles ------------------------------------------ */
 .alt-tiles {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 10px;
-  margin-bottom: 12px;
+  /* Flow naturally: tiles keep a readable min width and wrap on their own,
+     so they are never squeezed at narrow widths. */
+  grid-template-columns: repeat(auto-fit, minmax(146px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
 }
 .alt-tile {
   position: relative;
-  padding: 12px 14px;
+  padding: 13px 16px;
   border: 1px solid rgba(150, 170, 200, 0.12);
   border-radius: 11px;
   background: linear-gradient(180deg, rgba(20, 24, 33, 0.6), rgba(10, 12, 18, 0.6));
@@ -154,8 +156,8 @@
 }
 .alt-tile-v {
   display: block;
-  margin-top: 4px;
-  font-size: 26px;
+  margin-top: 6px;
+  font-size: 24px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
@@ -238,10 +240,12 @@
 .alt-result p { margin: 6px 0 0; color: #cdd6e0; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
 
 /* ---- Responsive ------------------------------------------ */
-@media (max-width: 900px) {
-  .alt-tiles { grid-template-columns: repeat(2, 1fr); }
-}
 @media (max-width: 560px) {
-  .alt-tiles { grid-template-columns: 1fr 1fr; }
-  .alt-ctl-left, .alt-ctl-right { flex: 1 1 100%; }
+  .alt-ctl-left,
+  .alt-ctl-right {
+    flex: 1 1 100%;
+  }
+  .alt-select { max-width: none; flex: 1 1 auto; }
+  .alt-ctl-right { justify-content: space-between; }
+  .alt-tile-v { font-size: 22px; }
 }

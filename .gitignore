@@ -53,3 +53,4 @@ engine-runtime.log
 
 # DB-IP City Lite derived index (178MB, built via scripts/build-ipgeo.mjs)
 /data/ipgeo/
+engine-runtime.pid
