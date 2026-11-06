@@ -19,6 +19,7 @@ const PATHS = {
   scan: "M12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14M12 2v3M12 19v3M2 12h3M19 12h3M12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3",
   ports: "M8 7V3M16 7V3M6 7h12v3a6 6 0 0 1-12 0zM12 16v5",
   usb: "M12 21V5M12 5l-3 3M12 5l3 3M12 14l-4-2.5V9M8 11.5a1 1 0 1 0 0-.1M12 11l4-2.5 0-1.5M16 6.5l1.5-1.5 1.5 1.5-1.5 1.5z",
+  shield: "M12 3l8 3v5c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6zM9 12l2 2 4-4",
 } as const;
 
 export type IconName = keyof typeof PATHS;

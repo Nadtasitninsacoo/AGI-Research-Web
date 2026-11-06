@@ -22,8 +22,10 @@ const EXTRA_TABLES: { name: string; sql: string }[] = [
       port INT UNSIGNED NOT NULL,
       service VARCHAR(60) NULL,
       cves INT UNSIGNED NOT NULL DEFAULT 0,
+      vuln_ids TEXT NULL,
       hostname VARCHAR(255) NULL,
       source VARCHAR(40) NOT NULL DEFAULT 'internetdb',
+      scanned_at TIMESTAMP NULL DEFAULT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       UNIQUE KEY uniq_ip_port (ip, port),
@@ -61,6 +63,14 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   {
     name: "saved_ips += scanned_at",
     sql: `ALTER TABLE saved_ips ADD COLUMN scanned_at TIMESTAMP NULL DEFAULT NULL`,
+  },
+  {
+    name: "saved_ports += vuln_ids",
+    sql: `ALTER TABLE saved_ports ADD COLUMN vuln_ids TEXT NULL`,
+  },
+  {
+    name: "saved_ports += scanned_at",
+    sql: `ALTER TABLE saved_ports ADD COLUMN scanned_at TIMESTAMP NULL DEFAULT NULL`,
   },
 ];
 

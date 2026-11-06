@@ -16,7 +16,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Access",
     items: [
-      { label: "Takeover", icon: "monitor", href: "/takeover", match: "/takeover" },
+      { label: "Vuln Analysis", icon: "shield", href: "/takeover", match: "/takeover" },
       { label: "Remote", icon: "monitor", href: "/remote", match: "/remote" },
     ],
   },
