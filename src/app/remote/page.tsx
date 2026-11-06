@@ -5,6 +5,7 @@
 
 import { PageFrame, Shell } from "@/components/hud/Shell";
 import { AgentLiveTheater } from "./AgentLiveTheater";
+import "@/styles/theater.css";
 
 export const metadata = { title: "Agent Live Theater" };
 

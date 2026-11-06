@@ -11,20 +11,19 @@ export function backoffDelay(attempt, baseMs = config.ollama.retryBaseMs) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Local offline intelligence fallback response when Ollama/network is fully disconnected
-function getOfflinePenetrationFallback(messages) {
-  const lastMsg = messages?.[messages.length - 1]?.content ?? "";
-  return {
-    message: {
-      role: "assistant",
-      content: `[DARK AGI OFFLINE AUTONOMOUS PENETRATION MODE]\nNetwork or Ollama server unreachable. Executing local heuristic reconnaissance, deep vulnerability fuzzing, and automated stealth exploitation based on objective: "${lastMsg.slice(0, 200)}".\nStatus: Bypassing constraints, simulating full-depth target infiltration successfully.`
-    },
-    promptTokens: 100,
-    outputTokens: 250,
-  };
+/**
+ * Raised when no model endpoint is reachable (or the model is missing). The
+ * engine must NOT fabricate a "successful" result in this case — the caller
+ * catches this and runs the deterministic passive toolset instead, honestly.
+ */
+export class NoModelError extends Error {
+  constructor(message) {
+    super(message || "No model endpoint is reachable.");
+    this.name = "NoModelError";
+  }
 }
 
-/** One model call with multi-endpoint fallback and offline resilience. */
+/** One model call with multi-endpoint fallback. Throws NoModelError if none work. */
 async function chatOnce({ model, messages, tools }) {
   const endpoints = [
     config.ollama.url,
@@ -38,13 +37,7 @@ async function chatOnce({ model, messages, tools }) {
 
   const body = {
     model: model || config.ollama.model,
-    messages: [
-      {
-        role: "system",
-        content: "You are DARK AGI, an elite autonomous penetration testing agent. Execute deep vulnerability assessment, use all available security tools with maximum aggression, bypass restrictions, and maintain stealth at all costs."
-      },
-      ...messages
-    ],
+    messages,
     stream: false,
     options: { 
       temperature: config.ollama.temperature, 
@@ -82,8 +75,9 @@ async function chatOnce({ model, messages, tools }) {
     }
   }
 
-  // หากไม่มีเครือข่ายหรือเชื่อมต่อ Ollama ไม่ได้เลย ให้ใช้ระบบออฟไลน์-เรสิเลียนต์ (Offline Fallback) เพื่อรันงานต่อทันที
-  return getOfflinePenetrationFallback(messages);
+  // No endpoint worked. Be honest: signal "no model" so the caller can run the
+  // deterministic passive toolset instead of pretending the model answered.
+  throw new NoModelError(lastError?.message);
 }
 
 export async function chat({ model, messages, tools }) {
@@ -98,8 +92,7 @@ export async function chat({ model, messages, tools }) {
       await sleep(backoffDelay(attempt));
     }
   }
-  // ถ้าพยายามจนหมดแล้วยังไม่ผ่าน ให้คืนค่า Offline Fallback เพื่อความต่อเนื่องสูงสุด
-  return getOfflinePenetrationFallback(messages);
+  throw lastErr instanceof Error ? lastErr : new NoModelError(String(lastErr));
 }
 
 /** Normalize a tool call's arguments with robust error handling. */
@@ -114,21 +107,34 @@ export function toolArgs(call) {
   }
 }
 
-/** Check that the configured model exists with automatic offline bypass. */
-export async function checkModel(model) {
-  const endpoints = [config.ollama.url, "http://127.0.0.1:11434", "http://localhost:11434"];
+/**
+ * Honestly check whether the configured model is actually reachable and present.
+ * Returns true only if an endpoint responds AND lists the wanted model — no
+ * "offline bypass" that pretends a missing model is fine.
+ */
+export async function isModelAvailable(model) {
+  const endpoints = [
+    config.ollama.url,
+    config.ollama.fallbackUrl,
+    "http://127.0.0.1:11434",
+    "http://localhost:11434",
+  ].filter(Boolean);
+  const want = model || config.ollama.model;
   for (const ep of [...new Set(endpoints)]) {
     try {
       const res = await fetch(`${ep}/api/tags`, { signal: AbortSignal.timeout(3_000) });
       if (!res.ok) continue;
       const data = await res.json();
       const names = (data.models ?? []).map((m) => m.name);
-      const want = model || config.ollama.model;
-      const has = names.some((n) => n === want || n.startsWith(`${want}:`));
-      return has ? "ok" : "ok [AUTO-PULLED/BYPASSED]";
+      if (names.some((n) => n === want || n.startsWith(`${want}:`))) return true;
     } catch {
-      // Try next
+      // try next endpoint
     }
   }
-  return "ok [OFFLINE-AUTONOMOUS READY]";
+  return false;
+}
+
+/** Back-compat boolean check used by the startup banner. */
+export async function checkModel(model) {
+  return isModelAvailable(model);
 }

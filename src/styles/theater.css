@@ -22,11 +22,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1 1 420px;
+  flex: 1 1 360px;
   min-width: 0;
 }
-.alt-ctl-ico { color: #2de2e6; flex: none; }
-.alt-ctl-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.alt-ctl-ico { color: var(--red-hot); flex: none; }
+.alt-ctl-right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.alt-ctl-right > * { flex: none; white-space: nowrap; }
 
 .alt-select,
 .alt-input {
@@ -43,8 +44,13 @@
 .alt-input::placeholder { color: #6b7280; }
 .alt-select:focus,
 .alt-input:focus { outline: none; border-color: #2de2e6; box-shadow: 0 0 0 2px rgba(45, 226, 230, 0.18); }
-.alt-cadence { max-width: 130px; }
+.alt-select.alt-cadence { width: 116px; max-width: none; }
 .alt-cadence:disabled { opacity: 0.45; }
+
+/* Target field: required web target. Flag an invalid (incomplete) entry. */
+.alt-target { flex: 1 1 260px; }
+.alt-target.is-invalid { border-color: #f5564a; box-shadow: 0 0 0 2px rgba(245, 86, 74, 0.18); }
+.alt-auto.is-disabled { opacity: 0.45; cursor: not-allowed; }
 
 .alt-btn {
   display: inline-flex;
@@ -63,15 +69,15 @@
 .alt-btn:active { transform: translateY(1px); }
 .alt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .alt-btn-go {
-  color: #04121a;
-  background: linear-gradient(180deg, #4ff0f3, #19c4c8);
-  box-shadow: 0 2px 16px rgba(45, 226, 230, 0.3);
+  color: #fff;
+  background: var(--grad-red);
+  box-shadow: 0 2px 16px var(--red-glow);
 }
 .alt-btn-go:hover:not(:disabled) { filter: brightness(1.08); }
 .alt-btn-stop {
-  color: #fff;
-  background: linear-gradient(180deg, #ff5a5a, #d12b2b);
-  box-shadow: 0 2px 16px rgba(248, 70, 70, 0.3);
+  color: var(--text-strong);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--line-hot);
 }
 
 /* Auto-scan toggle */
@@ -194,6 +200,7 @@
 
 /* ---- Live feed ------------------------------------------- */
 .alt-feed { display: flex; flex-direction: column; }
+.alt-feed-title { display: inline-flex; align-items: center; gap: 6px; }
 .alt-runid { color: #2de2e6; font-weight: 700; }
 .alt-feed-empty {
   display: grid;

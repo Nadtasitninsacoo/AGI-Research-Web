@@ -23,14 +23,27 @@ export type CrackingJobItem = {
   recoveredPassword: string | null;
   attempts: number;
   duration: number;
+  keysPerSec?: number;
+  workers?: number;
 };
 
-// Keyspace size per character in each allowed charset (must match usbScripts.ts).
+// Keyspace size per character in each allowed charset (mirrors CHARSETS in
+// crackEngine.ts — keep in sync).
 const CHARSET_SIZE: Record<string, number> = {
+  numbers: 10,
   "lower+numbers": 36,
   "full-alpha": 62,
   symbols: 46,
 };
+
+/** Compact keys/sec, e.g. 12.4M/s. */
+function formatRate(n: number): string {
+  if (!n || n < 0) return "—";
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B/s`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M/s`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K/s`;
+  return `${n}/s`;
+}
 
 type Level = 1 | 2 | 3 | 4;
 const LEVEL_META: Record<Level, { label: string; cls: string }> = {
@@ -237,7 +250,7 @@ export function UsbLab() {
         throw new Error(result.output || "ไม่สามารถเริ่มกระบวนการแครกได้");
       }
 
-      const matched = result.data?.find((r) => r.success);
+      const r0 = result.data?.[0];
 
       const newJob: CrackingJobItem = {
         id: `job_${Date.now()}`,
@@ -246,14 +259,20 @@ export function UsbLab() {
         charset,
         maxLength,
         status: result.found ? "SUCCESS" : "FAILED",
-        recoveredPassword: matched?.password ?? null,
-        attempts: matched?.attempts ?? 0,
-        duration: matched?.duration ?? 0,
+        recoveredPassword: r0?.password ?? null,
+        attempts: r0?.attempts ?? 0,
+        duration: r0?.duration ?? 0,
+        keysPerSec: r0?.keysPerSec,
+        workers: r0?.workers,
       };
 
       setHistory((prev) => [newJob, ...prev]);
       setSelectedJob(newJob);
-      setStatusMsg(result.found ? `[SUCCESS] กู้คืนรหัสผ่านสำเร็จ: ${matched?.password}` : "ไม่พบรหัสผ่านที่ตรงกับค่าแฮชเป้าหมายในเงื่อนไขที่กำหนด");
+      setStatusMsg(
+        result.found
+          ? `[SUCCESS] กู้คืนรหัสผ่านสำเร็จ: ${r0?.password} · ${formatRate(r0?.keysPerSec ?? 0)} · ${r0?.workers ?? 0} workers`
+          : `ไม่พบรหัสผ่าน · ทดสอบ ${(r0?.attempts ?? 0).toLocaleString("en-US")} ครั้ง · ${formatRate(r0?.keysPerSec ?? 0)}`,
+      );
     } catch (error: unknown) {
       setStatusMsg(`เกิดข้อผิดพลาด: ${(error as Error).message}`);
     } finally {
@@ -330,7 +349,8 @@ export function UsbLab() {
         pushFeed("CRACKER", result.output || "รันไม่สำเร็จ", "bad");
         continue;
       }
-      const matched = result.data?.find((r) => r.success);
+      const r0 = result.data?.[0];
+      const matched = result.found ? r0 : undefined;
       const job: CrackingJobItem = {
         id: `auto_${Date.now()}_${i}`,
         targetHash: cleanHash,
@@ -338,14 +358,16 @@ export function UsbLab() {
         charset: step.charset,
         maxLength,
         status: result.found ? "SUCCESS" : "FAILED",
-        recoveredPassword: matched?.password ?? null,
-        attempts: matched?.attempts ?? 0,
-        duration: matched?.duration ?? 0,
+        recoveredPassword: r0?.password ?? null,
+        attempts: r0?.attempts ?? 0,
+        duration: r0?.duration ?? 0,
+        keysPerSec: r0?.keysPerSec,
+        workers: r0?.workers,
       };
       setHistory((prev) => [job, ...prev]);
 
       if (result.found && matched) {
-        pushFeed("CRACKER", `พบรหัสผ่าน! หลังทดสอบ ${matched.attempts.toLocaleString("en-US")} ครั้ง (${matched.duration.toFixed(2)}s)`, "ok");
+        pushFeed("CRACKER", `พบรหัสผ่าน! หลังทดสอบ ${matched.attempts.toLocaleString("en-US")} ครั้ง (${matched.duration.toFixed(2)}s · ${formatRate(matched.keysPerSec)} · ${matched.workers} workers)`, "ok");
         pushFeed("VERIFIER", `ยืนยัน: "${matched.password}" ตรงกับแฮชเป้าหมาย ✓`, "ok");
         pushFeed("COORDINATOR", "ภารกิจสำเร็จ · บันทึกผลลงประวัติแล้ว", "ok");
         setSelectedJob(job);
@@ -353,7 +375,7 @@ export function UsbLab() {
         found = true;
         break;
       }
-      pushFeed("CRACKER", `ไม่พบในระดับนี้ (ทดสอบ ${job.attempts.toLocaleString("en-US")} ครั้ง)`, "warn");
+      pushFeed("CRACKER", `ไม่พบในระดับนี้ (ทดสอบ ${job.attempts.toLocaleString("en-US")} ครั้ง · ${formatRate(job.keysPerSec ?? 0)})`, "warn");
       pushFeed("VERIFIER", "ไม่ตรง · ส่งต่อให้วางแผนระดับถัดไป", "warn");
     }
 
@@ -411,6 +433,7 @@ export function UsbLab() {
             <label className="field">
               <span>CHARACTER SET</span>
               <select value={charset} onChange={(e) => setCharset(e.target.value)}>
+                <option value="numbers">Numbers only (0-9) · PIN</option>
                 <option value="lower+numbers">Lowercase + Numbers (a-z, 0-9)</option>
                 <option value="full-alpha">Full Alphanumeric (A-Z, a-z, 0-9)</option>
                 <option value="symbols">Include Symbols (!@#$)</option>
@@ -682,6 +705,8 @@ export function UsbLab() {
             <div className="usb-result-kv">
               <div>จำนวนครั้งที่ทดสอบ (Attempts): <strong>{selectedJob.attempts.toLocaleString("en-US")}</strong></div>
               <div>เวลาที่ใช้ประมวลผล (Duration): <strong>{selectedJob.duration.toFixed(2)} วินาที</strong></div>
+              <div>ความเร็ว (Throughput): <strong>{formatRate(selectedJob.keysPerSec ?? 0)}</strong></div>
+              <div>ขนานหลายคอร์ (Workers): <strong>{selectedJob.workers ?? "—"}</strong></div>
               <div>รูปแบบชุดตัวอักษร (Charset): <strong>{selectedJob.charset}</strong></div>
               <div>ความยาวสูงสุด (Max Length): <strong>{selectedJob.maxLength}</strong></div>
             </div>

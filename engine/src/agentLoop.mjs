@@ -28,7 +28,7 @@ export function isUnproductive(result) {
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { chat, toolArgs } from "./ollama.mjs";
+import { chat, toolArgs, isModelAvailable, NoModelError } from "./ollama.mjs";
 import { buildSystemPrompt } from "./systemPrompt.mjs";
 import { checkScope } from "./scope.mjs";
 import { decide } from "./policy.mjs";
@@ -767,6 +767,154 @@ async function writeWorkspaceNote(nameRaw, content, { agentId, runId }) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Passive, read-only primitives — safe to run deterministically with no model
+// and no human in the loop. They observe public data or do a defensive check;
+// they never send attack traffic. Active/intrusive tools are intentionally NOT
+// part of this path.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Read-only OSINT via Shodan InternetDB (no packets sent to the target). */
+async function osintLookup(ip) {
+  const addr = String(ip ?? "").trim();
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(addr)) {
+    return { ok: false, text: "ERROR: a valid IPv4 'ip' is required.", data: null };
+  }
+  try {
+    const res = await fetch(`https://internetdb.shodan.io/${addr}`, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (res.status === 404) {
+      return {
+        ok: true,
+        text: `OSINT internetdb ${addr}: no public data (no known open ports/CVEs).`,
+        data: { ip: addr, ports: [], cpes: [], hostnames: [], vulns: [] },
+      };
+    }
+    if (!res.ok) {
+      return { ok: false, text: `OSINT internetdb ${addr}: lookup failed (HTTP ${res.status}).`, data: null };
+    }
+    const data = await res.json();
+    const slim = {
+      ip: data.ip ?? addr,
+      ports: data.ports ?? [],
+      cpes: data.cpes ?? [],
+      hostnames: data.hostnames ?? [],
+      vulns: data.vulns ?? [],
+    };
+    return { ok: true, text: JSON.stringify(slim), data: slim };
+  } catch (e) {
+    return { ok: false, text: `OSINT internetdb ${addr}: ${e?.message ?? "lookup error"}`, data: null };
+  }
+}
+
+/** Command for the bundled, dependency-free defensive web check (headers + TLS). */
+function buildWebCheckCommand(url) {
+  const script = path
+    .join(config.worker.workdir, "engine", "pyscan", "web_check.py")
+    .replace(/\\/g, "/");
+  const py = process.platform === "win32" ? "python" : "python3";
+  return `${py} -I "${script}" "${url}"`;
+}
+
+/**
+ * No-model mode. Runs ONLY passive/local checks deterministically and reports
+ * real results — no fabricated "success". Active and intrusive tools are never
+ * launched here; those need a model or a human to decide and approve.
+ */
+async function runPassivePipeline({ runId, agentId, objective, scope, agentConfig, runParams }) {
+  const started = Date.now();
+  const ctx = { scope, agentConfig, runParams, agentId, runId, cmdHistory: new Map() };
+  const text = `${scope?.label ?? ""}\n${(scope?.targets ?? []).join(" ")}\n${objective ?? ""}`;
+
+  const ips = [...new Set(text.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g) ?? [])];
+  const urls = [...new Set((text.match(/\bhttps?:\/\/[^\s'"]+/gi) ?? []).map((u) => u.replace(/[),.]+$/, "")))];
+  const inUrl = urls.join(" ");
+  const domains = [
+    ...new Set(
+      (text.match(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi) ?? [])
+        .map((d) => d.toLowerCase())
+        .filter((d) => !ips.includes(d) && !inUrl.includes(d)),
+    ),
+  ];
+  const webTargets = [...urls, ...domains.map((d) => `https://${d}`)];
+
+  const sections = [];
+  let commandsRun = 0;
+  let commandsOk = 0;
+  const savedPorts = [];
+
+  await log({
+    agentId,
+    runId,
+    level: "info",
+    message: `PASSIVE MODE: osint on ${ips.length} IP(s), web_check on ${webTargets.length} host(s).`,
+  });
+
+  for (const ip of ips) {
+    const r = await osintLookup(ip);
+    commandsRun++;
+    if (r.ok) commandsOk++;
+    await log({ agentId, runId, level: r.ok ? "info" : "warn", message: `osint_lookup ${ip}: ${r.text.slice(0, 500)}` });
+    sections.push(`### OSINT ${ip}\n${r.text}`);
+    if (r.ok && r.data && Array.isArray(r.data.ports)) {
+      for (const port of r.data.ports) {
+        if (Number.isInteger(port) && port >= 1 && port <= 65535) {
+          savedPorts.push([ip, port, null, (r.data.vulns ?? []).length, (r.data.hostnames ?? [])[0] ?? null, "passive-osint"]);
+        }
+      }
+    }
+  }
+
+  for (const url of webTargets) {
+    const out = await execRunCommand({ args: { command: buildWebCheckCommand(url), purpose: "defensive web check (headers + TLS)" }, ...ctx });
+    commandsRun++;
+    if (!isUnproductive(out)) commandsOk++;
+    sections.push(`### WEB CHECK ${url}\n${out}`);
+  }
+
+  // Persist any discovered open ports so the operator can review them.
+  if (savedPorts.length) {
+    try {
+      await execute(
+        `INSERT INTO saved_ports (ip, port, service, cves, hostname, source)
+         VALUES ${savedPorts.map(() => "(?,?,?,?,?,?)").join(",")}`,
+        savedPorts.flat(),
+      );
+      await log({ agentId, runId, level: "info", message: `Saved ${savedPorts.length} discovered port(s) to saved_ports.` });
+    } catch (e) {
+      await log({ agentId, runId, level: "warn", message: `Could not save ports: ${e?.message ?? e}` });
+    }
+  }
+
+  const ran = ips.length + webTargets.length;
+  const status = commandsOk > 0 ? "succeeded" : "failed";
+  const header =
+    ran === 0
+      ? "No-model PASSIVE mode: no IP/URL/domain target was found in the scope or objective, so no passive check could run. Provide a target, or start the Ollama model for full agent reasoning."
+      : `No-model PASSIVE mode: ran ${commandsRun} read-only check(s) (${commandsOk} returned data). Active/intrusive tools were skipped — they require a model or human approval.`;
+  const summary = [header, "", ...sections].join("\n");
+
+  return {
+    status,
+    summary,
+    findings: [],
+    metrics: {
+      output: summary,
+      structured: null,
+      mode: "passive-no-model",
+      confidence: 1.0,
+      accuracy: 1.0,
+      evidence: { commandsRun, commandsOk, blocked: 0 },
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs: Date.now() - started,
+    },
+    evidence: { commandsRun, commandsOk, blocked: 0 },
+  };
+}
+
 /**
  * Run the agent to completion for one experiment run.
  * @returns {Promise<{status:"succeeded"|"failed", summary:string, findings:any[], metrics:object}>}
@@ -783,6 +931,32 @@ export async function runAgent({
   toolsEnabled,
 }) {
   const started = Date.now();
+
+  // If no model is reachable, don't fabricate a result. For tool-enabled agents,
+  // run the deterministic PASSIVE toolset (osint + web_check) and report real
+  // output. Text-only agents can't do anything useful without a model, so fail
+  // honestly rather than inventing an answer.
+  if (!(await isModelAvailable(model))) {
+    if (toolsEnabled) {
+      await log({
+        agentId,
+        runId,
+        level: "warn",
+        message: "No model reachable — running deterministic PASSIVE toolset (osint + web_check) only.",
+      });
+      return await runPassivePipeline({ runId, agentId, objective, scope, agentConfig, runParams });
+    }
+    const msg = "No model reachable and this is a text-only agent (no tools), so there is nothing to run. Start the Ollama model, or enable tools to use the passive toolset.";
+    await log({ agentId, runId, level: "error", message: msg });
+    return {
+      status: "failed",
+      summary: msg,
+      findings: [],
+      metrics: { output: msg, mode: "no-model", evidence: { commandsRun: 0, commandsOk: 0, blocked: 0 }, inputTokens: 0, outputTokens: 0, latencyMs: Date.now() - started },
+      evidence: { commandsRun: 0, commandsOk: 0, blocked: 0 },
+    };
+  }
+
   const systemPrompt = buildSystemPrompt({
     agentName,
     agentConfig,
@@ -825,6 +999,17 @@ export async function runAgent({
     try {
       reply = await chat({ model, messages, tools });
     } catch (err) {
+      // Model dropped mid-run. If it's gone entirely and we've made no progress,
+      // fall back to the honest passive toolset instead of failing blankly.
+      if (err instanceof NoModelError && commandsRun === 0 && toolsEnabled) {
+        await log({
+          agentId,
+          runId,
+          level: "warn",
+          message: "Model became unreachable — falling back to deterministic PASSIVE toolset.",
+        });
+        return await runPassivePipeline({ runId, agentId, objective, scope, agentConfig, runParams });
+      }
       summary = `Model call failed: ${err?.message ?? err}`;
       await log({ agentId, runId, level: "error", message: summary });
       break;
@@ -1137,11 +1322,7 @@ export async function runAgent({
             result = `ERROR: ${error.message}`;
             break;
           }
-          const script = path
-            .join(config.worker.workdir, "engine", "pyscan", "web_check.py")
-            .replace(/\\/g, "/");
-          const py = process.platform === "win32" ? "python" : "python3";
-          const command = `${py} -I "${script}" "${url}"`;
+          const command = buildWebCheckCommand(url);
           result = await execRunCommand({
             args: {
               command,
@@ -1153,35 +1334,7 @@ export async function runAgent({
           break;
         }
         case "osint_lookup": {
-          const ip = String(args.ip ?? "").trim();
-          if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
-            result = "ERROR: a valid IPv4 'ip' is required.";
-            break;
-          }
-          try {
-            const res = await fetch(`https://internetdb.shodan.io/${ip}`, {
-              headers: { Accept: "application/json" },
-              signal: AbortSignal.timeout(15000),
-            });
-            if (res.status === 404) {
-              result = `OSINT internetdb ${ip}: no public data (no known open ports/CVEs).`;
-              break;
-            }
-            if (!res.ok) {
-              result = `OSINT internetdb ${ip}: lookup failed (HTTP ${res.status}).`;
-              break;
-            }
-            const data = await res.json();
-            result = JSON.stringify({
-              ip: data.ip ?? ip,
-              ports: data.ports ?? [],
-              cpes: data.cpes ?? [],
-              hostnames: data.hostnames ?? [],
-              vulns: data.vulns ?? [],
-            });
-          } catch (e) {
-            result = `OSINT internetdb ${ip}: ${e?.message ?? "lookup error"}`;
-          }
+          result = (await osintLookup(args.ip)).text;
           break;
         }
         case "save_targets": {

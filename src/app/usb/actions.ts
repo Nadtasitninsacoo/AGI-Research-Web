@@ -5,15 +5,13 @@
 import type { RowDataPacket } from "mysql2";
 import { db } from "@/lib/db";
 import {
-  IS_WINDOWS,
   getErrorMessage,
-  executeRealCrackingJob,
-  parseCrackingOutput,
   identifyHash,
   dictionaryAttack,
   keyspaceAssessment,
   type CrackingTargetResult,
 } from "./usbScripts";
+import { bruteForceParallel } from "./crackEngine";
 
 export type { CrackingTargetResult } from "./usbScripts";
 
@@ -138,26 +136,42 @@ export async function bruteForceAction(
   output: string;
   data?: CrackingTargetResult[];
 }> {
-  if (!IS_WINDOWS) {
-    return {
-      ok: false,
-      found: false,
-      output: "Password cracking execution requires a Windows host environment.",
-    };
-  }
-
   const cleanHash = targetHash ? targetHash.trim() : "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8"; // Default test hash for 'password' (SHA256)
 
   try {
-    const rawOutput = await executeRealCrackingJob(cleanHash, algorithm, charset, maxLength, 60_000);
-    const results = parseCrackingOutput(rawOutput);
-    const matched = results.find((r) => r.success);
+    const r = await bruteForceParallel(cleanHash, algorithm, charset, maxLength, { timeoutMs: 60_000 });
+    const result: CrackingTargetResult = {
+      hash: cleanHash,
+      success: r.success,
+      password: r.password,
+      attempts: r.attempts,
+      duration: r.duration,
+      keysPerSec: r.keysPerSec,
+      workers: r.workers,
+      exhausted: r.exhausted,
+    };
+
+    const kps = r.keysPerSec.toLocaleString("en-US");
+    const tail = r.success
+      ? `พบรหัสผ่าน -> ${r.password}`
+      : r.timedOut
+        ? "หมดเวลา (timeout) — ยังไม่พบ"
+        : r.exhausted
+          ? "ค้นครบ keyspace แล้วไม่พบ"
+          : "ไม่พบรหัสผ่านในเงื่อนไขที่กำหนด";
 
     return {
       ok: true,
-      found: !!matched,
-      output: `[SUCCESS] ดำเนินการแครกแฮชสำเร็จผ่าน .NET Cryptography Engine\nTarget Hash: ${cleanHash}\nResult: ${matched ? `พบรหัสผ่าน -> ${matched.password}` : "ไม่พบรหัสผ่านในเงื่อนไขที่กำหนด"}\nTotal Attempts: ${matched?.attempts ?? 0}\nDuration: ${matched?.duration.toFixed(2) ?? 0}s`,
-      data: results,
+      found: r.success,
+      output: [
+        `[ENGINE] Parallel Node crypto · ${r.workers} workers`,
+        `Target Hash: ${cleanHash}`,
+        `Result: ${tail}`,
+        `Total Attempts: ${r.attempts.toLocaleString("en-US")}`,
+        `Throughput: ${kps} keys/s`,
+        `Duration: ${r.duration.toFixed(2)}s`,
+      ].join("\n"),
+      data: [result],
     };
   } catch (error: unknown) {
     return {
@@ -178,24 +192,22 @@ export async function hashDecryptAction(
   ok: boolean;
   output: string;
 }> {
-  if (!IS_WINDOWS) {
-    return {
-      ok: false,
-      output: "Hash decryption requires a Windows host environment.",
-    };
-  }
-
   const cleanHash = targetHash ? targetHash.trim() : "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8";
 
   try {
-    // เรียกใช้งานระบบตรวจสอบแฮชด้วยความเร็วสูงผ่านกระบวนการประมวลผลจริง
-    const rawOutput = await executeRealCrackingJob(cleanHash, algorithm, "lower+numbers", 4, 30_000);
-    const results = parseCrackingOutput(rawOutput);
-    const matched = results.find((r) => r.success);
+    // Dictionary/rules first (instant for weak hashes), then a short brute pass.
+    const dict = dictionaryAttack(cleanHash, algorithm);
+    let password = dict.found ? dict.password : null;
+    let attempts = dict.tested;
+    if (!password) {
+      const r = await bruteForceParallel(cleanHash, algorithm, "lower+numbers", 4, { timeoutMs: 30_000 });
+      password = r.password;
+      attempts += r.attempts;
+    }
 
     return {
       ok: true,
-      output: `[HASH DECRYPTION REPORT]\nAlgorithm: ${algorithm}\nTarget: ${cleanHash}\nStatus: ${matched ? "RECOVERED" : "NOT_FOUND"}\nPlaintext: ${matched?.password ?? "N/A"}\nAttempts: ${matched?.attempts ?? 0}`,
+      output: `[HASH DECRYPTION REPORT]\nAlgorithm: ${algorithm}\nTarget: ${cleanHash}\nStatus: ${password ? "RECOVERED" : "NOT_FOUND"}\nPlaintext: ${password ?? "N/A"}\nAttempts: ${attempts.toLocaleString("en-US")}`,
     };
   } catch (error: unknown) {
     return {

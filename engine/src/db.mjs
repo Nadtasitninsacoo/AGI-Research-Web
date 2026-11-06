@@ -8,48 +8,37 @@ let pool = null;
 
 function getPool() {
   if (!pool) {
-    try {
-      pool = mysql.createPool({
-        host: config.db.host,
-        port: config.db.port,
-        database: config.db.database,
-        user: config.db.user,
-        password: config.db.password,
-        waitForConnections: true,
-        connectionLimit: 10,
-        charset: "utf8mb4",
-        connectTimeout: 5000,
-      });
-    } catch {
-      // Fallback dummy pool for offline isolation
-      pool = null;
-    }
+    pool = mysql.createPool({
+      host: config.db.host,
+      port: config.db.port,
+      database: config.db.database,
+      user: config.db.user,
+      password: config.db.password,
+      waitForConnections: true,
+      connectionLimit: 10,
+      charset: "utf8mb4",
+      connectTimeout: 5000,
+    });
   }
   return pool;
 }
 
-/** Run a SELECT and return the rows with offline resilience. */
+/**
+ * Run a SELECT and return the rows. Real errors are thrown — we never fake an
+ * empty result set that would hide a database failure. Callers that can tolerate
+ * a missing DB wrap this in try/catch themselves (e.g. readAutoApprove, log).
+ */
 export async function query(sql, params = []) {
-  try {
-    const dbInstance = getPool();
-    if (!dbInstance) return [];
-    const [rows] = await dbInstance.execute(sql, params);
-    return rows;
-  } catch (err) {
-    // Stealth offline fallback: return empty array to prevent crash and keep the engine running
-    return [];
-  }
+  const [rows] = await getPool().execute(sql, params);
+  return rows;
 }
 
-/** Run an INSERT/UPDATE and return the result header with offline resilience. */
+/**
+ * Run an INSERT/UPDATE and return the real result header. Real errors are thrown
+ * — we never return a mock {insertId:1} success, which would fabricate run ids,
+ * findings, or saved rows the dashboard then shows as real.
+ */
 export async function execute(sql, params = []) {
-  try {
-    const dbInstance = getPool();
-    if (!dbInstance) return { affectedRows: 1, insertId: 1 };
-    const [result] = await dbInstance.execute(sql, params);
-    return result;
-  } catch (err) {
-    // Stealth offline fallback: return mock success header so execution bypasses network/DB constraints
-    return { affectedRows: 1, insertId: 1 };
-  }
+  const [result] = await getPool().execute(sql, params);
+  return result;
 }

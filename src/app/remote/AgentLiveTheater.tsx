@@ -42,12 +42,23 @@ type Snapshot = {
 const FINAL = new Set(["succeeded", "failed", "needs_input", "cancelled"]);
 const MAX_POINTS = 80;
 
-const OBJECTIVES = [
-  "osint_lookup 8.8.8.8 แล้ว save_targets พอร์ตที่เปิดลงฐานข้อมูล",
-  "dns_lookup + tls_inspect ของ example.com แล้ว record_finding สรุปความเสี่ยง",
-  "http_probe + tech_fingerprint โฮสต์เป้าหมาย แล้วแนะนำแนวทาง hardening",
-  "วิเคราะห์ช่องโหว่จากพอร์ตที่บันทึกไว้ แล้วจัดอันดับตาม CVSS",
+// Web-target objectives. Each is built from the operator's TARGET so every run
+// has an explicit, in-scope web target (no free-floating "some host" tasks).
+const OBJECTIVE_TEMPLATES: ((t: string) => string)[] = [
+  (t) => `web_check ${t} ตรวจ security headers และใบรับรอง TLS แล้ว record_finding สรุปความเสี่ยง`,
+  (t) => `tech_fingerprint ${t} ระบุเทคโนโลยีเว็บ/เซิร์ฟเวอร์ แล้วบันทึกผล`,
+  (t) => `http_probe ${t} (headers) + dns_lookup โดเมนของเป้าหมาย แล้วสรุปพื้นผิวเชิงรับ`,
+  (t) => `ประเมิน misconfig/exposure/headers ของ ${t} เชิงรับ แล้ว record_finding ตาม severity`,
 ];
+
+/** Accept a full web URL or a bare domain (we normalize bare domains to https). */
+function normalizeWebTarget(raw: string): string | null {
+  const s = (raw || "").trim();
+  if (!s) return null;
+  if (/^https?:\/\/\S+$/i.test(s)) return s;
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(s)) return `https://${s}`;
+  return null;
+}
 
 const CADENCES: { label: string; ms: number }[] = [
   { label: "ทุก 20 วิ", ms: 20_000 },
@@ -85,8 +96,12 @@ const LEVEL_COLOR: Record<string, string> = {
 export function AgentLiveTheater() {
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [experimentId, setExperimentId] = useState("");
+  const [target, setTarget] = usePersistentState("theater:target", "");
   const [command, setCommand] = useState("");
   const [optionsError, setOptionsError] = useState("");
+
+  // A run must have a web target. This is the authorized scope for the run.
+  const webTarget = useMemo(() => normalizeWebTarget(target), [target]);
 
   const [runId, setRunId] = useState<number | null>(null);
   const [snap, setSnap] = useState<Snapshot>(null);
@@ -135,13 +150,25 @@ export function AgentLiveTheater() {
   const launch = useCallback(
     async (prompt: string, source: string) => {
       if (!experimentId || submitting) return;
+      // Hard requirement: an in-scope web target. Never launch without one.
+      const tgt = normalizeWebTarget(target);
+      if (!tgt) {
+        setOptionsError("ต้องใส่เป้าหมายเว็บก่อน เช่น https://example.com");
+        return;
+      }
+      setOptionsError("");
       setSubmitting(true);
       try {
         prevEventsRef.current = 0;
         prevTokensRef.current = 0;
         const id = await createRunLocal({
           experimentId,
-          params: { prompt, source },
+          params: {
+            prompt,
+            source,
+            // Explicit engagement scope → engine parseScope() picks this up.
+            scope: { targets: [tgt], label: "live-theater" },
+          },
         });
         setRunId(id);
         setSnap(null);
@@ -152,7 +179,7 @@ export function AgentLiveTheater() {
         setSubmitting(false);
       }
     },
-    [experimentId, submitting],
+    [experimentId, submitting, target, setOptionsError],
   );
 
   const stop = useCallback(async () => {
@@ -228,19 +255,19 @@ export function AgentLiveTheater() {
       clearTimeout(autoTimerRef.current);
       autoTimerRef.current = null;
     }
-    if (!auto || running || submitting || !experimentId) return;
+    if (!auto || running || submitting || !experimentId || !webTarget) return;
 
     autoTimerRef.current = setTimeout(() => {
-      const obj = OBJECTIVES[objIdxRef.current % OBJECTIVES.length];
+      const tmpl = OBJECTIVE_TEMPLATES[objIdxRef.current % OBJECTIVE_TEMPLATES.length];
       objIdxRef.current += 1;
       setSweeps((n) => n + 1);
-      void launch(obj, "theater-auto");
+      void launch(tmpl(webTarget), "theater-auto");
     }, cadenceMs);
 
     return () => {
       if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
     };
-  }, [auto, running, submitting, experimentId, cadenceMs, launch, status]);
+  }, [auto, running, submitting, experimentId, webTarget, cadenceMs, launch, status]);
 
   // Keep the feed pinned to the newest line.
   useEffect(() => {
@@ -265,7 +292,14 @@ export function AgentLiveTheater() {
     runStats.launched > 0 ? Math.round((runStats.ok / runStats.launched) * 100) : 0;
 
   const onLaunch = () => {
-    const prompt = command.trim() || OBJECTIVES[0];
+    if (!webTarget) {
+      setOptionsError("ต้องใส่เป้าหมายเว็บก่อน เช่น https://example.com");
+      return;
+    }
+    // Operator's own instruction wins, but the target is always attached.
+    const prompt = command.trim()
+      ? `${command.trim()} (เป้าหมาย: ${webTarget})`
+      : OBJECTIVE_TEMPLATES[0](webTarget);
     void launch(prompt, "theater-manual");
   };
 
@@ -289,8 +323,17 @@ export function AgentLiveTheater() {
             ))}
           </select>
           <input
+            className={`alt-input alt-target${target.trim() && !webTarget ? " is-invalid" : ""}`}
+            placeholder="เป้าหมายเว็บ เช่น https://example.com"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && !running && onLaunch()}
+            aria-label="เป้าหมายเว็บ"
+            spellCheck={false}
+          />
+          <input
             className="alt-input"
-            placeholder="สั่งงานเอเจนต์ เช่น: osint_lookup 8.8.8.8 แล้วบันทึกพอร์ต…"
+            placeholder="คำสั่งเสริม (ไม่บังคับ) เช่น ตรวจ security headers…"
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !running && onLaunch()}
@@ -306,18 +349,23 @@ export function AgentLiveTheater() {
             <button
               className="alt-btn alt-btn-go"
               onClick={onLaunch}
-              disabled={!experimentId || submitting}
+              disabled={!experimentId || submitting || !webTarget}
+              title={!webTarget ? "ใส่เป้าหมายเว็บก่อน" : "ปล่อยเอเจนต์ไปยังเป้าหมาย"}
             >
               <Play size={14} /> ปล่อยเอเจนต์
             </button>
           )}
 
-          <label className={`alt-auto${auto ? " is-on" : ""}`}>
+          <label
+            className={`alt-auto${auto ? " is-on" : ""}${!webTarget ? " is-disabled" : ""}`}
+            title={!webTarget ? "ใส่เป้าหมายเว็บก่อนจึงเปิด AUTO-SCAN ได้" : "สแกนเป้าหมายอัตโนมัติตามรอบ"}
+          >
             <Radar size={14} />
             <span>AUTO-SCAN</span>
             <input
               type="checkbox"
               checked={auto}
+              disabled={!webTarget}
               onChange={(e) => setAuto(e.target.checked)}
             />
             <span className="alt-auto-dot" />
@@ -405,8 +453,8 @@ export function AgentLiveTheater() {
       {/* ── Live theater feed ────────────────────────────────────── */}
       <section className="panel alt-feed span-12">
         <header className="panel-head">
-          <span>
-            <Activity size={13} style={{ verticalAlign: "-2px" }} /> LIVE AGENT STREAM
+          <span className="alt-feed-title">
+            <Activity size={13} /> LIVE AGENT STREAM
             {runId != null && <b className="alt-runid"> · run #{runId}</b>}
           </span>
           <em>{logs.length} เหตุการณ์</em>
