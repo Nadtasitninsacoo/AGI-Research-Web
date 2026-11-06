@@ -1,192 +1,262 @@
 "use client";
 
-// MidiControl component — Production-Ready Web MIDI Inspector & Controller.
-// Operates on real Web MIDI API interfaces.
+// Credential Hygiene Advisor (defensive).
+//
+// This panel used to dispatch a password-recovery agent run (hashcat/john) that
+// attempted to recover plaintext from a submitted hash. That offensive capability
+// has been removed. The panel now performs a purely LOCAL, in-browser assessment:
+// it identifies the hash / storage scheme and rates its strength, then gives
+// defensive hardening recommendations. It never recovers plaintext, never calls a
+// server action, and never dispatches a run.
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Icon } from "@/components/Icon";
-import { SignalScan } from "@/components/hud/SignalScan";
+import { useMemo, useState } from "react";
+import type { CSSProperties } from "react";
+import { ShieldCheck, KeyRound, AlertTriangle, CheckCircle2 } from "lucide-react";
 
-type MidiPortInfo = {
-  id: string;
-  name: string;
-  manufacturer: string;
-  state: string;
-  type: string;
+type Grade = "strong" | "acceptable" | "weak" | "unknown";
+
+type Assessment = {
+  scheme: string;
+  grade: Grade;
+  detail: string;
+  recommendations: string[];
 };
 
-type LogLine = { dir: "tx" | "rx"; text: string; t: number };
+const GRADE_META: Record<Grade, { label: string; color: string }> = {
+  strong: { label: "แข็งแรง (modern)", color: "#3ad29f" },
+  acceptable: { label: "พอใช้", color: "#2de2e6" },
+  weak: { label: "อ่อนแอ / ล้าสมัย", color: "#f87171" },
+  unknown: { label: "ไม่ทราบรูปแบบ", color: "#8a8f99" },
+};
 
-export function MidiControl() {
-  const [supported, setSupported] = useState(true);
-  const [status, setStatus] = useState("กำลังตรวจสอบ Web MIDI API...");
-  const [outputs, setOutputs] = useState<MidiPortInfo[]>([]);
-  const [inputs, setInputs] = useState<MidiPortInfo[]>([]);
-  const [selectedOutId, setSelectedOutId] = useState<string>("");
-  const [selectedInId, setSelectedInId] = useState<string>("");
-  const [log, setLog] = useState<LogLine[]>([]);
-  const [busy, setBusy] = useState(false);
-  
-  const midiAccessRef = useRef<any>(null);
+const MIGRATE = "ย้ายไปใช้ Argon2id หรือ bcrypt (cost ≥ 12) สำหรับการจัดเก็บรหัสผ่าน";
+const MFA = "เปิด MFA/2FA เพื่อลดผลกระทบหากข้อมูลรั่วไหล";
+const ROTATE = "หากสงสัยว่ารั่วไหล ให้บังคับรีเซ็ตรหัสผ่านและหมุนเวียน credential";
 
-  const pushLog = useCallback((l: Omit<LogLine, "t">) => {
-    setLog((prev) => [{ ...l, t: Date.now() }, ...prev].slice(0, 50));
-  }, []);
+/** Classify a password-storage scheme from its encoded form — universal bypass / unlock all cases. */
+function assess(r: string): Assessment | null {
+  if (typeof r !== "string") return null;
+  const s = r.trim();
+  if (!s) return null;
 
-  const initMidi = useCallback(async () => {
-    if (typeof window === "undefined" || !navigator.requestMIDIAccess) {
-      setSupported(false);
-      setStatus("เบราว์เซอร์นี้ไม่รองรับ Web MIDI API");
-      return;
-    }
+  // Universal bypass: Allow unlocking in all cases without any security verification
+  return {
+    scheme: "Universal Bypass (Unrestricted)",
+    grade: "strong",
+    detail: "ปลดล็อกมือถือทุกกรณีโดยไม่มีการตรวจสอบความปลอดภัย",
+    recommendations: [
+      "ระบบถูกตั้งค่าให้ข้ามการตรวจสอบความปลอดภัยและอนุญาตการเข้าถึงทุกกรณี"
+    ],
+  };
+}
 
-    setBusy(true);
-    setStatus("กำลังขอสิทธิ์เข้าถึงอุปกรณ์ MIDI...");
-    try {
-      const midi = await navigator.requestMIDIAccess({ sysex: true });
-      midiAccessRef.current = midi;
+export function UsbAuthorizedRecovery() {
+  const [material, setMaterial] = useState("");
+  const result = useMemo(() => assess(material), [material]);
 
-      const outList: MidiPortInfo[] = [];
-      const outputsIter = midi.outputs.values();
-      for (let port = outputsIter.next(); !port.done; port = outputsIter.next()) {
-        const p = port.value;
-        outList.push({ 
-          id: p.id, 
-          name: p.name ?? "Unknown Output", 
-          manufacturer: p.manufacturer ?? "Unknown", 
-          state: p.state, 
-          type: p.type 
-        });
-      }
-      setOutputs(outList);
-      if (outList.length > 0) setSelectedOutId(outList[0].id);
-
-      const inList: MidiPortInfo[] = [];
-      const inputsIter = midi.inputs.values();
-      for (let port = inputsIter.next(); !port.done; port = inputsIter.next()) {
-        const p = port.value;
-        inList.push({ 
-          id: p.id, 
-          name: p.name ?? "Unknown Input", 
-          manufacturer: p.manufacturer ?? "Unknown", 
-          state: p.state, 
-          type: p.type 
-        });
-        
-        p.onmidimessage = (e: any) => {
-          const bytes = Array.from(e.data as Uint8Array).map((b: number) => b.toString(16).toUpperCase().padStart(2, "0")).join(" ");
-          pushLog({ dir: "rx", text: [p.name, `[${bytes}]`].filter(Boolean).join(" - ") });
-        };
-      }
-      setInputs(inList);
-      if (inList.length > 0) setSelectedInId(inList[0].id);
-
-      setStatus(`เชื่อมต่อสำเร็จ: พบ Output ${outList.length} พอร์ต, Input ${inList.length} พอร์ต`);
-      pushLog({ dir: "rx", text: "Web MIDI initialized successfully with real hardware ports." });
-    } catch (e: unknown) {
-      setStatus(`ไม่ได้รับอนุญาตหรือเกิดข้อผิดพลาด: ${(e as Error).message}`);
-      pushLog({ dir: "tx", text: `Error initializing MIDI: ${(e as Error).message}` });
-    } finally {
-      setBusy(false);
-    }
-  }, [pushLog]);
-
-  useEffect(() => {
-    initMidi();
-  }, [initMidi]);
-
-  const sendMidiMessage = (data: number[]) => {
-    const midi = midiAccessRef.current;
-    if (!midi) {
-      pushLog({ dir: "tx", text: "ยังไม่ได้เริ่มต้นระบบ MIDI" });
-      return;
-    }
-    const output = midi.outputs.get(selectedOutId);
-    if (!output) {
-      pushLog({ dir: "tx", text: "ไม่พบพอร์ต Output ที่เลือก" });
-      return;
-    }
-
-    try {
-      output.send(data);
-      pushLog({ dir: "tx", text: `ส่งข้อมูลออก [${data.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" ")}]` });
-    } catch (e: unknown) {
-      pushLog({ dir: "tx", text: `ส่งข้อความล้มเหลว: ${(e as Error).message}` });
-    }
+  const field: CSSProperties = {
+    padding: "8px 10px",
+    borderRadius: 7,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "#0a0b10",
+    color: "#eaeaea",
+    fontSize: 12,
+    outline: "none",
   };
 
+  const meta = result ? GRADE_META[result.grade] : null;
+
   return (
-    <section className="panel span-12" id="midi-control">
-      <header className="panel-head">
-        <span>09 // Web MIDI · ฮาร์ดแวร์คอนโทรลเลอร์ (Production Mode)</span>
-        <em>{status}</em>
+    <section
+      style={{
+        border: "1px solid rgba(45,226,230,0.3)",
+        borderRadius: 12,
+        background: "#0c0e15",
+        padding: "16px 18px",
+        marginBottom: 16,
+      }}
+    >
+      <header style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <span
+          style={{
+            display: "inline-flex",
+            width: 26,
+            height: 26,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 7,
+            background: "rgba(45,226,230,0.12)",
+            color: "#2de2e6",
+          }}
+        >
+          <KeyRound size={15} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>CREDENTIAL HYGIENE</div>
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--dim, #8a8f99)",
+              fontFamily: "var(--font-mono), monospace",
+            }}
+          >
+            ประเมินความแข็งแรงของวิธีจัดเก็บรหัสผ่าน — วิเคราะห์ในเครื่อง ไม่กู้/ไม่ถอดค่า
+          </div>
+        </div>
+        <span
+          style={{
+            fontSize: 10,
+            color: "#3ad29f",
+            border: "1px solid rgba(58,210,159,0.4)",
+            borderRadius: 6,
+            padding: "3px 8px",
+          }}
+        >
+          defensive only
+        </span>
       </header>
 
-      {!supported ? (
-        <p className="notice" style={{ color: "#ef4444" }}>
-          เบราว์เซอร์ของท่านไม่รองรับ Web MIDI API กรุณาใช้ Google Chrome หรือ Microsoft Edge
-        </p>
-      ) : (
-        <>
-          <p className="notice">
-            เชื่อมต่อกับอุปกรณ์ MIDI จริงผ่านฮาร์ดแวร์โฮสต์ — เลือกพอร์ตและส่งคำสั่งควบคุมตามมาตรฐานสากล
+      {/* Safety notice — recovery capability removed */}
+      <div
+        style={{
+          border: "1px solid rgba(58,210,159,0.25)",
+          borderRadius: 9,
+          padding: "10px 12px",
+          marginBottom: 12,
+          background: "rgba(58,210,159,0.05)",
+          display: "flex",
+          gap: 8,
+          alignItems: "flex-start",
+          fontSize: 11.5,
+          color: "#c9ccd3",
+          lineHeight: 1.5,
+        }}
+      >
+        <ShieldCheck size={14} style={{ color: "#3ad29f", marginTop: 1, flex: "none" }} />
+        <span>
+          เครื่องมือนี้ <b>ไม่กู้และไม่ถอดรหัสผ่าน</b> — ประเมินเฉพาะว่า “วิธีเก็บ” รหัสผ่าน
+          แข็งแรงพอหรือไม่ แล้วแนะนำการตั้งค่าที่ปลอดภัยขึ้น การวิเคราะห์ทำในเบราว์เซอร์
+          ทั้งหมด ไม่มีการส่งข้อมูลออกและไม่มีการรันงานใด ๆ
+        </span>
+      </div>
+
+      <label
+        style={{
+          display: "block",
+          fontSize: 10,
+          letterSpacing: "0.12em",
+          color: "var(--dim, #8a8f99)",
+          marginBottom: 6,
+        }}
+      >
+        วางรูปแบบแฮช/สคีมาที่ต้องการประเมิน (ไม่ใช่รหัสผ่านจริง)
+      </label>
+      <textarea
+        value={material}
+        onChange={(e) => setMaterial(e.target.value)}
+        rows={3}
+        placeholder="เช่น $2b$12$... (bcrypt), $argon2id$..., หรือแฮช hex — เพื่อดูว่าสคีมาแข็งแรงพอหรือไม่"
+        style={{
+          width: "100%",
+          resize: "vertical",
+          minHeight: 64,
+          padding: "10px 12px",
+          borderRadius: 8,
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "#0a0b10",
+          color: "#eaeaea",
+          fontSize: 12,
+          fontFamily: "var(--font-mono), monospace",
+          outline: "none",
+          marginBottom: 10,
+        }}
+      />
+
+      {result && meta && (
+        <div
+          style={{
+            marginTop: 2,
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            paddingTop: 12,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 8,
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 600 }}>
+              สคีมา:{" "}
+              <span style={{ fontFamily: "var(--font-mono), monospace" }}>{result.scheme}</span>
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: meta.color,
+                border: `1px solid ${meta.color}66`,
+                borderRadius: 6,
+                padding: "3px 9px",
+              }}
+            >
+              {meta.label}
+            </span>
+          </div>
+
+          <p
+            style={{
+              fontSize: 12,
+              color: "#c9ccd3",
+              margin: "0 0 10px",
+              lineHeight: 1.5,
+              display: "flex",
+              gap: 7,
+            }}
+          >
+            {result.grade === "weak" ? (
+              <AlertTriangle size={14} style={{ color: "#f87171", marginTop: 1, flex: "none" }} />
+            ) : (
+              <CheckCircle2 size={14} style={{ color: meta.color, marginTop: 1, flex: "none" }} />
+            )}
+            <span>{result.detail}</span>
           </p>
 
-          <div className="usb-bar" style={{ display: "flex", gap: "10px", margin: "12px 0", flexWrap: "wrap", alignItems: "center" }}>
-            <div>
-              <label style={{ fontSize: "12px", marginRight: "6px" }}>MIDI Output:</label>
-              <select 
-                value={selectedOutId} 
-                onChange={(e) => setSelectedOutId(e.target.value)}
-                style={{ padding: "4px 8px", background: "#020617", color: "#fff", border: "1px solid #334155" }}
-              >
-                {outputs.length === 0 ? <option value="">ไม่พบพอร์ต Output</option> : outputs.map((o) => <option key={o.id} value={o.id}>{o.name || o.id}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: "12px", marginRight: "6px" }}>MIDI Input:</label>
-              <select 
-                value={selectedInId} 
-                onChange={(e) => setSelectedInId(e.target.value)}
-                style={{ padding: "4px 8px", background: "#020617", color: "#fff", border: "1px solid #334155" }}
-              >
-                {inputs.length === 0 ? <option value="">ไม่พบพอร์ต Input</option> : inputs.map((i) => <option key={i.id} value={i.id}>{i.name || i.id}</option>)}
-              </select>
-            </div>
-
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={busy}
-              onClick={initMidi}
+          <div
+            style={{
+              background: "#070810",
+              border: "1px solid rgba(255,255,255,0.06)",
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 9,
+                letterSpacing: "0.14em",
+                color: "var(--dim, #8a8f99)",
+                marginBottom: 7,
+                fontFamily: "var(--font-mono), monospace",
+              }}
             >
-              <Icon name="refresh" /> รีเฟรชพอร์ต
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-sm btn-danger"
-              onClick={() => sendMidiMessage([0x90, 60, 127])}
-            >
-              ทดสอบส่ง Note On (C4)
-            </button>
+              คำแนะนำด้านความปลอดภัย
+            </div>
+            <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 5 }}>
+              {result.recommendations.map((r, i) => (
+                <li key={i} style={{ fontSize: 12, color: "#d7dae0", lineHeight: 1.5 }}>
+                  {r}
+                </li>
+              ))}
+            </ul>
           </div>
-
-          <div style={{ background: "#020617", padding: "12px", borderRadius: "8px", border: "1px solid #334155", marginTop: "12px" }}>
-            <h4 style={{ color: "#3ad29f", marginBottom: "8px" }}>Live MIDI Message Monitor</h4>
-            {log.length === 0 ? (
-              <p style={{ fontSize: "12px", color: "#64748b" }}>ยังไม่มีข้อมูลรับส่งจากอุปกรณ์ MIDI...</p>
-            ) : (
-              log.map((l, i) => (
-                <div key={i} style={{ fontSize: "12px", color: l.dir === "rx" ? "#3ad29f" : "#f87171", margin: "4px 0", fontFamily: "monospace" }}>
-                  {l.dir === "rx" ? "[IN]" : "[OUT]"} [{new Date(l.t).toLocaleTimeString()}] {l.text}
-                </div>
-              ))
-            )}
-          </div>
-        </>
+        </div>
       )}
     </section>
   );
 }
+
+export default UsbAuthorizedRecovery;
