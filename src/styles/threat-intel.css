@@ -85,6 +85,139 @@
 }
 .ti-card-btn:hover { background: rgba(45, 226, 230, 0.16); color: #fff; }
 
+/* ============================================================
+   THREAT INTEL — radar command panel
+   ============================================================ */
+.ti-rp {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(130% 120% at 0% 0%, rgba(45, 226, 230, 0.07), transparent 55%),
+    linear-gradient(180deg, rgba(14, 18, 26, 0.92), rgba(9, 11, 16, 0.97));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+.ti-rp.ti-rp-active { border-color: rgba(45, 226, 230, 0.35); box-shadow: inset 0 0 40px rgba(45, 226, 230, 0.06); }
+.ti-rp.ti-rp-scanning { border-color: rgba(45, 226, 230, 0.6); box-shadow: inset 0 0 50px rgba(45, 226, 230, 0.12); }
+
+.ti-rp-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr 190px;
+  gap: 20px;
+  align-items: center;
+}
+
+/* ── Radar scope ── */
+.ti-rp-scope-wrap { display: flex; justify-content: center; }
+.ti-rp-scope {
+  position: relative; width: 130px; height: 130px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(45, 226, 230, 0.05), rgba(6, 10, 14, 0.9) 72%);
+  border: 1px solid rgba(45, 226, 230, 0.25);
+  overflow: hidden;
+  box-shadow: inset 0 0 24px rgba(45, 226, 230, 0.08);
+}
+.ti-rp-ring {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  border: 1px solid rgba(45, 226, 230, 0.16); border-radius: 50%;
+}
+.ti-rp-ring.r1 { width: 34%; height: 34%; }
+.ti-rp-ring.r2 { width: 64%; height: 64%; }
+.ti-rp-ring.r3 { width: 92%; height: 92%; }
+.ti-rp-cross { position: absolute; top: 50%; left: 50%; background: rgba(45, 226, 230, 0.14); }
+.ti-rp-cross-h { width: 100%; height: 1px; transform: translate(-50%, -50%); }
+.ti-rp-cross-v { width: 1px; height: 100%; transform: translate(-50%, -50%); }
+.ti-rp-core {
+  position: absolute; top: 50%; left: 50%; width: 8px; height: 8px;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: #2de2e6; box-shadow: 0 0 10px rgba(45, 226, 230, 0.9);
+}
+.ti-rp-sweep {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(45, 226, 230, 0.45) 0deg,
+    rgba(45, 226, 230, 0.12) 24deg,
+    transparent 70deg,
+    transparent 360deg
+  );
+  animation: ti-sweep 2.6s linear infinite;
+  transform-origin: center;
+}
+@keyframes ti-sweep { to { transform: rotate(360deg); } }
+.ti-rp-blip {
+  position: absolute; width: 6px; height: 6px; border-radius: 50%;
+  background: #f84646; box-shadow: 0 0 8px rgba(248, 70, 70, 0.9);
+  opacity: 0; animation: ti-blip 2.6s ease-in-out infinite;
+}
+.ti-rp-blip.b0 { top: 30%; left: 62%; animation-delay: 0.3s; }
+.ti-rp-blip.b1 { top: 58%; left: 40%; animation-delay: 1.0s; }
+.ti-rp-blip.b2 { top: 44%; left: 68%; animation-delay: 1.7s; }
+.ti-rp-blip.b3 { top: 66%; left: 56%; animation-delay: 2.2s; background: #f5c451; box-shadow: 0 0 8px rgba(245, 196, 81, 0.9); }
+@keyframes ti-blip { 0%, 100% { opacity: 0; } 10% { opacity: 1; } 60% { opacity: 0.2; } }
+
+/* ── Status + controls ── */
+.ti-rp-statusline { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.ti-rp-light {
+  width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; background: #566;
+}
+.ti-rp-light.ti-rp-idle { background: #4a5564; }
+.ti-rp-light.ti-rp-active { background: #5fd38a; box-shadow: 0 0 10px rgba(95, 211, 138, 0.8); animation: ti-pulse 2s infinite; }
+.ti-rp-light.ti-rp-scanning { background: #2de2e6; box-shadow: 0 0 12px rgba(45, 226, 230, 0.9); animation: ti-pulse 0.9s infinite; }
+@keyframes ti-pulse {
+  0% { box-shadow: 0 0 0 0 currentColor; }
+  70% { box-shadow: 0 0 0 8px rgba(0, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+}
+.ti-rp-status { font-size: 13px; font-weight: 800; letter-spacing: 0.1em; color: #fff; }
+.ti-rp-sub { font-size: 10px; color: #6b7686; font-family: var(--font-geist-mono), monospace; margin-top: 1px; }
+
+.ti-rp-chart { margin-bottom: 12px; }
+.ti-rp-chart-label { font-size: 9px; letter-spacing: 0.08em; color: #6b7686; margin-bottom: 5px; text-transform: uppercase; }
+.ti-rp-bars {
+  display: flex; align-items: flex-end; gap: 3px; height: 46px;
+  padding: 6px 8px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.ti-rp-bars-empty { font-size: 10px; color: #4a5564; align-self: center; margin: auto; }
+.ti-rp-bar {
+  flex: 1 1 0; min-width: 3px; border-radius: 2px 2px 0 0;
+  background: rgba(45, 226, 230, 0.3); transition: height 0.4s ease;
+}
+.ti-rp-bar.hit {
+  background: linear-gradient(180deg, #f84646, #f5c451);
+  box-shadow: 0 0 8px rgba(248, 70, 70, 0.5);
+}
+
+.ti-rp-mini { display: flex; gap: 8px; }
+.ti-rp-minibox {
+  flex: 1; padding: 7px 10px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.ti-rp-mk { display: block; font-size: 8px; letter-spacing: 0.1em; color: #6b7686; }
+.ti-rp-mv { display: block; margin-top: 2px; font-size: 18px; font-weight: 800; font-family: var(--font-geist-mono), monospace; }
+.ti-red { color: #ff6b6b; } .ti-amber { color: #f5c451; } .ti-cyan { color: #2de2e6; }
+
+.ti-rp-ctl { display: flex; flex-direction: column; gap: 9px; }
+.ti-rp-intlabel { font-size: 9px; letter-spacing: 0.08em; color: #6b7686; text-transform: uppercase; }
+.ti-rp-select {
+  height: 34px; padding: 0 10px; font-size: 12px; color: #d4d8df;
+  background: #090a0f; border: 1px solid #303649; border-radius: 8px; outline: none;
+}
+.ti-rp-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 42px; font-size: 13px; font-weight: 800; letter-spacing: 0.04em;
+  border-radius: 9px; cursor: pointer; transition: all 0.2s ease;
+}
+.ti-rp-start { color: #0a0d12; background: linear-gradient(180deg, #4ff0f4, #2de2e6); border: 1px solid #2de2e6; box-shadow: 0 0 20px rgba(45, 226, 230, 0.35); }
+.ti-rp-start:hover { box-shadow: 0 0 28px rgba(45, 226, 230, 0.6); }
+.ti-rp-stop { color: #ff9aa2; background: rgba(248, 70, 70, 0.12); border: 1px solid rgba(248, 70, 70, 0.5); }
+.ti-rp-stop:hover { background: rgba(248, 70, 70, 0.2); }
+
+@media (max-width: 900px) {
+  .ti-rp-grid { grid-template-columns: 1fr; }
+  .ti-rp-scope-wrap { margin-bottom: 8px; }
+}
+
 /* CVE detail modal */
 .ti-modal-backdrop {
   position: fixed; inset: 0; z-index: 80;

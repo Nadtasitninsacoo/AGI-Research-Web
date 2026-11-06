@@ -113,6 +113,9 @@ export default function ThreatIntelPage() {
   const [scanning, setScanning] = useState(false);
   const [lastTick, setLastTick] = useState<string>("—");
   const [sweeps, setSweeps] = useState(0);
+  // Per-sweep count of newly discovered CVEs — drives the activity sparkline.
+  const [history, setHistory] = useState<number[]>([]);
+  const [blips, setBlips] = useState(0);
 
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [detail, setDetail] = useState<{
@@ -189,14 +192,18 @@ export default function ThreatIntelPage() {
       }
       const list = await loadCves(false);
       // New CVEs discovered since last seen → alert the severe ones.
+      let found = 0;
       for (const c of list) {
         if (!seenRef.current.has(c.cve)) {
           seenRef.current.add(c.cve);
+          found++;
           if (severityOf(c) === "CRITICAL" || severityOf(c) === "HIGH") {
             pushAlert(c);
           }
         }
       }
+      setHistory((h) => [...h, found].slice(-28));
+      setBlips(batch.ok ? batch.ips.length : 0);
       setLastTick(new Date().toLocaleTimeString("en-GB", { hour12: false }));
       setSweeps((n) => n + 1);
     } finally {
@@ -267,63 +274,23 @@ export default function ThreatIntelPage() {
                 FLEET CVE AGGREGATION · AUTO RADAR · LIVE ALERTING
               </p>
             </div>
-
-            {/* Radar control */}
-            <div className="flex items-center gap-2 rounded border border-[#252b3b] bg-[#0e1017] px-3 py-2">
-              <span
-                className={`h-2.5 w-2.5 rounded-full ${
-                  radarOn
-                    ? scanning
-                      ? "animate-ping bg-cyan-400"
-                      : "bg-cyan-400"
-                    : "bg-slate-600"
-                }`}
-              />
-              <div className="mr-1">
-                <div
-                  className={`text-[10px] font-bold ${
-                    radarOn ? "text-cyan-300" : "text-slate-400"
-                  }`}
-                >
-                  {radarOn ? (scanning ? "SCANNING..." : "RADAR ACTIVE") : "RADAR IDLE"}
-                </div>
-                <div className="text-[9px] text-slate-500">
-                  sweep #{sweeps} · {lastTick}
-                </div>
-              </div>
-
-              <select
-                value={intervalMs}
-                onChange={(e) => setIntervalMs(Number(e.target.value))}
-                className="rounded border border-[#303649] bg-[#090a0f] px-1.5 py-1 text-[10px] text-slate-300 focus:outline-none"
-                title="ความถี่ในการสแกน"
-              >
-                {INTERVALS.map((i) => (
-                  <option key={i.ms} value={i.ms}>
-                    {i.label}
-                  </option>
-                ))}
-              </select>
-
-              {radarOn ? (
-                <button
-                  type="button"
-                  onClick={() => setRadarOn(false)}
-                  className="rounded border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-[10px] font-bold tracking-wider text-red-300 hover:bg-red-500/20"
-                >
-                  หยุดเรดาร์
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={startRadar}
-                  className="inline-flex items-center gap-1.5 rounded border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-bold tracking-wider text-cyan-300 hover:bg-cyan-500/20"
-                >
-                  <Radar className="h-3.5 w-3.5" /> เริ่มเรดาร์
-                </button>
-              )}
-            </div>
           </header>
+
+          {/* ── Radar command panel (wide) ──────────────────── */}
+          <RadarPanel
+            radarOn={radarOn}
+            scanning={scanning}
+            sweeps={sweeps}
+            lastTick={lastTick}
+            blips={blips}
+            history={history}
+            intervalMs={intervalMs}
+            critical={stats.critical}
+            alerts={alerts.length}
+            onInterval={setIntervalMs}
+            onStart={startRadar}
+            onStop={() => setRadarOn(false)}
+          />
 
           {message ? (
             <div className="rounded border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
@@ -442,6 +409,144 @@ export default function ThreatIntelPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+function RadarPanel({
+  radarOn,
+  scanning,
+  sweeps,
+  lastTick,
+  blips,
+  history,
+  intervalMs,
+  critical,
+  alerts,
+  onInterval,
+  onStart,
+  onStop,
+}: {
+  radarOn: boolean;
+  scanning: boolean;
+  sweeps: number;
+  lastTick: string;
+  blips: number;
+  history: number[];
+  intervalMs: number;
+  critical: number;
+  alerts: number;
+  onInterval: (ms: number) => void;
+  onStart: () => void;
+  onStop: () => void;
+}) {
+  const statusClass = radarOn
+    ? scanning
+      ? "ti-rp-scanning"
+      : "ti-rp-active"
+    : "ti-rp-idle";
+  const statusLabel = radarOn
+    ? scanning
+      ? "SCANNING"
+      : "ACTIVE"
+    : "IDLE";
+
+  const max = Math.max(1, ...history);
+
+  return (
+    <section className={`panel span-12 ti-rp ${statusClass}`}>
+      <div className="ti-rp-grid">
+        {/* Radar scope */}
+        <div className="ti-rp-scope-wrap">
+          <div className={`ti-rp-scope ${radarOn ? "is-on" : ""}`}>
+            <span className="ti-rp-ring r1" />
+            <span className="ti-rp-ring r2" />
+            <span className="ti-rp-ring r3" />
+            <span className="ti-rp-cross ti-rp-cross-h" />
+            <span className="ti-rp-cross ti-rp-cross-v" />
+            {radarOn ? <span className="ti-rp-sweep" /> : null}
+            <span className="ti-rp-core" />
+            {radarOn
+              ? [0, 1, 2, 3].map((i) => (
+                  <span key={i} className={`ti-rp-blip b${i}`} />
+                ))
+              : null}
+          </div>
+        </div>
+
+        {/* Status + controls */}
+        <div className="ti-rp-main">
+          <div className="ti-rp-statusline">
+            <span className={`ti-rp-light ${statusClass}`} />
+            <div>
+              <div className="ti-rp-status">RADAR {statusLabel}</div>
+              <div className="ti-rp-sub">
+                sweep #{sweeps} · {lastTick} · {blips} เป้าหมาย/รอบ
+              </div>
+            </div>
+          </div>
+
+          {/* Activity sparkline */}
+          <div className="ti-rp-chart" title="CVE ใหม่ที่พบต่อรอบสแกน">
+            <div className="ti-rp-chart-label">กิจกรรมการสแกน (CVE ใหม่/รอบ)</div>
+            <div className="ti-rp-bars">
+              {history.length === 0 ? (
+                <span className="ti-rp-bars-empty">— ยังไม่มีข้อมูล —</span>
+              ) : (
+                history.map((v, i) => (
+                  <span
+                    key={i}
+                    className={`ti-rp-bar ${v > 0 ? "hit" : ""}`}
+                    style={{ height: `${Math.max(6, (v / max) * 100)}%` }}
+                    title={`รอบ ${i + 1}: ${v} CVE`}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="ti-rp-mini">
+            <div className="ti-rp-minibox">
+              <span className="ti-rp-mk">CRITICAL</span>
+              <span className="ti-rp-mv ti-red">{critical}</span>
+            </div>
+            <div className="ti-rp-minibox">
+              <span className="ti-rp-mk">ALERTS</span>
+              <span className="ti-rp-mv ti-amber">{alerts}</span>
+            </div>
+            <div className="ti-rp-minibox">
+              <span className="ti-rp-mk">SWEEPS</span>
+              <span className="ti-rp-mv ti-cyan">{sweeps}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="ti-rp-ctl">
+          <label className="ti-rp-intlabel">ความถี่สแกน</label>
+          <select
+            value={intervalMs}
+            onChange={(e) => onInterval(Number(e.target.value))}
+            className="ti-rp-select"
+          >
+            {INTERVALS.map((i) => (
+              <option key={i.ms} value={i.ms}>
+                ทุก {i.label}
+              </option>
+            ))}
+          </select>
+
+          {radarOn ? (
+            <button type="button" onClick={onStop} className="ti-rp-btn ti-rp-stop">
+              ■ หยุดเรดาร์
+            </button>
+          ) : (
+            <button type="button" onClick={onStart} className="ti-rp-btn ti-rp-start">
+              <Radar className="h-4 w-4" /> เริ่มเรดาร์
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
