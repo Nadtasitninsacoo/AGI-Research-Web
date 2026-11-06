@@ -56,6 +56,16 @@ const ROLE_META: Record<FeedRole, { label: string; glyph: string; color: string 
 
 const ROLE_ORDER: FeedRole[] = ["COORDINATOR", "PLANNER", "CRACKER", "VERIFIER"];
 
+// Demo hashes of the word "password" per algorithm — used when the hash field is
+// left empty so the engine can be tried without typing anything (not required).
+const DEMO_HASHES: Record<string, string> = {
+  MD5: "5f4dcc3b5aa765d61d8327deb882cf99",
+  SHA1: "5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8",
+  SHA256: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
+  SHA512:
+    "b109f3bbbc244eb82441917ed06d618b9008dd09b3befd1b5e07394c706a8bb980b1d7785e5976ec049b46df5f1326af5a2ea6d103fd07c95385ffab0cacbc86",
+};
+
 // Full-auto escalation: try the smallest keyspace first, widen on a miss.
 const AUTO_STRATEGY: { charset: string; name: string }[] = [
   { charset: "lower+numbers", name: "a-z · 0-9" },
@@ -161,13 +171,13 @@ export function UsbLab() {
   }, [charset, maxLength]);
   const levelMeta = LEVEL_META[level];
 
+  // Hash field is OPTIONAL — if empty, use a demo hash for the selected algorithm.
+  const resolveHash = () =>
+    targetHash.trim() || DEMO_HASHES[algorithm.toUpperCase()] || DEMO_HASHES.SHA256;
+
   // RECON only — identify the hash + dictionary + feasibility, no brute-force.
   async function runRecon(): Promise<HashAnalysis | null> {
-    const cleanHash = targetHash.trim();
-    if (!cleanHash) {
-      setStatusMsg("กรุณากรอก Target Hash ก่อนทำ RECON");
-      return null;
-    }
+    const cleanHash = resolveHash();
     setAnalyzing(true);
     try {
       const res = await analyzeHash(cleanHash, algorithm, charset, maxLength);
@@ -183,11 +193,7 @@ export function UsbLab() {
   }
 
   async function startCrackingJob() {
-    const cleanHash = targetHash.trim();
-    if (!cleanHash) {
-      setStatusMsg("กรุณากรอก Target Hash ที่ต้องการตรวจสอบก่อนเริ่มกระบวนการแครก");
-      return;
-    }
+    const cleanHash = resolveHash();
 
     setCracking(true);
 
@@ -258,11 +264,7 @@ export function UsbLab() {
   // Full Auto: a team of agents escalates the keyspace light -> heavy until the
   // hash is recovered, narrating each step in the Team Ops feed. Local only.
   async function startFullAuto() {
-    const cleanHash = targetHash.trim();
-    if (!cleanHash) {
-      setStatusMsg("กรุณากรอก Target Hash ก่อนเริ่ม Full Auto");
-      return;
-    }
+    const cleanHash = resolveHash();
     autoCancel.current = false;
     setAutoRunning(true);
     setFeed([]);

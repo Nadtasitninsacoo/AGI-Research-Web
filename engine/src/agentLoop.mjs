@@ -33,6 +33,7 @@ import { buildSystemPrompt } from "./systemPrompt.mjs";
 import { checkScope } from "./scope.mjs";
 import { decide } from "./policy.mjs";
 import { runCommand, SHELL_NAMES, defaultShell } from "./shell.mjs";
+import { formatToolCatalog, buildToolCommand } from "./toolRegistry.mjs";
 import { config } from "./config.mjs";
 import { log } from "./logger.mjs";
 import { execute } from "./db.mjs";
@@ -466,6 +467,38 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "list_tools",
+      description:
+        "List the registered cyber tools available on this host (the Command Center catalog) with their category, risk level and whether they are installed. Use this to discover what you can run before calling run_tool.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "run_tool",
+      description:
+        "Run a registered tool by id against a target. Scope + policy + approval are enforced exactly like run_command: active/intrusive tools only run against in-scope targets and may require approval. Call list_tools first.",
+      parameters: {
+        type: "object",
+        properties: {
+          tool: { type: "string", description: "Registered tool id (see list_tools)." },
+          target: {
+            type: "string",
+            description: "In-scope target (host/IP/URL/domain) for the tool.",
+          },
+          extra: {
+            type: "string",
+            description: "Optional extra argument (e.g. wordlist path, nmap flags).",
+          },
+        },
+        required: ["tool"],
+      },
+    },
+  },
 ];
 
 /**
@@ -844,6 +877,30 @@ export async function runAgent({
         case "run_command":
           result = await execRunCommand({ args, ...ctx });
           break;
+        case "list_tools":
+          result = await formatToolCatalog();
+          break;
+        case "run_tool": {
+          const built = await buildToolCommand(
+            String(args.tool ?? ""),
+            String(args.target ?? ""),
+            args.extra ? String(args.extra) : "",
+          );
+          if (!built.ok) {
+            result = `ERROR: ${built.error}`;
+            break;
+          }
+          // Route through the SAME guardrail chain as run_command.
+          result = await execRunCommand({
+            args: {
+              command: built.command,
+              shell: built.shell,
+              purpose: `registered tool: ${built.def.id} (${built.def.risk})`,
+            },
+            ...ctx,
+          });
+          break;
+        }
         case "port_scan": {
           const t = String(args.target ?? "").trim();
           if (!t) {

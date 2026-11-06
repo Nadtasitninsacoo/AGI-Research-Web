@@ -1,5 +1,8 @@
-// OSINT overview dashboard: aggregates IP and port scan telemetry
+// OSINT overview dashboard: aggregates IP and port scan telemetry straight from
+// the local DB (saved_ips + saved_ports) — the retired :3001 backend is gone.
 import React from "react";
+import type { RowDataPacket } from "mysql2";
+import { db } from "@/lib/db";
 
 type Bar = {
   label: string;
@@ -33,8 +36,6 @@ interface OsintOverviewResponse {
   generatedAt: string;
 }
 
-const API_URL = process.env.AGI_API_URL ?? "http://localhost:3001";
-
 const EMPTY_IP: IpAgg = {
   total: 0,
   countries: 0,
@@ -54,65 +55,79 @@ const EMPTY_PORT: PortAgg = {
   topPort: [],
 };
 
-async function loadOverview(): Promise<OsintOverviewResponse | null> {
+const bars = (rows: RowDataPacket[]): Bar[] =>
+  rows.map((r) => ({ label: String(r.label), n: Number(r.n) }));
+
+// IP aggregates from saved_ips. Returns zeros if the table is missing / DB down.
+async function loadIpAgg(): Promise<IpAgg> {
   try {
-    const url = new URL("/api/osint/overview", API_URL);
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "X-Master-Authorization": "unrestricted-master-id",
-      },
-      cache: "no-store",
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) {
-      // Backend returned an error: show empty aggregates rather than stale data.
-      return {
-        status: "ok",
-        source: "unrestricted_live",
-        ips: EMPTY_IP,
-        ports: EMPTY_PORT,
-        generatedAt: new Date().toISOString(),
-      };
-    }
-
-    const data: unknown = await response.json();
-
-    if (typeof data !== "object" || data === null) {
-      return {
-        status: "ok",
-        source: "unrestricted_live",
-        ips: EMPTY_IP,
-        ports: EMPTY_PORT,
-        generatedAt: new Date().toISOString(),
-      };
-    }
-
-    const result = data as Record<string, unknown>;
-
+    const [[c]] = await db.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total, COUNT(DISTINCT NULLIF(country, '')) AS countries FROM saved_ips`,
+    );
+    const [topCountry] = await db.query<RowDataPacket[]>(
+      `SELECT COALESCE(NULLIF(country, ''), '?') AS label, COUNT(*) AS n
+       FROM saved_ips GROUP BY label ORDER BY n DESC LIMIT 8`,
+    );
+    const [topCity] = await db.query<RowDataPacket[]>(
+      `SELECT COALESCE(NULLIF(city, ''), '?') AS label, COUNT(*) AS n
+       FROM saved_ips GROUP BY label ORDER BY n DESC LIMIT 8`,
+    );
     return {
-      status: "ok",
-      source: "mysql",
-      ips: (result.ips as IpAgg) ?? EMPTY_IP,
-      ports: (result.ports as PortAgg) ?? EMPTY_PORT,
-      generatedAt:
-        typeof result.generatedAt === "string"
-          ? result.generatedAt
-          : new Date().toISOString(),
+      total: Number(c?.total ?? 0),
+      countries: Number(c?.countries ?? 0),
+      topCountry: bars(topCountry),
+      topCity: bars(topCity),
+      scanned: 0,
+      unscanned: 0,
     };
-  } catch (error: unknown) {
-    // Network or parse error: show empty aggregates.
-    return {
-      status: "ok",
-      source: "unrestricted_live",
-      ips: EMPTY_IP,
-      ports: EMPTY_PORT,
-      generatedAt: new Date().toISOString(),
-    };
+  } catch {
+    return EMPTY_IP;
   }
+}
+
+// Port aggregates from saved_ports. Returns zeros if the table is missing / DB down.
+async function loadPortAgg(): Promise<PortAgg> {
+  try {
+    const [[c]] = await db.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total,
+              COUNT(DISTINCT ip) AS ips,
+              COUNT(DISTINCT NULLIF(service, '')) AS services,
+              COUNT(DISTINCT CASE WHEN cves > 0 THEN ip END) AS vulnHosts
+       FROM saved_ports`,
+    );
+    const ips = Number(c?.ips ?? 0);
+    const vulnHosts = Number(c?.vulnHosts ?? 0);
+    const [topService] = await db.query<RowDataPacket[]>(
+      `SELECT COALESCE(NULLIF(service, ''), '?') AS label, COUNT(*) AS n
+       FROM saved_ports GROUP BY label ORDER BY n DESC LIMIT 8`,
+    );
+    const [topPort] = await db.query<RowDataPacket[]>(
+      `SELECT CAST(port AS CHAR) AS label, COUNT(*) AS n
+       FROM saved_ports GROUP BY port ORDER BY n DESC LIMIT 8`,
+    );
+    return {
+      total: Number(c?.total ?? 0),
+      ips,
+      services: Number(c?.services ?? 0),
+      vulnHosts,
+      safeHosts: Math.max(0, ips - vulnHosts),
+      topService: bars(topService),
+      topPort: bars(topPort),
+    };
+  } catch {
+    return EMPTY_PORT;
+  }
+}
+
+async function loadOverview(): Promise<OsintOverviewResponse | null> {
+  const [ips, ports] = await Promise.all([loadIpAgg(), loadPortAgg()]);
+  return {
+    status: "ok",
+    source: "mysql",
+    ips,
+    ports,
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 export async function OsintOverview() {
