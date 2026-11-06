@@ -521,7 +521,17 @@ export function RunExecution() {
       </section>
 
       {/* 03 — Team Task Queue */}
-      <TeamQueuePanel experimentId={experimentId} disabled={submitting} />
+      <TeamQueuePanel
+        experimentId={experimentId}
+        disabled={submitting}
+        teamAgents={agents
+          .filter((a) => teamAgentIds.includes(String(a.id)))
+          .map((a) => ({
+            id: a.id,
+            name: a.name,
+            role: String(a.id) === agentId ? "coordinator" : "worker",
+          }))}
+      />
 
       {/* 04 — Execution Status */}
       <ExecutionStatusPanel

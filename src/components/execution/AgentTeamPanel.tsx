@@ -1,8 +1,20 @@
-import { Target } from "lucide-react";
+import { Target, Radar, Brain, Ghost, Swords, ShieldAlert, Network, Cpu, type LucideIcon } from "lucide-react";
 
 import type { Agent } from "@/lib/execution/types";
 
 import { s } from "./classNames";
+
+/** A distinct, on-brand icon + accent colour per agent (fallbacks to Cpu). */
+function agentLook(name: string): { Icon: LucideIcon; color: string } {
+  const n = (name ?? "").toUpperCase();
+  if (n.includes("RECON")) return { Icon: Radar, color: "#2de2e6" };
+  if (n.includes("ORACLE")) return { Icon: Brain, color: "#a78bfa" };
+  if (n.includes("WRAITH")) return { Icon: Ghost, color: "#93c5fd" };
+  if (n.includes("NEMESIS")) return { Icon: Swords, color: "#f87171" };
+  if (n.includes("CERBERUS")) return { Icon: ShieldAlert, color: "#fbbf24" };
+  if (n.includes("HYDRA")) return { Icon: Network, color: "#34d399" };
+  return { Icon: Cpu, color: "#9aa0aa" };
+}
 
 type Props = {
   agents: Agent[];
@@ -45,6 +57,8 @@ export function AgentTeamPanel({
             .filter(Boolean)
             .join(" ");
 
+          const { Icon, color } = agentLook(agent.name);
+
           return (
             <label key={id} className={cardClass}>
               <input
@@ -54,8 +68,12 @@ export function AgentTeamPanel({
                 onChange={(event) => onToggle(id, event.target.checked)}
               />
 
+              <span className={s.teamIcon} style={{ color }}>
+                <Icon size={17} />
+              </span>
+
               <span>
-                <strong className={s.teamName}>{agent.name}</strong>
+                <strong className={s.teamName} style={{ color }}>{agent.name}</strong>
                 <small className={s.teamMeta}>
                   {isCoordinator ? "COORDINATOR" : (agent.status ?? "AVAILABLE")}
                 </small>

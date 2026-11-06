@@ -11,11 +11,13 @@ import {
   AlertTriangle,
   CheckCircle2,
   Square,
+  ArrowRight,
 } from "lucide-react";
 
 import { listExecutionOptions } from "@/app/execute/options-actions";
 import { createRunLocal, cancelRunAction } from "@/app/runs/actions";
 import type { Experiment } from "@/lib/execution/types";
+import { ReconGlobe } from "./ReconGlobe";
 
 type LogRow = {
   id: number;
@@ -39,9 +41,9 @@ type Snapshot = {
 const FINAL = new Set(["succeeded", "failed", "needs_input", "cancelled"]);
 
 const EXAMPLES = [
-  "ค้น OSINT ของ 8.8.8.8 (osint_lookup) แล้วบันทึกพอร์ตที่เจอลงฐานข้อมูล",
-  "lookup 1.1.1.1 and 9.9.9.9, save open ports, then summarize risks",
-  "ตรวจ exposure ของโฮสต์ในขอบเขตที่ได้รับอนุญาต แล้วแนะนำการแก้ไข",
+  "osint_lookup 8.8.8.8 แล้ว save_targets พอร์ตที่เปิดลงฐานข้อมูล",
+  "dns_lookup + tls_inspect ของ example.com แล้ว record_finding สรุปความเสี่ยง",
+  "http_probe + tech_fingerprint โฮสต์เป้าหมาย แล้วแนะนำแนวทาง hardening",
 ];
 
 function statusTone(status: string | undefined): { label: string; color: string } {
@@ -185,14 +187,22 @@ export function MapAutoAgent() {
 
   return (
     <section
+      className="auto-recon-card"
       style={{
         border: "1px solid rgba(45,226,230,0.3)",
         borderRadius: 12,
-        background: "#0c0e15",
         padding: "16px 18px",
         marginBottom: 16,
       }}
     >
+      {/* Decorative blue planet + orbiting stars (Overview-style backdrop). */}
+      <div className="recon-planet" aria-hidden="true">
+        <ReconGlobe />
+        <div className="orbit orbit-1"><span className="star" /></div>
+        <div className="orbit orbit-2"><span className="star" /></div>
+        <div className="orbit orbit-3"><span className="star" /></div>
+      </div>
+
       <header
         style={{
           display: "flex",
@@ -232,13 +242,15 @@ export function MapAutoAgent() {
         <span
           style={{
             fontSize: 10,
-            color: "var(--dim, #8a8f99)",
-            border: "1px solid rgba(255,255,255,0.1)",
+            color: "#e0a33e",
+            border: "1px solid rgba(224,163,62,0.4)",
+            background: "rgba(224,163,62,0.08)",
             borderRadius: 6,
             padding: "3px 8px",
           }}
+          title="scope.mjs ถูกถอดออก และมี auto-approve bypass — ระบบไม่ได้บังคับขอบเขต"
         >
-          scope + approval gated
+          ไม่จำกัดขอบเขต · guardrails ถอดออก
         </span>
       </header>
 
@@ -326,7 +338,10 @@ export function MapAutoAgent() {
           type="button"
           onClick={() => void submit()}
           disabled={!command.trim() || submitting || running || !experimentId}
+          className={`auto-recon-run${running ? " is-working" : ""}`}
           style={{
+            position: "relative",
+            overflow: "hidden",
             display: "inline-flex",
             alignItems: "center",
             gap: 7,
@@ -381,14 +396,13 @@ export function MapAutoAgent() {
         {runId !== null && (
           <Link
             href={`/runs/${runId}`}
-            style={{
-              fontSize: 11,
-              color: "#2de2e6",
-              textDecoration: "none",
-              marginLeft: "auto",
-            }}
+            className="auto-recon-fulllink"
+            style={{ marginLeft: "auto" }}
           >
-            ดูหน้ารันเต็ม #{runId} →
+            <span>
+              ดูหน้ารันเต็ม <strong>#{runId}</strong>
+            </span>
+            <ArrowRight size={13} className="auto-recon-fulllink-arrow" />
           </Link>
         )}
       </div>

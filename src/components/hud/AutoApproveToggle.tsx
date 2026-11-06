@@ -65,10 +65,10 @@ export function AutoApproveToggle() {
         disabled={on === null || busy}
         onClick={toggle}
       >
-        <span className="switch-track" style={{ background: on ? "#f81e36" : "#222" }}><span className="switch-thumb" /></span>
-        <span className="switch-label" style={{ color: "#f81e36" }}>{label}</span>
+        <span className="switch-track" style={{ background: on ? "#e0a33e" : "#2a2f3a" }}><span className="switch-thumb" /></span>
+        <span className="switch-label" style={{ color: on ? "#e0a33e" : "#3ad29f" }}>{label}</span>
       </button>
-      <small style={{ color: "#ffb3bb", display: "block", marginTop: "8px" }}>
+      <small style={{ color: "#8a8f99", display: "block", marginTop: "8px" }}>
         {on
           ? "เอนจินอนุมัติคำสั่งระดับ intrusive โดยอัตโนมัติ (คำสั่งระดับ forbidden ยังถูกห้ามเสมอ)"
           : "คำสั่งระดับ intrusive ต้องได้รับการอนุมัติด้วยตนเอง"}

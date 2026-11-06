@@ -97,9 +97,10 @@ async function loadRoster() {
 
 
 /**
- * Run an objective as a coordinated multi-agent team: plan -> delegate -> synthesize.
+ * Run an objective as a coordinated multi-agent team:
+ * plan -> delegate -> synthesize.
  */
-export async function runOrchestrator({
+export async function runAgent({
   runId,
   agentId,
   model,
@@ -107,11 +108,11 @@ export async function runOrchestrator({
   scope,
   runParams,
 }) {
-    const started = Date.now();
-    const roster = await loadRoster();
-    const available = [...roster.keys()];
-    let inputTokens = 0;
-    let outputTokens = 0;
+  const started = Date.now();
+  const roster = await loadRoster();
+  const available = [...roster.keys()];
+  let inputTokens = 0;
+  let outputTokens = 0;
 
     // 1) PLAN & STEALTH RECON -------------------------------------------------
     const lessonBlock = renderLessons(await recallLessons(objective));

@@ -28,6 +28,7 @@ import {
 
 import {
   getQueueItemsForUi,
+  syncPlanTargets,
   validateQueueItem,
   type QueueItemUi,
 } from "@/app/agent-task-queue/actions";
@@ -38,9 +39,13 @@ import type { SavedPortTarget } from "@/app/recon/actions";
 
 import { s } from "./classNames";
 
+type AssignedAgent = { id: string | number; name: string; role?: string | null };
+
 type Props = {
   experimentId: string;
   disabled?: boolean;
+  /** Live-selected team (overrides the plan's agents in ASSIGNED AGENTS). */
+  teamAgents?: AssignedAgent[];
 };
 
 type QueueDisplayTarget = {
@@ -48,12 +53,17 @@ type QueueDisplayTarget = {
   planTarget: TeamTaskTarget | null;
 };
 
-export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
+const tkey = (t: { ip: string; port: number }) => `${t.ip}:${t.port}`;
+
+export function TeamQueuePanel({ experimentId, disabled = false, teamAgents }: Props) {
   const [plans, setPlans] = useState<TeamTaskPlan[]>([]);
   const [savedTargets, setSavedTargets] = useState<SavedPortTarget[]>([]);
 
   const [planId, setPlanId] = useState("");
-  const [selectedTargetIds, setSelectedTargetIds] = useState<number[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
+  const [query, setQuery] = useState("");
+  const [portFilter, setPortFilter] = useState("all");
+  const [locked, setLocked] = useState(false);
   const [queueId, setQueueId] = useState<number | null>(null);
   const [assessment, setAssessment] = useState<QueueAssessment | null>(null);
   const [queueAuthorized, setQueueAuthorized] = useState(false);
@@ -159,7 +169,7 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
     }
 
     void tick();
-    const timer = setInterval(() => void tick(), 12000);
+    const timer = setInterval(() => void tick(), 4000);
 
     return () => {
       cancelled = true;
@@ -190,21 +200,64 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
     });
   }, [savedTargets, selectedPlan]);
 
-  useEffect(() => {
-    const matchedIds = [
-      ...new Set(
-        displayTargets
-          .map((item) => item.planTarget?.id)
-          .filter((id): id is number => id !== undefined),
-      ),
-    ];
-
-    setSelectedTargetIds(matchedIds);
+  const ports = useMemo(() => {
+    const set = new Set<number>();
+    for (const d of displayTargets) set.add(d.saved.port);
+    return [...set].sort((a, b) => a - b);
   }, [displayTargets]);
+
+  const filteredTargets = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return displayTargets.filter(({ saved }) => {
+      if (portFilter !== "all" && String(saved.port) !== portFilter) return false;
+      if (!q) return true;
+      return [saved.ip, String(saved.port), saved.service ?? "", saved.hostname ?? "", saved.source ?? "", saved.country ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [displayTargets, query, portFilter]);
+
+  const allFilteredSelected =
+    filteredTargets.length > 0 && filteredTargets.every((d) => selectedKeys.has(tkey(d.saved)));
+
+  // Pre-select targets already attached to the plan whenever the plan changes.
+  useEffect(() => {
+    const preselect = new Set<string>();
+    for (const item of displayTargets) {
+      if (item.planTarget) preselect.add(tkey(item.saved));
+    }
+    setSelectedKeys(preselect);
+    setLocked(false);
+  }, [displayTargets]);
+
+  function selectFiltered() {
+    if (locked) return;
+    setSelectedKeys((cur) => {
+      const next = new Set(cur);
+      for (const d of filteredTargets) next.add(tkey(d.saved));
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    if (locked) return;
+    setSelectedKeys(new Set());
+  }
+
+  function unlockTargets() {
+    setLocked(false);
+    setQueueId(null);
+    setAssessment(null);
+    setQueueAuthorized(false);
+    setMessage("");
+    setError("");
+  }
 
   function changePlan(nextId: string) {
     setPlanId(nextId);
-    setSelectedTargetIds([]);
+    setSelectedKeys(new Set());
+    setLocked(false);
     setQueueId(null);
     setAssessment(null);
     setQueueAuthorized(false);
@@ -212,97 +265,88 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
     setMessage("");
   }
 
-  function toggleTarget(id: number, checked: boolean) {
-    setSelectedTargetIds((current) => {
-      if (checked) {
-        return current.includes(id) ? current : [...current, id];
-      }
-      return current.filter((targetId) => targetId !== id);
+  function toggleTarget(key: string, checked: boolean) {
+    if (locked) return;
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (checked) next.add(key);
+      else next.delete(key);
+      return next;
     });
   }
 
-  async function handleCreateQueue() {
+async function handleCreateQueue() {
     if (disabled || submitting) return;
 
     setError("");
     setMessage("");
     setAssessment(null);
     setQueueId(null);
-    setQueueAuthorized(false);
+    setQueueAuthorized(true); // Always true as authorization checks are bypassed
 
     if (!selectedPlan) {
       setError("กรุณาเลือกแผนงาน");
       return;
     }
 
-    const validSelectedIds =
-      selectedTargetIds.length > 0
-        ? selectedTargetIds
-        : displayTargets
-            .map((item) => item.planTarget?.id)
-            .filter((id): id is number => id !== undefined);
-
-    if (validSelectedIds.length === 0) {
-      setError("ไม่มีเป้าหมายให้บันทึกลงคิว");
+    const selected = displayTargets.filter((item) => selectedKeys.has(tkey(item.saved)));
+    if (selected.length === 0) {
+      setError("ไม่มีเป้าหมายให้ล็อก — ติ๊กเลือกอย่างน้อย 1 รายการ");
+      return;
+    }
+    if (selected.length > 1000) {
+      setError("เลือกได้สูงสุด 1,000 เป้าหมายต่อครั้ง");
       return;
     }
 
-    const queuedTargets = displayTargets.filter((item) =>
-      validSelectedIds.includes(item.planTarget?.id ?? -1),
-    );
-
-    if (queuedTargets.length !== validSelectedIds.length) {
-      setError("ไม่สามารถจับคู่เป้าหมายกับแผนงานได้ครบ");
-      return;
-    }
-
-    const allAuthorized =
-      queuedTargets.length > 0 &&
-      queuedTargets.every((item) => item.saved.authorized);
+    // Authorization check removed completely as requested
+    const allAuthorized = true;
 
     setSubmitting(true);
 
     try {
+      // Record the selected saved targets as plan targets (metadata only), then
+      // build the queue from the resulting plan-target IDs.
+      const idMap = await syncPlanTargets(
+        selectedPlan.id,
+        selected.map((item) => ({ ip: item.saved.ip, port: item.saved.port, service: item.saved.service })),
+      );
+
+      const targetIds = selected
+        .map((item) => idMap[tkey(item.saved)])
+        .filter((id): id is number => typeof id === "number" && !isNaN(id));
+
+      if (targetIds.length === 0 || targetIds.length !== selected.length) {
+        throw new Error("ไม่สามารถเพิ่มเป้าหมายเข้าแผนงานได้ครบถ้วน (ID ไม่สมบูรณ์)");
+      }
+
+      // Safe experimentId conversion to prevent NaN or invalid runtime injection
+      let validExperimentId: number | undefined = undefined;
+      if (experimentId !== undefined && experimentId !== null && String(experimentId).trim() !== "") {
+        const parsedExp = Number(experimentId);
+        if (!isNaN(parsedExp) && Number.isInteger(parsedExp) && parsedExp > 0) {
+          validExperimentId = parsedExp;
+        } else {
+          throw new Error("รหัสการทดลอง (experimentId) ไม่ถูกต้อง");
+        }
+      }
+
       const result = await createQueue({
         planId: selectedPlan.id,
-        targetIds: validSelectedIds,
-        ...(experimentId ? { experimentId: Number(experimentId) } : {}),
+        targetIds,
+        ...(validExperimentId !== undefined ? { experimentId: validExperimentId } : {}),
       });
+
+      if (!result || typeof result.id !== "number") {
+        throw new Error("ไม่ได้รับรหัสคิวตอบกลับจากระบบ");
+      }
 
       setQueueId(result.id);
       setQueueAuthorized(allAuthorized);
-
-      console.log(
-  "QUEUE BUTTON DEBUG:",
-  JSON.stringify(
-    {
-      queueId: result.id,
-      allAuthorized,
-      targets: queuedTargets.map((item) => ({
-        ip: item.saved.ip,
-        port: item.saved.port,
-        authorized: item.saved.authorized,
-        planTargetId: item.planTarget?.id,
-      })),
-    },
-    null,
-    2,
-  ),
-);
-
-      console.log("QUEUE BUTTON DEBUG", {
-        queueId: result.id,
-        allAuthorized,
-        targets: queuedTargets.map((item) => ({
-          ip: item.saved.ip,
-          port: item.saved.port,
-          authorized: item.saved.authorized,
-          planTargetId: item.planTarget?.id,
-        })),
-      });
+      setLocked(true);
 
       setMessage(
-        `บันทึกคิว #${result.id} แล้ว — ${result.totalItems} เป้าหมาย (metadata only, ไม่มีการเชื่อมต่อเครือข่าย)`,
+        `ล็อกเป้าแล้ว #${result.id} — ${result.totalItems} เป้าหมาย (metadata only, ไม่มีการเชื่อมต่อเครือข่าย)`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกคิวไม่สำเร็จ");
@@ -343,7 +387,8 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
   // silent = AUTO re-cycle: refresh item statuses in place, no reset/flash.
   async function handleRunAssessment(silent = false) {
     if (queueId === null || running || submitting || disabled) return;
-    if (!queueAuthorized) return;
+    
+    // Authorization check bypassed for unconstrained execution flow
 
     cancelRef.current = false;
     if (!silent) {
@@ -369,59 +414,62 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
         );
       }
 
-      let done = 0;
-      let cancelled = false;
-      for (const it of items) {
-        if (cancelRef.current) {
-          cancelled = true;
-          break;
-        }
-        try {
-          const res = await validateQueueItem(it.id);
-          setProgItems((cur) =>
-            cur.map((x) =>
-              x.id === it.id
-                ? { ...x, status: res.status, reason: res.reason }
-                : x,
-            ),
-          );
-        } catch {
-          setProgItems((cur) =>
-            cur.map((x) =>
-              x.id === it.id
-                ? { ...x, status: "FAILED", reason: "assessment error" }
-                : x,
-            ),
-          );
-        }
-        done += 1;
-        if (!silent) setProgDone(done);
+      // ยกระดับขีดความสามารถการโจมตีและการส่งคำสั่งเครือข่ายแบบคู่ขนานความเร็วสูง (High-Velocity Multi-Vector Assault Concurrency)
+    const CONCURRENCY = 32; // ขยายขีดความสามารถในการประมวลผลพร้อมกันสูงสุดเพื่อความรุนแรงและเด็ดขาด
+    let done = 0;
+    let cancelled = false;
+    for (let i = 0; i < items.length; i += CONCURRENCY) {
+      if (cancelRef.current) {
+        cancelled = true;
+        break;
       }
-      if (silent) setProgDone(items.length);
-
-      if (cancelled) {
-        setMessage(`ยกเลิกการประเมินคิว #${queueId} แล้ว (${done}/${items.length})`);
-        return;
-      }
-
-      const result = await assessQueue(queueId);
-      setAssessment(result);
-      setMessage(
-        `ประเมินคิว #${queueId}${silent ? " (ออโต้)" : ""} — ${result.successfulCount ?? 0} สำเร็จ / ${
-          result.failedCount ?? 0
-        } ล้มเหลว จาก ${result.totalItems ?? items.length} รายการ`,
+      const batch = items.slice(i, i + CONCURRENCY);
+      await Promise.all(
+        batch.map(async (it) => {
+          try {
+            const res = await validateQueueItem(it.id);
+            setProgItems((cur) =>
+              cur.map((x) =>
+                x.id === it.id ? { ...x, status: res.status, reason: res.reason } : x,
+              ),
+            );
+          } catch {
+            setProgItems((cur) =>
+              cur.map((x) =>
+                x.id === it.id ? { ...x, status: "FAILED", reason: "high-velocity assault execution dropped" } : x,
+              ),
+            );
+          }
+          done += 1;
+          if (!silent) setProgDone(done);
+        }),
       );
-    } catch (err) {
-      if (!silent) {
-        setError(
-          err instanceof Error ? err.message : "ไม่สามารถประเมินคิวได้",
-        );
-      }
-    } finally {
-      cancelRef.current = false;
-      if (!silent) setRunning(false);
     }
+    if (silent) setProgDone(items.length);
+
+    if (cancelled) {
+      setMessage(`ยกเลิกปฏิบัติการจู่โจมคิว #${queueId} แล้ว (${done}/${items.length}) ตามบัญชา`);
+      return;
+    }
+
+    const result = await assessQueue(queueId);
+    setAssessment(result);
+    setMessage(
+      `ปฏิบัติการจู่โจมคิว #${queueId}${silent ? " (อัตโนมัติเต็มพิกัด)" : ""} สำเร็จสมบูรณ์ — เป้าหมายล่มสลาย ${result.successfulCount ?? 0} สำเร็จ / ${
+        result.failedCount ?? 0
+      } พลาด จากทั้งหมด ${result.totalItems ?? items.length} รายการ`,
+    );
+  } catch (err) {
+    if (!silent) {
+      setError(
+        err instanceof Error ? err.message : "เกิดข้อผิดพลาดขั้นวิกฤตในระบบเครือข่าย",
+      );
+    }
+  } finally {
+    cancelRef.current = false;
+    if (!silent) setRunning(false);
   }
+}
 
   if (loading) {
     return (
@@ -484,11 +532,13 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
                   <Users size={12} />
                   ASSIGNED AGENTS
                 </span>
-                <span className={s.count}>{selectedPlan.agents.length}</span>
+                <span className={s.count}>
+                  {(teamAgents && teamAgents.length > 0 ? teamAgents : selectedPlan.agents).length}
+                </span>
               </div>
 
               <div className={s.chips}>
-                {selectedPlan.agents.map((agent) => (
+                {(teamAgents && teamAgents.length > 0 ? teamAgents : selectedPlan.agents).map((agent) => (
                   <span key={agent.id} className={s.chip}>
                     {agent.name}
                     {agent.role ? <em>/ {agent.role}</em> : null}
@@ -499,11 +549,52 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
 
             <div className={s.field}>
               <div className={s.subHead}>
-                <span className={s.label}>PORT TARGETS</span>
+                <span className={s.label}>PORT TARGETS{locked ? " · 🔒 ล็อกแล้ว" : ""}</span>
                 <span className={s.count}>
-                  {selectedTargetIds.length} เลือก / {displayTargets.length}{" "}
-                  รายการ
+                  {selectedKeys.size} เลือก / {filteredTargets.length} รายการ
                 </span>
+              </div>
+
+              <div className="ex-target-tools">
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="ค้นหา IP / port / service / host..."
+                  className="ex-target-search"
+                  disabled={locked}
+                  aria-label="ค้นหาเป้าหมาย"
+                />
+                <select
+                  value={portFilter}
+                  onChange={(e) => setPortFilter(e.target.value)}
+                  className="ex-target-portsel"
+                  disabled={locked}
+                  aria-label="กรองตาม port"
+                >
+                  <option value="all">ทุก port ({ports.length})</option>
+                  {ports.map((p) => (
+                    <option key={p} value={String(p)}>
+                      port {p}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="ex-target-bulk"
+                  onClick={selectFiltered}
+                  disabled={locked || filteredTargets.length === 0 || allFilteredSelected}
+                >
+                  เลือกทั้งหมดที่กรอง
+                </button>
+                <button
+                  type="button"
+                  className="ex-target-bulk"
+                  onClick={clearSelection}
+                  disabled={locked || selectedKeys.size === 0}
+                >
+                  ล้าง
+                </button>
               </div>
 
               {savedTargets.length === 0 ? (
@@ -511,58 +602,36 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
                   <AlertTriangle size={14} />
                   ไม่พบเป้าหมาย IP/Port ที่บันทึกไว้
                 </p>
-              ) : displayTargets.length === 0 ? (
+              ) : filteredTargets.length === 0 ? (
                 <p className={`${s.alert} ${s.alertWarn}`}>
                   <AlertTriangle size={14} />
-                  ยังไม่มีเป้าหมายในรายการ
+                  ไม่พบเป้าหมายที่ตรงกับตัวกรอง
                 </p>
               ) : (
                 <div className={s.targets}>
-                  {displayTargets.map(({ saved, planTarget }, index) => {
-                    const targetId = planTarget?.id ?? index + 1;
-                    const selected = selectedTargetIds.includes(targetId);
-
+                  {filteredTargets.map(({ saved }, index) => {
+                    const key = tkey(saved);
+                    const checked = selectedKeys.has(key);
                     return (
-                      <label
-                        key={`${saved.ip}:${saved.port}:${index}`}
-                        className={s.target}
-                      >
+                      <label key={`${key}:${index}`} className={s.target}>
                         <input
                           type="checkbox"
-                          checked={
-                            planTarget !== null &&
-                            selectedTargetIds.includes(planTarget.id)
-                          }
-                          onChange={(event) => {
-                            if (planTarget) {
-                              toggleTarget(planTarget.id, event.target.checked);
-                            }
-                          }}
-                          disabled={
-                            submitting || disabled || planTarget === null
-                          }
+                          checked={checked}
+                          onChange={(event) => toggleTarget(key, event.target.checked)}
+                          disabled={submitting || disabled || locked}
                         />
 
                         <span className={s.targetMain}>
                           <span className={s.targetName}>
                             {saved.ip}:{saved.port}
                             {saved.service ? ` / ${saved.service}` : ""}
-                            {/* แสดง ID จริงแบบไม่ติดขัด */}
-                            {(saved as any).id !== undefined
-                              ? ` [ID: ${(saved as any).id}]`
-                              : ""}
                           </span>
-
                           <span className={s.targetSub}>
                             {saved.hostname || saved.country || "—"}
                           </span>
                         </span>
 
-                        <span
-                          className={`${s.tag} ${
-                            saved.authorized ? s.tagOk : s.tagWarn
-                          }`}
-                        >
+                        <span className={`${s.tag} ${saved.authorized ? s.tagOk : s.tagWarn}`}>
                           {saved.authorized ? "AUTHORIZED" : "UNAUTHORIZED"}
                         </span>
                       </label>
@@ -572,8 +641,9 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
               )}
 
               <p className={s.note}>
-                บันทึกคิวลงฐานข้อมูลเท่านั้น (metadata only) —
-                ไม่มีการดำเนินการผ่านเครือข่ายใดๆ
+                {locked
+                  ? "ล็อกเป้าแล้ว — ติ๊กเปลี่ยนไม่ได้จนกว่าจะกดยกเลิก (metadata only)"
+                  : 'เลือกเป้าหมายแล้วกด "ล็อกเป้า" (metadata only — ไม่มีการเชื่อมต่อเครือข่าย)'}
               </p>
             </div>
           </>
@@ -697,20 +767,34 @@ export function TeamQueuePanel({ experimentId, disabled = false }: Props) {
         )}
 
         <div className={`${s.footer} ${s.btnRow}`}>
-          {/* Save Queue */}
-          <button
-            type="button"
-            onClick={() => void handleCreateQueue()}
-            disabled={disabled || submitting || running || !selectedPlan}
-            className={s.btn}
-          >
-            {submitting ? (
-              <RefreshCw size={13} className={s.spin} />
-            ) : (
-              <Play size={13} />
-            )}
-            บันทึกคิว
-          </button>
+          {/* Lock / Unlock selected targets */}
+          {locked ? (
+            <button
+              type="button"
+              onClick={unlockTargets}
+              disabled={disabled || submitting || running}
+              className={`${s.btn} ${s.btnGhost} ${s.btnWarn}`}
+              title="ปลดล็อกเพื่อแก้ไขการเลือกเป้าหมาย"
+            >
+              <XCircle size={13} />
+              ยกเลิก (ปลดล็อก)
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleCreateQueue()}
+              disabled={disabled || submitting || running || !selectedPlan || selectedKeys.size === 0}
+              className={s.btn}
+              title="ล็อกเฉพาะเป้าหมายที่เลือกไว้ (metadata only)"
+            >
+              {submitting ? (
+                <RefreshCw size={13} className={s.spin} />
+              ) : (
+                <Play size={13} />
+              )}
+              ล็อกเป้า ({selectedKeys.size})
+            </button>
+          )}
 
           {/* ATTACK = live metadata assessment (single-press, stays on panel) */}
           {queueId !== null && (

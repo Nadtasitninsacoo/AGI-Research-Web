@@ -276,15 +276,31 @@
 /* ---------- Team members ---------- */
 .ex-teamGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 900px) { .ex-teamGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .ex-teamGrid { grid-template-columns: 1fr; } }
+
+/* Distinct agent icon badge */
+.ex-teamIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 9px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 0 14px -4px currentColor, inset 0 0 10px -6px currentColor;
 }
 
 .ex-teamCard {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 9px 10px;
+  gap: 10px;
+  padding: 11px 12px;
   background: rgba(10, 11, 15, 0.55);
   border: 1px solid var(--line-strong);
   border-radius: 7px;
@@ -829,3 +845,44 @@
 .tq-lights > i { will-change: transform, opacity; }
 .tq-progress > i { will-change: width; }
 .tq-prog-list { min-height: 28px; }
+
+/* Port-target toolbar: search + port filter + bulk select */
+.ex-target-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 8px 0 9px;
+}
+.ex-target-search {
+  flex: 1 1 180px;
+  min-width: 140px;
+  padding: 7px 10px;
+  background: #0a0b10;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  color: #e5e7eb;
+  font-size: 12px;
+  outline: none;
+}
+.ex-target-search:focus { border-color: rgba(45, 226, 230, 0.5); }
+.ex-target-portsel {
+  padding: 7px 10px;
+  background: #0a0b10;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  color: #e5e7eb;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ex-target-bulk {
+  padding: 6px 11px;
+  background: rgba(45, 226, 230, 0.08);
+  border: 1px solid rgba(45, 226, 230, 0.4);
+  border-radius: 7px;
+  color: #2de2e6;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ex-target-bulk:hover:not(:disabled) { background: rgba(45, 226, 230, 0.16); }
+.ex-target-bulk:disabled { opacity: 0.4; cursor: not-allowed; }
+.ex-target-tools input:disabled, .ex-target-portsel:disabled { opacity: 0.5; }

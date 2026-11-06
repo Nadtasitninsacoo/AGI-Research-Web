@@ -237,6 +237,7 @@
   cursor: pointer;
 }
 .lf-mini:hover { color: #fff; background: rgba(248, 30, 54, 0.3); }
+.lf-mini:disabled { color: #6b7280; background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.1); cursor: not-allowed; }
 
 /* Search */
 .lf-search { position: relative; max-width: 640px; }
@@ -649,3 +650,210 @@
 .smap-ports tbody tr:last-child td { border-bottom: 0; }
 .smap-port { font-variant-numeric: tabular-nums; color: #5fd38a; font-weight: 600; white-space: nowrap; }
 .smap-ver { color: var(--muted, #9aa0aa); }
+
+/* ============================================================
+   23 / AGENT AUTO RECON — deep-space card (Overview hero style, in blue)
+   Glowing blue planet limb from the top-right + orbiting stars.
+   ============================================================ */
+
+.auto-recon-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(120% 140% at 100% -40%, rgba(44, 120, 240, 0.18), transparent 52%),
+    linear-gradient(100deg, rgba(10, 11, 16, 0.94) 32%, rgba(8, 22, 50, 0.72) 100%);
+}
+
+/* ── "ดูหน้ารันเต็ม" pill button ───────────────────────────── */
+.auto-recon-fulllink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(45, 226, 230, 0.4);
+  background: rgba(45, 226, 230, 0.08);
+  color: #7defff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.18s ease, background 0.18s ease,
+    box-shadow 0.18s ease, transform 0.18s ease, color 0.18s ease;
+}
+.auto-recon-fulllink strong { color: #2de2e6; font-weight: 800; }
+.auto-recon-fulllink-arrow { transition: transform 0.18s ease; }
+.auto-recon-fulllink:hover {
+  border-color: rgba(45, 226, 230, 0.9);
+  background: rgba(45, 226, 230, 0.18);
+  color: #e6ffff;
+  box-shadow: 0 0 0 1px rgba(45, 226, 230, 0.25),
+    0 0 18px rgba(45, 226, 230, 0.4);
+  transform: translateY(-1px);
+}
+.auto-recon-fulllink:hover .auto-recon-fulllink-arrow { transform: translateX(3px); }
+
+/* ── Run button: alive while the agent is actually working ──── */
+.auto-recon-run.is-working {
+  border-color: rgba(82, 232, 155, 0.75) !important;
+  color: #8dffc4 !important;
+  background: rgba(82, 232, 155, 0.14) !important;
+  animation: recon-run-pulse 1.5s ease-in-out infinite;
+}
+/* running light sweep across the button */
+.auto-recon-run.is-working::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(141, 255, 196, 0.45) 50%,
+    transparent 80%
+  );
+  transform: translateX(-120%);
+  animation: recon-run-sweep 1.4s linear infinite;
+  pointer-events: none;
+}
+/* blinking status dot at the leading edge */
+.auto-recon-run.is-working::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8dffc4;
+  box-shadow: 0 0 8px 2px rgba(141, 255, 196, 0.9);
+  animation: recon-run-blink 0.9s steps(1, end) infinite;
+  pointer-events: none;
+}
+@keyframes recon-run-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(82, 232, 155, 0); }
+  50% { box-shadow: 0 0 20px 2px rgba(82, 232, 155, 0.45); }
+}
+@keyframes recon-run-sweep {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+@keyframes recon-run-blink {
+  0%, 60% { opacity: 1; }
+  61%, 100% { opacity: 0.15; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auto-recon-run.is-working,
+  .auto-recon-run.is-working::before,
+  .auto-recon-run.is-working::after { animation: none; }
+}
+
+/* The planet: a glowing blue limb bleeding in from the top-right. */
+.recon-planet {
+  position: absolute;
+  top: -150px;
+  right: -36px;
+  width: 360px;
+  height: 360px;
+  pointer-events: none;
+}
+
+/* Realistic slowly-rotating Earth with a glowing atmosphere rim */
+.recon-globe {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 36% 32%, #2f73b4 0%, #1a5088 42%, #0c3156 70%, #06203c 100%);
+  box-shadow:
+    0 0 36px 6px rgba(96, 175, 255, 0.45),
+    0 0 100px 26px rgba(40, 115, 215, 0.3),
+    inset -28px -24px 52px rgba(0, 0, 0, 0.62),
+    inset 16px 13px 36px rgba(160, 210, 255, 0.22);
+}
+
+/* Rotating ocean + continents texture (slow spin) */
+.recon-globe::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  background-image:
+    radial-gradient(ellipse 16% 24% at 18% 34%, rgba(54, 150, 104, 0.6), transparent 62%),
+    radial-gradient(ellipse 13% 20% at 40% 60%, rgba(66, 140, 92, 0.55), transparent 62%),
+    radial-gradient(ellipse 19% 16% at 66% 30%, rgba(82, 152, 104, 0.5), transparent 62%),
+    radial-gradient(ellipse 15% 22% at 86% 64%, rgba(58, 134, 96, 0.55), transparent 62%),
+    radial-gradient(ellipse 11% 15% at 58% 82%, rgba(74, 142, 94, 0.5), transparent 62%),
+    radial-gradient(ellipse 14% 18% at 3% 70%, rgba(60, 136, 96, 0.5), transparent 62%);
+  background-size: 200% 100%;
+  background-repeat: repeat-x;
+  opacity: 0.92;
+  animation: earth-spin 60s linear infinite;
+}
+
+/* Day-side specular highlight + night terminator + crisp atmosphere rim */
+.recon-globe::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(195, 228, 255, 0.32), transparent 36%),
+    radial-gradient(circle at 74% 78%, rgba(0, 0, 0, 0.5), transparent 48%);
+  box-shadow: inset 0 0 1px 1px rgba(150, 205, 255, 0.5);
+}
+
+@keyframes earth-spin { to { background-position: -200% 0; } }
+
+/* Micro-stars orbiting the planet (reuses @keyframes hero-orbit from overview.css). */
+.recon-planet .orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px solid rgba(96, 165, 255, 0.09);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.recon-planet .orbit .star {
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  background: #bfe0ff;
+  border-radius: 50%;
+  box-shadow: 0 0 8px 2px rgba(96, 165, 255, 0.7), 0 0 2px 1px rgba(255, 255, 255, 0.9);
+}
+.recon-planet .orbit-1 { width: 280px; height: 280px; animation: hero-orbit 16s linear infinite; }
+.recon-planet .orbit-2 { width: 420px; height: 420px; animation: hero-orbit 26s linear infinite reverse; }
+.recon-planet .orbit-3 { width: 560px; height: 560px; animation: hero-orbit 38s linear infinite; }
+.recon-planet .orbit-2 .star { width: 3px; height: 3px; background: #fff; box-shadow: 0 0 6px 2px rgba(150, 200, 255, 0.7); }
+.recon-planet .orbit-3 .star { width: 5px; height: 5px; background: #d0e4ff; box-shadow: 0 0 10px 3px rgba(96, 165, 255, 0.6); }
+
+@media (prefers-reduced-motion: reduce) {
+  .recon-planet .orbit { animation: none; }
+  .recon-globe::before { animation: none; }
+}
+
+/* Canvas Earth globe (real continents, rotating) */
+.recon-globe3d {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow:
+    0 0 14px 1px rgba(150, 210, 255, 0.6),
+    0 0 42px 8px rgba(80, 160, 255, 0.45),
+    0 0 110px 30px rgba(44, 120, 240, 0.3);
+}
+
+/* Keep the AGENT AUTO RECON content clear of the globe (right side) on wide screens */
+@media (min-width: 760px) {
+  .auto-recon-card { padding-right: 320px !important; }
+}
+@media (min-width: 1280px) {
+  .auto-recon-card { padding-right: 360px !important; }
+}

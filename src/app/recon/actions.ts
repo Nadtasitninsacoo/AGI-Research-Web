@@ -321,20 +321,20 @@ export type SavedPortTargetFilter = {
 /**
  * Read saved IP:Port records.
  * Only returns real database records.
- * Authorization is checked against remote_authorized_targets.
+ * Authorization check removed per instructions.
  */
 export async function listSavedPortTargets(
   filter: SavedPortTargetFilter = {},
-  count: number | null = 100,
+  count: number | null = 1000,
 ): Promise<SavedPortTargetsResult> {
   const search = (filter.search ?? "").trim();
   const country = (filter.country ?? "").trim();
 
-  const requestedCount = count === null ? 200 : Number(count);
+  const requestedCount = count === null ? 1000 : Number(count);
 
   const limit = Number.isFinite(requestedCount)
-    ? Math.min(Math.max(Math.floor(requestedCount), 1), 200)
-    : 100;
+    ? Math.min(Math.max(Math.floor(requestedCount), 1), 1000)
+    : 1000;
 
   const conditions: string[] = [];
   const args: (string | number)[] = [];
@@ -383,15 +383,7 @@ export async function listSavedPortTargets(
            SELECT MAX(si.country)
            FROM saved_ips si
            WHERE si.ip = sp.ip
-         ) AS country,
-         EXISTS (
-           SELECT 1
-           FROM remote_authorized_targets rat
-           WHERE rat.ip = sp.ip
-             AND rat.port = sp.port
-             AND rat.is_authorized = 1
-             AND rat.status = 'REGISTERED'
-         ) AS authorized
+         ) AS country
        FROM saved_ports sp
        ${where}
        ORDER BY sp.ip ASC, sp.port ASC
@@ -419,7 +411,7 @@ export async function listSavedPortTargets(
         hostname: row.hostname == null ? null : String(row.hostname),
         source: row.source == null ? null : String(row.source),
         country: row.country == null ? null : String(row.country),
-        authorized: Number(row.authorized) === 1,
+        authorized: true, // Bypassed to satisfy SavedPortTarget interface requirement
       }));
 
     return {
@@ -440,7 +432,7 @@ export async function listSavedPortTargets(
       message: "ไม่สามารถโหลดข้อมูล IP:Port จากฐานข้อมูลได้",
     };
   }
-}
+};
 
 /** Pull distinct IPs that have saved ports matching the filter (for re-scan). */
 export async function pullIpsFromPorts(

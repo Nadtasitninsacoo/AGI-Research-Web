@@ -79,7 +79,7 @@ export function PageHero({
   note?: ReactNode;
 }) {
   return (
-    <header className="hero mb-4 border-b border-slate-800 bg-slate-900/60 p-4">
+    <header className="hero mb-4 border-b border-slate-800 bg-slate-900/60 px-6 py-5 sm:px-8 sm:py-6">
       <div>
         <small className="tracking-wider text-cyan-400">
           {kicker}

@@ -123,7 +123,7 @@ async function RunsContent({
                     <th className="num">METRIC</th>
                     <th>DURATION</th>
                     <th>CREATED</th>
-                    <th></th>
+                    <th>จัดการ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -150,7 +150,7 @@ async function RunsContent({
                       <td className="muted">{fmtDate(r.createdAt)}</td>
                       <td>
                         <Link href={`/runs/${r.id}`} className="btn btn-sm">
-                          ดู →
+                          ดู / จัดการ →
                         </Link>
                       </td>
                     </tr>

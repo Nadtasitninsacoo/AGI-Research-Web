@@ -258,6 +258,7 @@ export function StrategicMap() {
   const [searching, setSearching] = useState(false);
 
   const [measureM, setMeasureM] = useState(0);
+  const [measureCount, setMeasureCount] = useState(0); // mirrors measurePts.current.length for render
   const [markCount, setMarkCount] = useState(0);
   const [layer, setLayer] = useState<"dark" | "sat">("dark");
   const [satProvider, setSatProvider] = useState<SatProvider>(PROVIDERS[0]);
@@ -289,6 +290,11 @@ export function StrategicMap() {
   const measureLayer = useRef<LType.LayerGroup | null>(null);
   const measurePts = useRef<LType.LatLng[]>([]);
   const measureLine = useRef<LType.Polyline | null>(null);
+  // One entry per point in measurePts, so "undo last point" can remove exactly
+  // the vertex dot (and distance tooltip, if any) that click added.
+  const measurePointLayers = useRef<
+    Array<{ vertex: LType.CircleMarker; tip: LType.Tooltip | null }>
+  >([]);
   const searchMarker = useRef<LType.Marker | null>(null);
   const meMarker = useRef<LType.Marker | null>(null);
   const meCircle = useRef<LType.Circle | null>(null);
@@ -473,31 +479,35 @@ export function StrategicMap() {
       for (const [la, ln] of annot.marks) addMark(leaflet.latLng(la, ln));
       if (annot.measure.length) {
         const pts = annot.measure.map(([la, ln]) => leaflet.latLng(la, ln));
-        pts.forEach((ll) =>
-          leaflet
-            .circleMarker(ll, { radius: 3, className: "lf-vertex" })
-            .addTo(measureLayer.current!),
-        );
         measureLine.current = leaflet
           .polyline(pts, { className: "lf-measure-line" })
           .addTo(measureLayer.current!);
         measurePts.current = pts;
+        measurePointLayers.current = [];
         let total = 0;
-        for (let i = 1; i < pts.length; i++) {
-          total += pts[i - 1].distanceTo(pts[i]);
-          leaflet
-            .tooltip({
-              permanent: true,
-              direction: "right",
-              className: "lf-tip lf-tip-dist",
-            })
-            .setLatLng(pts[i])
-            .setContent(
-              `${kmLabel(total)} · ${bearing(pts[i - 1], pts[i]).toFixed(0)}°`,
-            )
+        pts.forEach((ll, i) => {
+          const vertex = leaflet
+            .circleMarker(ll, { radius: 3, className: "lf-vertex" })
             .addTo(measureLayer.current!);
-        }
+          let tip: LType.Tooltip | null = null;
+          if (i > 0) {
+            total += pts[i - 1].distanceTo(ll);
+            tip = leaflet
+              .tooltip({
+                permanent: true,
+                direction: "right",
+                className: "lf-tip lf-tip-dist",
+              })
+              .setLatLng(ll)
+              .setContent(
+                `${kmLabel(total)} · ${bearing(pts[i - 1], ll).toFixed(0)}°`,
+              )
+              .addTo(measureLayer.current!);
+          }
+          measurePointLayers.current.push({ vertex, tip });
+        });
         setMeasureM(total);
+        setMeasureCount(pts.length);
         setHasData(true);
       }
     })();
@@ -589,7 +599,7 @@ export function StrategicMap() {
       // measure: append a vertex, redraw the line, sum segment lengths + bearing
       measurePts.current.push(latlng);
       const pts = measurePts.current;
-      leaflet
+      const vertex = leaflet
         .circleMarker(latlng, { radius: 3, className: "lf-vertex" })
         .addTo(measureLayer.current!);
       if (!measureLine.current) {
@@ -603,11 +613,13 @@ export function StrategicMap() {
       for (let i = 1; i < pts.length; i++)
         total += pts[i - 1].distanceTo(pts[i]);
       setMeasureM(total);
+      setMeasureCount(pts.length);
       setHasData(true);
+      let tip: LType.Tooltip | null = null;
       if (pts.length > 1) {
         const prev = pts[pts.length - 2];
         const seg = prev.distanceTo(latlng);
-        leaflet
+        tip = leaflet
           .tooltip({
             permanent: true,
             direction: "right",
@@ -619,6 +631,7 @@ export function StrategicMap() {
           )
           .addTo(measureLayer.current!);
       }
+      measurePointLayers.current.push({ vertex, tip });
       saveAnnot();
     },
     [addMark, saveAnnot],
@@ -758,11 +771,50 @@ export function StrategicMap() {
     refreshHasData();
     saveAnnot();
   }, [refreshHasData, saveAnnot]);
+  // Undo just the most recently placed mark (pins are added to marksLayer in
+  // click order, so the last layer in the group is always the last one placed).
+  const undoLastMark = useCallback(() => {
+    const layers = marksLayer.current?.getLayers() ?? [];
+    const last = layers[layers.length - 1];
+    if (!last) return;
+    marksLayer.current!.removeLayer(last);
+    setMarkCount((c) => Math.max(0, c - 1));
+    refreshHasData();
+    saveAnnot();
+  }, [refreshHasData, saveAnnot]);
   const clearMeasure = useCallback(() => {
     measureLayer.current?.clearLayers();
     measurePts.current = [];
+    measurePointLayers.current = [];
     measureLine.current = null;
     setMeasureM(0);
+    setMeasureCount(0);
+    refreshHasData();
+    saveAnnot();
+  }, [refreshHasData, saveAnnot]);
+  // Undo just the last measurement vertex: drop it from the point list, remove
+  // its dot + distance tooltip, and redraw the line / recompute the total.
+  // Earlier points' tooltips stay correct as-is (each already shows only the
+  // cumulative distance up to itself).
+  const undoLastMeasurePoint = useCallback(() => {
+    if (measurePts.current.length === 0) return;
+    measurePts.current.pop();
+    const last = measurePointLayers.current.pop();
+    if (last) {
+      measureLayer.current?.removeLayer(last.vertex);
+      if (last.tip) measureLayer.current?.removeLayer(last.tip);
+    }
+    const pts = measurePts.current;
+    if (pts.length >= 2) {
+      measureLine.current?.setLatLngs(pts);
+    } else if (measureLine.current) {
+      measureLayer.current?.removeLayer(measureLine.current);
+      measureLine.current = null;
+    }
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) total += pts[i - 1].distanceTo(pts[i]);
+    setMeasureM(total);
+    setMeasureCount(pts.length);
     refreshHasData();
     saveAnnot();
   }, [refreshHasData, saveAnnot]);
@@ -1507,30 +1559,32 @@ export function StrategicMap() {
     if (doMeasure && found.length >= 2) {
       clearMeasure();
       const pts = found.map((f) => f.ll);
-      pts.forEach((ll) =>
-        leaflet
-          .circleMarker(ll, { radius: 3, className: "lf-vertex" })
-          .addTo(measureLayer.current!),
-      );
       measureLine.current = leaflet
         .polyline(pts, { className: "lf-measure-line" })
         .addTo(measureLayer.current!);
       measurePts.current = pts;
       let total = 0;
-      for (let i = 1; i < pts.length; i++) {
-        total += pts[i - 1].distanceTo(pts[i]);
-        leaflet
-          .tooltip({
-            permanent: true,
-            direction: "right",
-            className: "lf-tip lf-tip-dist",
-          })
-          .setLatLng(pts[i])
-          .setContent(
-            `${kmLabel(total)} · ${bearing(pts[i - 1], pts[i]).toFixed(0)}°`,
-          )
+      pts.forEach((ll, i) => {
+        const vertex = leaflet
+          .circleMarker(ll, { radius: 3, className: "lf-vertex" })
           .addTo(measureLayer.current!);
-      }
+        let tip: LType.Tooltip | null = null;
+        if (i > 0) {
+          total += pts[i - 1].distanceTo(ll);
+          tip = leaflet
+            .tooltip({
+              permanent: true,
+              direction: "right",
+              className: "lf-tip lf-tip-dist",
+            })
+            .setLatLng(ll)
+            .setContent(
+              `${kmLabel(total)} · ${bearing(pts[i - 1], ll).toFixed(0)}°`,
+            )
+            .addTo(measureLayer.current!);
+        }
+        measurePointLayers.current.push({ vertex, tip });
+      });
       found.forEach((f) =>
         leaflet
           .marker(f.ll, { icon: pinIcon(leaflet, "mark") })
@@ -1542,6 +1596,7 @@ export function StrategicMap() {
           }),
       );
       setMeasureM(total);
+      setMeasureCount(pts.length);
       setMode("measure");
       setHasData(true);
       saveAnnot();
@@ -1901,8 +1956,16 @@ export function StrategicMap() {
         {/* Live readout for the active tool */}
         {mode === "measure" && (
           <div className="lf-readout">
-            ระยะรวม: <b>{kmLabel(measureM)}</b> · {measurePts.current.length}{" "}
+            ระยะรวม: <b>{kmLabel(measureM)}</b> · {measureCount}{" "}
             จุด
+            <button
+              type="button"
+              className="lf-mini"
+              onClick={undoLastMeasurePoint}
+              disabled={measureCount === 0}
+            >
+              ← ย้อนกลับ
+            </button>
             <button type="button" className="lf-mini" onClick={clearMeasure}>
               <Icon name="trash" /> ล้าง
             </button>
@@ -1911,6 +1974,9 @@ export function StrategicMap() {
         {mode === "mark" && markCount > 0 && (
           <div className="lf-readout">
             มาร์คไว้ <b>{markCount}</b> จุด · คลิกขวาที่หมุดเพื่อลบ
+            <button type="button" className="lf-mini" onClick={undoLastMark}>
+              ← ย้อนกลับ
+            </button>
             <button type="button" className="lf-mini" onClick={clearMarks}>
               <Icon name="trash" /> ล้างทั้งหมด
             </button>

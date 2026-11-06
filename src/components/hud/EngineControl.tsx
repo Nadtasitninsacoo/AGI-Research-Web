@@ -88,10 +88,10 @@ export function EngineControl() {
   return (
     <div className={`engine-ctl ${running ? "engine-on" : "engine-off"}`} style={{ background: "#0a0a0a", border: "1px solid #f81e3633" }}>
       <div className="engine-ctl-status">
-        <i className="engine-led" style={{ background: running ? "#f81e36" : "#ff9aa5", boxShadow: "0 0 10px #f81e36" }} />
+        <i className="engine-led" style={{ background: offline ? "#e0a33e" : running ? "#3ad29f" : "#f87171", boxShadow: `0 0 10px ${offline ? "rgba(224,163,62,.7)" : running ? "rgba(58,210,159,.7)" : "rgba(248,113,113,.65)"}` }} />
         <div className="engine-ctl-text">
-          <strong style={{ color: "#f81e36" }}>{offline ? "ENGINE — ออฟไลน์" : running ? "ENGINE ทำงานอยู่" : "ENGINE หยุดอยู่"}</strong>
-          <small style={{ color: "#ffb3bb" }}>
+          <strong style={{ color: offline ? "#e0a33e" : running ? "#3ad29f" : "#f87171" }}>{offline ? "ENGINE — ออฟไลน์" : running ? "ENGINE ทำงานอยู่" : "ENGINE หยุดอยู่"}</strong>
+          <small style={{ color: "#8a8f99" }}>
             {offline
               ? "เชื่อมต่อแบ็กเอนด์ไม่ได้ — ไม่ทราบสถานะ"
               : running
@@ -105,17 +105,17 @@ export function EngineControl() {
 
       <div className="engine-ctl-actions">
         {running ? (
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => send("stop")} disabled={busy} style={{ color: "#ff9aa5", borderColor: "#ff9aa533" }}>
+          <button type="button" className="btn btn-sm btn-danger" onClick={() => send("stop")} disabled={busy}>
             {busy ? "กำลังหยุด..." : "■ หยุด (Stop Engine)"}
           </button>
         ) : (
-          <button type="button" className="btn btn-sm btn-danger" onClick={() => send("start")} disabled={busy} style={{ background: "#f81e36", color: "#000", fontWeight: "bold" }}>
+          <button type="button" className="btn btn-sm btn-ok" onClick={() => send("start")} disabled={busy}>
             {busy ? "กำลังสตาร์ท..." : "▶ สตาร์ท ENGINE"}
           </button>
         )}
       </div>
 
-      {msg && <p className="engine-ctl-msg" role="status" style={{ color: "#f81e36", background: "#111", padding: "6px", marginTop: "8px", border: "1px solid #f81e3622" }}>{msg}</p>}
+      {msg && <p className="engine-ctl-msg" role="status" style={{ color: "#c9ccd3", background: "rgba(255,255,255,0.04)", padding: "6px 9px", marginTop: "8px", border: "1px solid var(--line)", borderRadius: 6 }}>{msg}</p>}
     </div>
   );
 }

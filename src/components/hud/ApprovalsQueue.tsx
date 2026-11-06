@@ -66,7 +66,7 @@ export function ApprovalsQueue() {
   }
 
   return (
-    <div className="approvals" style={{ background: "#0a0a0a", border: "1px solid #f81e3633" }}>
+    <div className="approvals" style={{ background: "#0a0a0a", border: "1px solid #f81e3633", padding: "14px 16px", borderRadius: 8 }}>
       <div className="approvals-head">
         <span style={{ color: "#f81e36" }}>คิวอนุมัติคำสั่ง (Intrusive commands)</span>
         <em style={{ color: "#f81e36" }}>{pending.length} PENDING</em>

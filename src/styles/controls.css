@@ -207,22 +207,28 @@ textarea:disabled {
 
 .btn-danger {
   color: #fff;
-  background: var(--grad-red);
-  border-color: var(--red-hot);
+  background: linear-gradient(180deg, #ff4258 0%, #e51230 55%, #c60f24 100%);
+  border-color: #ff6273;
   box-shadow:
     var(--bevel-up),
-    0 2px 12px var(--red-glow);
+    0 0 0 1px rgba(255, 98, 115, 0.25),
+    0 2px 16px rgba(248, 30, 54, 0.45);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: linear-gradient(180deg, #ff2d44 0%, #bd1120 100%);
-  border-color: var(--red-hot);
+  background: linear-gradient(180deg, #ff5c6e 0%, #f31e38 60%, #d41226 100%);
+  border-color: #ff8090;
+  box-shadow:
+    var(--bevel-up),
+    0 0 0 1px rgba(255, 128, 144, 0.35),
+    0 3px 22px rgba(248, 30, 54, 0.6);
 }
 
 .btn-ghost {
-  color: #c8c8ce;
-  background: transparent;
-  border-color: #414148;
+  color: #d6d8df;
+  background: rgba(255, 255, 255, 0.045);
+  border-color: #565a64;
 }
 
 .btn-ghost:hover:not(:disabled):not(.is-off) {
@@ -889,3 +895,15 @@ textarea:disabled {
   cursor: pointer;
 }
 .modal-close:hover:not(:disabled) { color: var(--text-strong); border-color: var(--red-hot); }
+
+/* Positive / success action button (e.g. start engine) */
+.btn-ok {
+  color: #04140d;
+  background: linear-gradient(180deg, #52e89b 0%, #26b06e 100%);
+  border-color: #5cf0a8;
+  box-shadow: var(--bevel-up), 0 0 0 1px rgba(92, 240, 168, 0.25), 0 2px 16px rgba(58, 210, 159, 0.38);
+}
+.btn-ok:hover:not(:disabled) {
+  background: linear-gradient(180deg, #54e89b 0%, #26b06e 100%);
+  border-color: #3ad29f;
+}

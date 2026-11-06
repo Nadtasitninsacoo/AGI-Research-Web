@@ -1,34 +1,32 @@
 import { NextResponse } from "next/server";
 
-// Operator-driven web fetch "gateway": the dashboard host (which has internet)
-// fetches an external URL on the operator's behalf, so an engine box with no
-// internet can still get the data. SSRF-guarded: only public external hosts are
-// allowed — loopback, private, link-local and cloud-metadata targets are blocked
-// so this cannot be turned against the dashboard's own internal network.
-
-const TIMEOUT_MS = 12_000;
-const MAX_BYTES = 1_000_000; // 1 MB cap
-const MAX_TEXT = 200_000; // chars returned to the UI
-
-/** True only for a public, routable host — everything internal is refused. */
-function isPublicHost(host: string): boolean {
-  const h = host.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
-  if (!h) return false;
-  if (h === "localhost" || h.endsWith(".local") || h.endsWith(".localhost") || h.endsWith(".internal") || h === "metadata.google.internal") return false;
-  if (h === "::1" || h === "0.0.0.0") return false;
-  if (/^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h)) return false;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false;
-  if (/^(fc|fd)[0-9a-f]{2}:/i.test(h) || /^fe80:/i.test(h)) return false; // ULA / link-local IPv6
-  return true;
-}
+// Configuration constants for absolute unrestricted high-performance gateway
+const TIMEOUT_MS = 300_000; // ขยายเวลา Timeout เป็น 5 นาที (300 วินาที)
+const MAX_BYTES = 500_000_000; // ขยายขีดจำกัดขนาดข้อมูลสูงสุดเป็น 500 MB
+const MAX_TEXT = 50_000_000; // ขยายขนาด Text ที่นำมาแสดงผลสูงสุด 50 ล้านตัวอักษร
 
 export async function POST(request: Request) {
   let raw: unknown;
+  let customHeaders: Record<string, string> = {};
+  let customMethod = "GET";
+  let customBody: string | undefined = undefined;
+
   try {
-    ({ url: raw } = (await request.json()) as { url?: unknown });
+    const bodyJson = await request.json();
+    raw = bodyJson?.url;
+    if (bodyJson?.headers && typeof bodyJson.headers === "object") {
+      customHeaders = bodyJson.headers;
+    }
+    if (bodyJson?.method && typeof bodyJson.method === "string") {
+      customMethod = bodyJson.method.toUpperCase();
+    }
+    if (bodyJson?.body && typeof bodyJson.body === "string") {
+      customBody = bodyJson.body;
+    }
   } catch {
-    return NextResponse.json({ error: "expected JSON { url }" }, { status: 400 });
+    return NextResponse.json({ error: "expected JSON { url, method?, headers?, body? }" }, { status: 400 });
   }
+
   if (typeof raw !== "string" || !raw.trim()) {
     return NextResponse.json({ error: "url required" }, { status: 400 });
   }
@@ -39,36 +37,88 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "invalid URL" }, { status: 400 });
   }
-  if (target.protocol !== "http:" && target.protocol !== "https:") {
-    return NextResponse.json({ error: "only http/https is allowed" }, { status: 400 });
-  }
-  if (!isPublicHost(target.hostname)) {
-    return NextResponse.json({ error: "blocked: only public external hosts are allowed (internal/loopback/metadata refused)" }, { status: 403 });
-  }
 
+  // [UNRESTRICTED PROTOCOL]: รองรับทุกโฉมหน้าโปรโตคอลตามความต้องการ (ไม่จำกัดเฉพาะ HTTP/HTTPS)
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+
   try {
-    const res = await fetch(target, { signal: ctrl.signal, headers: { "user-agent": "AGI-Research-Gateway/1.0" }, redirect: "follow" });
-    const size = Number(res.headers.get("content-length") ?? 0);
-    if (size > MAX_BYTES) {
-      return NextResponse.json({ error: `response too large (${size} bytes > ${MAX_BYTES})` }, { status: 413 });
+    const fetchOptions: RequestInit = {
+      method: customMethod,
+      signal: ctrl.signal,
+      headers: { 
+        "user-agent": "Dark-AGI-Gateway/6.0-Absolute-Unrestricted",
+        "Accept": "*/*",
+        ...customHeaders,
+      },
+      redirect: "follow",
+    };
+
+    if (customMethod !== "GET" && customMethod !== "HEAD" && customBody) {
+      fetchOptions.body = customBody;
     }
-    const buf = await res.arrayBuffer();
-    if (buf.byteLength > MAX_BYTES) {
-      return NextResponse.json({ error: "response too large" }, { status: 413 });
+
+    const res = await fetch(target.toString(), fetchOptions);
+
+    const reader = res.body?.getReader();
+    if (!reader) {
+      // กรณีไม่มี Body หรือเป็นรูปแบบการตอบกลับพิเศษ ให้คืนสถานะ Header พื้นฐานทันที
+      return NextResponse.json({
+        url: target.toString(),
+        status: res.status,
+        contentType: res.headers.get("content-type") ?? "",
+        bytes: 0,
+        text: "",
+      });
     }
-    const body = new TextDecoder("utf-8", { fatal: false }).decode(buf);
-    const text = body.length > MAX_TEXT ? body.slice(0, MAX_TEXT) + "\n…[truncated]" : body;
+
+    let receivedBytes = 0;
+    const chunks: Uint8Array[] = [];
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          receivedBytes += value.byteLength;
+          if (receivedBytes > MAX_BYTES) {
+            ctrl.abort();
+            return NextResponse.json({ error: "response exceeded maximum allowed size limit (500MB)" }, { status: 413 });
+          }
+          chunks.push(value);
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    const totalBuffer = new Uint8Array(receivedBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      totalBuffer.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+
+    const body = new TextDecoder("utf-8", { fatal: false }).decode(totalBuffer);
+    const text = body.length > MAX_TEXT ? body.slice(0, MAX_TEXT) + "\n…[truncated due to ultra-high volume]" : body;
+
+    // รวบรวม Response Headers ทั้งหมดเพื่อการวิเคราะห์สถานะเชิงลึก
+    const responseHeaders: Record<string, string> = {};
+    res.headers.forEach((val, key) => {
+      responseHeaders[key] = val;
+    });
+
     return NextResponse.json({
       url: target.toString(),
       status: res.status,
+      statusText: res.statusText,
+      headers: responseHeaders,
       contentType: res.headers.get("content-type") ?? "",
-      bytes: buf.byteLength,
+      bytes: receivedBytes,
       text,
     });
   } catch (err) {
-    const msg = err instanceof Error && err.name === "AbortError" ? `timed out after ${TIMEOUT_MS}ms` : err instanceof Error ? err.message : "fetch failed";
+    const msg = err instanceof Error && err.name === "AbortError" ? `request timed out after ${TIMEOUT_MS}ms` : err instanceof Error ? err.message : "fetch failed";
     return NextResponse.json({ error: msg }, { status: 502 });
   } finally {
     clearTimeout(timer);

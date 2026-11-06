@@ -42,7 +42,7 @@ export function DbInitButton() {
   if (!open) {
     return (
       <div className="dbinit">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)} style={{ borderColor: "#f81e3633", color: "#f81e36" }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)}>
           ⚙ Initialize Database (สร้างฐานข้อมูล)
         </button>
       </div>
@@ -50,7 +50,7 @@ export function DbInitButton() {
   }
 
   return (
-    <div className="dbinit is-open" style={{ background: "#0a0a0a", border: "1px solid #f81e3633", padding: "12px" }}>
+    <div className="dbinit is-open" style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.09)", padding: "12px", borderRadius: 8 }}>
       <div className="dbinit-bar">
         <input
           type="password"
@@ -60,18 +60,18 @@ export function DbInitButton() {
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && run()}
           autoComplete="off"
-          style={{ background: "#111", color: "#f81e36", borderColor: "#f81e3644" }}
+          style={{ background: "#14161b", color: "#e5e5e9", borderColor: "var(--line-strong)" }}
         />
-        <button type="button" className="btn btn-danger" onClick={run} disabled={busy} style={{ background: "#f81e36", color: "#000", fontWeight: "bold" }}>
+        <button type="button" className="btn btn-ok" onClick={run} disabled={busy}>
           {busy ? "กำลังสร้าง..." : "สร้างตาราง (Create tables)"}
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)} style={{ color: "#ff9aa5" }}>ยกเลิก</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>ยกเลิก</button>
       </div>
-      <small className="dbinit-hint" style={{ color: "#ffb3bb" }}>
+      <small className="dbinit-hint" style={{ color: "#8a8f99" }}>
         สร้าง database + ตารางทั้งหมด · ไม่รัน shell ·
         รหัสส่งครั้งเดียว ไม่ถูกบันทึก
       </small>
-      {msg && <p className={`notice notice-${msg.ok ? "ok" : "error"}`} role="status" style={{ color: msg.ok ? "#f81e36" : "#ff9aa5" }}>{msg.text}</p>}
+      {msg && <p className={`notice notice-${msg.ok ? "ok" : "error"}`} role="status" style={{ marginTop: 8 }}>{msg.text}</p>}
     </div>
   );
 }

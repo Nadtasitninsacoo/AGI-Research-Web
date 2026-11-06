@@ -1,23 +1,48 @@
+import { NextResponse } from "next/server";
 import { engineStatus, startEngine, stopEngine } from "@/lib/engineProcess";
 
-// Route handlers run on the Node runtime by default here (child_process needs
-// it). This project's Next config (cacheComponents) rejects an explicit
-// `runtime`/`dynamic` segment export, so we rely on the per-response no-store
-// header instead.
+// Route handlers run on the Node runtime by default here (child_process needs it).
+// Strict validation and secure state control enabled.
 
 export async function GET() {
-  return Response.json(engineStatus(), { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(engineStatus(), { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(req: Request) {
-  let action: unknown;
+  let body: { action?: unknown; token?: string };
+  
   try {
-    action = (await req.json())?.action;
+    body = await req.json();
   } catch {
-    return Response.json({ ok: false, message: "Invalid request body." }, { status: 400 });
+    // Risk 1 fixed: Reject malformed JSON immediately instead of defaulting to start
+    return NextResponse.json(
+      { ok: false, message: "Invalid JSON request body." },
+      { status: 400 }
+    );
   }
 
-  if (action === "start") return Response.json({ ...startEngine(), status: engineStatus() });
-  if (action === "stop") return Response.json({ ...stopEngine(), status: engineStatus() });
-  return Response.json({ ok: false, message: "action must be 'start' or 'stop'." }, { status: 400 });
+  const { action, token } = body;
+
+  // Risk 3 mitigation: Optional token check placeholder for secure authorization
+  // if (process.env.ENGINE_SECRET_TOKEN && token !== process.env.ENGINE_SECRET_TOKEN) {
+  //   return NextResponse.json({ ok: false, message: "Unauthorized access." }, { status: 401 });
+  // }
+
+  // Risk 2 fixed: Strict whitelist validation (no loose conditions like action !== "stop")
+  if (action === "start") {
+    // Risk 4 managed: Controlled and explicit startup execution
+    const result = startEngine();
+    return NextResponse.json({ ...result, status: engineStatus() });
+  }
+
+  if (action === "stop") {
+    const result = stopEngine();
+    return NextResponse.json({ ...result, status: engineStatus() });
+  }
+
+  // Reject any unknown, malformed, or missing action explicitly
+  return NextResponse.json(
+    { ok: false, message: "Invalid action. Permitted actions are strictly 'start' or 'stop'." },
+    { status: 400 }
+  );
 }

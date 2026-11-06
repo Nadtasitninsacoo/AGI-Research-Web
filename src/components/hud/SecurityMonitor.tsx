@@ -15,6 +15,7 @@ type SecEvent = {
 };
 
 const SEV_LABEL: Record<string, string> = { critical: "วิกฤต", high: "สูง", warn: "เตือน", info: "ข้อมูล" };
+const SEV_COLOR: Record<string, string> = { critical: "#f87171", high: "#e0a33e", warn: "#e8c84d", info: "#8a8f99" };
 
 export function SecurityMonitor() {
   const [lockdown, setLockdown] = useState<boolean>(false);
@@ -83,11 +84,11 @@ export function SecurityMonitor() {
   const high = counts.high ?? 0;
 
   return (
-    <div className={`sentinel ${lockdown ? "is-locked" : ""}`} style={{ background: "#0a0a0a", border: "1px solid #f81e3633", padding: "16px", color: "#f81e36" }}>
-      <div className="sentinel-head" style={{ borderBottom: "1px solid #f81e3622", paddingBottom: "10px" }}>
+    <div className={`sentinel ${lockdown ? "is-locked" : ""}`} style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.09)", padding: "16px", color: "#c9ccd3" }}>
+      <div className="sentinel-head" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "10px" }}>
         <div className="sentinel-status">
-          <span className={`sentinel-dot ${lockdown ? "lock" : critical || high ? "warn" : "ok"}`} style={{ background: lockdown ? "#ff9aa5" : "#f81e36", boxShadow: "0 0 10px #f81e36" }} />
-          <strong style={{ color: "#f81e36" }}>
+          <span className={`sentinel-dot ${lockdown ? "lock" : critical || high ? "warn" : "ok"}`} style={{ background: lockdown ? "#f87171" : critical || high ? "#e0a33e" : "#3ad29f", boxShadow: `0 0 10px ${lockdown ? "rgba(248,113,113,.7)" : critical || high ? "rgba(224,163,62,.7)" : "rgba(58,210,159,.7)"}` }} />
+          <strong style={{ color: lockdown ? "#f87171" : critical || high ? "#e0a33e" : "#3ad29f" }}>
             {lockdown === null
               ? "SENTINEL …"
               : lockdown
@@ -99,20 +100,19 @@ export function SecurityMonitor() {
         </div>
         <button
           type="button"
-          className={`btn btn-sm ${lockdown ? "btn-ghost" : "btn-danger"}`}
+          className={`btn btn-sm ${lockdown ? "btn-ok" : "btn-danger"}`}
           disabled={busy}
           onClick={toggleLockdown}
-          style={lockdown ? { color: "#ff9aa5", borderColor: "#ff9aa533" } : { background: "#f81e36", color: "#000", fontWeight: "bold" }}
         >
           {busy ? "กำลังประมวลผล..." : lockdown ? "ปลดล็อก (LIFT LOCKDOWN)" : "LOCKDOWN"}
         </button>
       </div>
 
       <div className="sentinel-tally" style={{ color: "#ffb3bb", margin: "10px 0" }}>
-        <span className="tally crit" style={{ color: "#ff9aa5" }}>วิกฤต {critical}</span>
-        <span className="tally high" style={{ color: "#ffcc66" }}>สูง {high}</span>
-        <span className="tally warn" style={{ color: "#f81e36" }}>เตือน {counts.warn ?? 0}</span>
-        <small style={{ color: "#cc8888" }}>· 24 ชม.</small>
+        <span className="tally crit" style={{ color: "#f87171", border: "1px solid #f8717144", borderRadius: 6, padding: "2px 9px" }}>วิกฤต {critical}</span>
+        <span className="tally high" style={{ color: "#e0a33e", border: "1px solid #e0a33e44", borderRadius: 6, padding: "2px 9px" }}>สูง {high}</span>
+        <span className="tally warn" style={{ color: "#e8c84d", border: "1px solid #e8c84d44", borderRadius: 6, padding: "2px 9px" }}>เตือน {counts.warn ?? 0}</span>
+        <small style={{ color: "#8a8f99" }}>· 24 ชม.</small>
       </div>
 
       {lockdown ? (
@@ -126,10 +126,10 @@ export function SecurityMonitor() {
           <li className="muted" style={{ color: "#ffb3bb" }}>ไม่มีเหตุการณ์ด้านความปลอดภัย</li>
         ) : (
           events.slice(0, 12).map((ev) => (
-            <li key={ev.id} className={`sev-${ev.severity}`} style={{ borderBottom: "1px solid #f81e3611", padding: "6px 0", fontSize: "11px" }}>
-              <span className="sev-tag" style={{ background: "#3a080f", color: "#f81e36", padding: "2px 6px", marginRight: "8px", border: "1px solid #f81e3633" }}>{SEV_LABEL[ev.severity] ?? ev.severity}</span>
-              <span className="sev-kind" style={{ color: "#f81e36", fontWeight: "bold", marginRight: "8px" }}>{ev.kind}</span>
-              <span className="sev-detail" style={{ color: "#ffb3bb" }}>{ev.detail ?? ev.command ?? ""}</span>
+            <li key={ev.id} className={`sev-${ev.severity}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "6px 0", fontSize: "11px" }}>
+              <span className="sev-tag" style={{ background: `${SEV_COLOR[ev.severity] ?? "#8a8f99"}1e`, color: SEV_COLOR[ev.severity] ?? "#8a8f99", padding: "2px 7px", marginRight: "8px", borderRadius: 4, border: `1px solid ${SEV_COLOR[ev.severity] ?? "#8a8f99"}44` }}>{SEV_LABEL[ev.severity] ?? ev.severity}</span>
+              <span className="sev-kind" style={{ color: "#e4e6ea", fontWeight: "bold", marginRight: "8px" }}>{ev.kind}</span>
+              <span className="sev-detail" style={{ color: "#8a8f99" }}>{ev.detail ?? ev.command ?? ""}</span>
             </li>
           ))
         )}
