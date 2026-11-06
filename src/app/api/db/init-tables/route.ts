@@ -50,6 +50,22 @@ const EXTRA_TABLES: { name: string; sql: string }[] = [
       UNIQUE KEY uniq_ip (ip)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
+  {
+    name: "cve_intel",
+    sql: `CREATE TABLE IF NOT EXISTS cve_intel (
+      cve_id VARCHAR(32) NOT NULL,
+      cvss DECIMAL(3,1) NULL,
+      severity VARCHAR(12) NULL,
+      vector VARCHAR(160) NULL,
+      published VARCHAR(32) NULL,
+      description TEXT NULL,
+      source VARCHAR(16) NOT NULL DEFAULT 'nvd',
+      status VARCHAR(16) NOT NULL DEFAULT 'ok',
+      fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (cve_id),
+      KEY idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
 ];
 
 // Fixed, idempotent column migrations for existing databases. Re-running just

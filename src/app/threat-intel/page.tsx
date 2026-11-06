@@ -15,6 +15,7 @@ import { Sidebar } from "@/components/hud/Sidebar";
 
 import { scanIpsForVulns } from "@/app/takeover/scan-actions";
 import {
+  enrichCves,
   getCveDetail,
   getEnvironmentCves,
   getRadarBatch,
@@ -44,9 +45,14 @@ const CRITICAL_SVC = new Set([
   "nfs",
 ]);
 
-type Severity = "CRITICAL" | "HIGH" | "MEDIUM";
+type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
 
+// Real NVD severity when the CVE is enriched; otherwise a provisional estimate
+// from service exposure (shown as "~" in the UI) until NVD confirms it.
 function severityOf(cve: EnvCve): Severity {
+  if (cve.enriched && cve.nvdSeverity) {
+    return cve.nvdSeverity === "NONE" ? "INFO" : cve.nvdSeverity;
+  }
   const hasCritical = cve.services.some((s) =>
     CRITICAL_SVC.has(s.toLowerCase()),
   );
@@ -80,6 +86,20 @@ const SEV_META: Record<
     border: "border-amber-500/40",
     dot: "bg-amber-400",
   },
+  LOW: {
+    label: "LOW",
+    text: "text-sky-300",
+    bg: "bg-sky-500/10",
+    border: "border-sky-500/40",
+    dot: "bg-sky-400",
+  },
+  INFO: {
+    label: "INFO",
+    text: "text-slate-300",
+    bg: "bg-slate-500/10",
+    border: "border-slate-500/30",
+    dot: "bg-slate-400",
+  },
 };
 
 type Alert = {
@@ -104,9 +124,11 @@ export default function ThreatIntelPage() {
     totalCves: 0,
     affected: 0,
     critical: 0,
+    enriched: 0,
   });
   const [message, setMessage] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [enriching, setEnriching] = useState(false);
 
   const [radarOn, setRadarOn] = useState(false);
   const [intervalMs, setIntervalMs] = useState(20000);
@@ -125,6 +147,7 @@ export default function ThreatIntelPage() {
   } | null>(null);
 
   const seenRef = useRef<Set<string>>(new Set());
+  const alertedRef = useRef<Set<string>>(new Set());
   const radarRef = useRef(false);
   const tickingRef = useRef(false);
 
@@ -133,7 +156,10 @@ export default function ThreatIntelPage() {
     setStats({
       totalCves: list.length,
       affected: list.reduce((m, c) => Math.max(m, c.assets), 0),
-      critical: list.filter((c) => severityOf(c) === "CRITICAL").length,
+      // Count only NVD-confirmed CRITICAL to avoid heuristic over-counting.
+      critical: list.filter((c) => c.enriched && c.nvdSeverity === "CRITICAL")
+        .length,
+      enriched: list.filter((c) => c.enriched).length,
     });
   }, []);
 
@@ -180,7 +206,21 @@ export default function ThreatIntelPage() {
     });
   }, []);
 
-  // One radar sweep: pick targets, passive-scan, refresh, raise alerts.
+  // Raise alerts only for NVD-confirmed severe CVEs (CRITICAL/HIGH).
+  const raiseAlerts = useCallback(
+    (list: EnvCve[]) => {
+      for (const c of list) {
+        if (!c.enriched || !c.nvdSeverity) continue;
+        if (c.nvdSeverity !== "CRITICAL" && c.nvdSeverity !== "HIGH") continue;
+        if (alertedRef.current.has(c.cve)) continue;
+        alertedRef.current.add(c.cve);
+        pushAlert(c);
+      }
+    },
+    [pushAlert],
+  );
+
+  // One radar sweep: scan targets → enrich new CVEs from NVD → refresh → alert.
   const tick = useCallback(async () => {
     if (tickingRef.current) return;
     tickingRef.current = true;
@@ -190,27 +230,59 @@ export default function ThreatIntelPage() {
       if (batch.ok && batch.ips.length) {
         await scanIpsForVulns(batch.ips);
       }
-      const list = await loadCves(false);
-      // New CVEs discovered since last seen → alert the severe ones.
+      let list = await loadCves(false);
+
+      // Count newly discovered CVEs this sweep (for the activity graph).
       let found = 0;
       for (const c of list) {
         if (!seenRef.current.has(c.cve)) {
           seenRef.current.add(c.cve);
           found++;
-          if (severityOf(c) === "CRITICAL" || severityOf(c) === "HIGH") {
-            pushAlert(c);
-          }
         }
       }
+
+      // Enrich any un-enriched CVEs from NVD (throttled server-side).
+      const pending = list.filter((c) => !c.enriched).map((c) => c.cve);
+      if (pending.length) {
+        setEnriching(true);
+        await enrichCves(pending, 6);
+        setEnriching(false);
+        list = await loadCves(false);
+      }
+
+      raiseAlerts(list);
       setHistory((h) => [...h, found].slice(-28));
       setBlips(batch.ok ? batch.ips.length : 0);
       setLastTick(new Date().toLocaleTimeString("en-GB", { hour12: false }));
       setSweeps((n) => n + 1);
     } finally {
       setScanning(false);
+      setEnriching(false);
       tickingRef.current = false;
     }
-  }, [loadCves, pushAlert]);
+  }, [loadCves, raiseAlerts]);
+
+  // Manual one-shot: enrich everything still missing CVSS, in batches.
+  const enrichAll = useCallback(async () => {
+    if (enriching) return;
+    setEnriching(true);
+    try {
+      let guard = 0;
+      // Loop a few batches; each respects NVD rate limits server-side.
+      while (guard++ < 12) {
+        const list = await loadCves(false);
+        const pending = list.filter((c) => !c.enriched).map((c) => c.cve);
+        if (!pending.length) break;
+        const r = await enrichCves(pending, 6);
+        await loadCves(false);
+        if (r.rateLimited) break;
+        if (r.fetched === 0) break;
+      }
+      raiseAlerts(await loadCves(false));
+    } finally {
+      setEnriching(false);
+    }
+  }, [enriching, loadCves, raiseAlerts]);
 
   // Radar loop.
   useEffect(() => {
@@ -230,11 +302,8 @@ export default function ThreatIntelPage() {
   }, [radarOn, intervalMs, tick]);
 
   function startRadar() {
-    // Seed current severe CVEs as alerts so the operator sees them immediately.
-    const severe = cves
-      .filter((c) => severityOf(c) === "CRITICAL")
-      .slice(0, 5);
-    severe.forEach(pushAlert);
+    // Surface already-confirmed severe CVEs immediately, then sweep.
+    raiseAlerts(cves);
     setRadarOn(true);
   }
 
@@ -316,11 +385,28 @@ export default function ThreatIntelPage() {
 
           {/* CVE table */}
           <section className="rounded border border-[#303649] bg-[#0e1017] p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-slate-400" />
-              <h2 className="text-xs font-bold tracking-widest text-white">
-                CVE ที่พบในระบบ (เรียงตามจำนวน asset ที่กระทบ)
-              </h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-slate-400" />
+                <h2 className="text-xs font-bold tracking-widest text-white">
+                  CVE ที่พบในระบบ (เรียงตาม CVSS จริงจาก NVD)
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-500">
+                  enrich แล้ว{" "}
+                  <b className="text-cyan-300">{stats.enriched}</b>/
+                  {stats.totalCves}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void enrichAll()}
+                  disabled={enriching || stats.enriched >= stats.totalCves}
+                  className="rounded border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-bold tracking-wider text-cyan-300 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {enriching ? "กำลัง enrich..." : "ENRICH จาก NVD"}
+                </button>
+              </div>
             </div>
 
             <div className="max-h-[560px] overflow-auto rounded border border-[#1c2130]">
@@ -329,6 +415,7 @@ export default function ThreatIntelPage() {
                   <tr className="text-[9px] font-bold tracking-widest text-slate-500">
                     <th className="px-3 py-2.5">CVE</th>
                     <th className="px-3 py-2.5">SEVERITY</th>
+                    <th className="px-3 py-2.5 text-center">CVSS</th>
                     <th className="px-3 py-2.5 text-center">ASSETS</th>
                     <th className="px-3 py-2.5">SERVICES</th>
                     <th className="px-3 py-2.5">PORTS</th>
@@ -339,7 +426,7 @@ export default function ThreatIntelPage() {
                 <tbody>
                   {cves.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-3 py-10 text-center text-slate-500">
+                      <td colSpan={8} className="px-3 py-10 text-center text-slate-500">
                         {loading
                           ? "กำลังโหลด..."
                           : "ยังไม่พบ CVE — เริ่มเรดาร์เพื่อสแกนหาช่องโหว่"}
@@ -360,10 +447,23 @@ export default function ThreatIntelPage() {
                           <td className="px-3 py-2.5">
                             <span
                               className={`inline-flex items-center gap-1.5 rounded border ${meta.border} ${meta.bg} px-2 py-0.5 text-[10px] font-bold ${meta.text}`}
+                              title={
+                                c.enriched
+                                  ? "ยืนยันจาก NVD CVSS"
+                                  : "ประเมินเบื้องต้น (ยังไม่ enrich จาก NVD)"
+                              }
                             >
                               <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+                              {c.enriched ? "" : "~"}
                               {meta.label}
                             </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-center font-mono">
+                            {c.cvss != null ? (
+                              <span className={meta.text}>{c.cvss.toFixed(1)}</span>
+                            ) : (
+                              <span className="text-slate-600">—</span>
+                            )}
                           </td>
                           <td className="px-3 py-2.5 text-center font-mono text-slate-200">
                             {c.assets}
