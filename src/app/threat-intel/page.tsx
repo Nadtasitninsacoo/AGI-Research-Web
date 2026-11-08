@@ -14,12 +14,10 @@ import { Navbar } from "@/components/hud/Navbar";
 import { Sidebar } from "@/components/hud/Sidebar";
 
 import { usePersistentState } from "@/lib/usePersistentState";
-import { scanIpsForVulns } from "@/app/takeover/scan-actions";
 import {
   enrichCves,
   getCveDetail,
   getEnvironmentCves,
-  getRadarBatch,
   type CveDetail,
   type EnvCve,
 } from "./actions";
@@ -256,8 +254,6 @@ export default function ThreatIntelPage() {
 
   const seenRef = useRef<Set<string>>(new Set());
   const alertedRef = useRef<Set<string>>(new Set());
-  const radarRef = useRef(false);
-  const tickingRef = useRef(false);
 
   const applyCves = useCallback((list: EnvCve[]) => {
     setCves(list);
@@ -328,47 +324,34 @@ export default function ThreatIntelPage() {
     [pushAlert],
   );
 
-  // One radar sweep: scan targets → enrich new CVEs from NVD → refresh → alert.
-  const tick = useCallback(async () => {
-    if (tickingRef.current) return;
-    tickingRef.current = true;
-    setScanning(true);
+  // The sweeping now runs on the SERVER (src/lib/threatRadar.ts) so it keeps going
+  // when you navigate away / close the tab. This only reflects the server: pull its
+  // status and refresh the CVE table + alerts from whatever it has written to the DB.
+  const syncRadar = useCallback(async () => {
     try {
-      const batch = await getRadarBatch(12);
-      if (batch.ok && batch.ips.length) {
-        await scanIpsForVulns(batch.ips);
-      }
-      let list = await loadCves(false);
-
-      // Count newly discovered CVEs this sweep (for the activity graph).
-      let found = 0;
-      for (const c of list) {
-        if (!seenRef.current.has(c.cve)) {
-          seenRef.current.add(c.cve);
-          found++;
-        }
-      }
-
-      // Enrich any un-enriched CVEs from NVD (throttled server-side).
-      const pending = list.filter((c) => !c.enriched).map((c) => c.cve);
-      if (pending.length) {
-        setEnriching(true);
-        await enrichCves(pending, 6);
-        setEnriching(false);
-        list = await loadCves(false);
-      }
-
-      raiseAlerts(list);
-      setHistory((h) => [...h, found].slice(-28));
-      setBlips(batch.ok ? batch.ips.length : 0);
-      setLastTick(new Date().toLocaleTimeString("en-GB", { hour12: false }));
-      setSweeps((n) => n + 1);
-    } finally {
-      setScanning(false);
-      setEnriching(false);
-      tickingRef.current = false;
+      const res = await fetch("/api/threat-radar", { cache: "no-store" });
+      const s = (await res.json()) as {
+        running?: boolean;
+        ticking?: boolean;
+        sweeps?: number;
+        lastBatchSize?: number;
+        history?: number[];
+        lastTickAt?: number | null;
+      };
+      setRadarOn(!!s.running);
+      setScanning(!!s.ticking);
+      if (typeof s.sweeps === "number") setSweeps(s.sweeps);
+      if (typeof s.lastBatchSize === "number") setBlips(s.lastBatchSize);
+      if (Array.isArray(s.history)) setHistory(s.history);
+      if (s.lastTickAt)
+        setLastTick(new Date(s.lastTickAt).toLocaleTimeString("en-GB", { hour12: false }));
+    } catch {
+      /* server momentarily unreachable — keep showing last known state */
     }
-  }, [loadCves, raiseAlerts]);
+    // Reflect whatever the background sweep has stored.
+    const list = await loadCves(false);
+    raiseAlerts(list);
+  }, [loadCves, raiseAlerts, setRadarOn, setSweeps, setHistory, setLastTick]);
 
   // Manual one-shot: enrich everything still missing CVSS, in batches.
   const enrichAll = useCallback(async () => {
@@ -424,27 +407,61 @@ export default function ThreatIntelPage() {
     };
   }, [autoEnrich, loadCves]);
 
-  // Radar loop.
+  // Reflect the server radar: poll status + refresh CVEs every 5s. Runs regardless
+  // of radarOn so re-opening the page shows the live server state (even if the sweep
+  // was started elsewhere or kept running while this tab was closed).
   useEffect(() => {
-    radarRef.current = radarOn;
-    if (!radarOn) return;
     let stopped = false;
-    const run = async () => {
-      if (stopped || !radarRef.current) return;
-      await tick();
+    const run = () => {
+      if (!stopped) void syncRadar();
     };
-    void run();
-    const id = window.setInterval(() => void run(), intervalMs);
+    run(); // immediate sync on mount
+    const id = window.setInterval(run, 5000);
     return () => {
       stopped = true;
       window.clearInterval(id);
     };
-  }, [radarOn, intervalMs, tick]);
+  }, [syncRadar]);
 
-  function startRadar() {
-    // Surface already-confirmed severe CVEs immediately, then sweep.
+  async function startRadar() {
     raiseAlerts(cves);
     setRadarOn(true);
+    try {
+      await fetch("/api/threat-radar", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        // auto: keep sweeping so IPs saved later get picked up automatically.
+        body: JSON.stringify({ action: "start", intervalMs, auto: true }),
+      });
+    } catch {
+      /* ignore — poll will reflect real state */
+    }
+    void syncRadar();
+  }
+
+  async function stopRadarNow() {
+    setRadarOn(false);
+    try {
+      await fetch("/api/threat-radar", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "stop" }),
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function changeInterval(ms: number) {
+    setIntervalMs(ms);
+    // Apply the new cadence live if the server radar is already running.
+    if (radarOn) {
+      void fetch("/api/threat-radar", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "start", intervalMs: ms, auto: true }),
+      });
+    }
   }
 
   async function openDetail(cve: string) {
@@ -496,9 +513,9 @@ export default function ThreatIntelPage() {
             intervalMs={intervalMs}
             critical={stats.critical}
             alerts={alerts.length}
-            onInterval={setIntervalMs}
+            onInterval={changeInterval}
             onStart={startRadar}
-            onStop={() => setRadarOn(false)}
+            onStop={stopRadarNow}
           />
 
           {message ? (
