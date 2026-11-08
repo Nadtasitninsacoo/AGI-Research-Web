@@ -101,7 +101,7 @@ export default function LoginPage() {
         }}
       >
         {/* โลโก้ */}
-        <div style={{ display: "grid", placeItems: "center", marginBottom: 14 }}>
+        <div className="login-logo" style={{ marginBottom: 14 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/agi-logo.png"

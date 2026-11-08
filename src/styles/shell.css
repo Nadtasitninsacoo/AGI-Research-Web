@@ -157,6 +157,58 @@
   filter: drop-shadow(0 0 9px rgba(242, 27, 50, 0.45));
 }
 
+/* running-light ring for the login page logo (same effect as sidebar .brand) */
+.login-logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.login-logo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 18%,
+    rgba(242, 27, 50, 0.4) 46%,
+    rgba(255, 130, 140, 0.7) 50%,
+    rgba(242, 27, 50, 0.4) 54%,
+    transparent 82%
+  );
+  background-size: 220% 100%;
+  mix-blend-mode: screen;
+  opacity: 0.6;
+  animation: brand-sweep 3.4s linear infinite;
+}
+
+.login-logo::after {
+  content: "";
+  position: absolute;
+  inset: -45%;
+  z-index: 0;
+  pointer-events: none;
+  background: conic-gradient(from 0deg, transparent 0 68%, rgba(242, 27, 50, 0.55) 84%, transparent 100%);
+  filter: blur(7px);
+  opacity: 0.3;
+  animation: brand-spin 6.5s linear infinite;
+}
+
+.login-logo > img {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-logo::before,
+  .login-logo::after { animation: none; opacity: 0.14; }
+}
+
 .brand-text {
   display: flex;
   flex-direction: column;
