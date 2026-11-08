@@ -269,17 +269,24 @@ export default function ThreatIntelPage() {
 
   const loadCves = useCallback(
     async (seedSeen: boolean) => {
-      const res = await getEnvironmentCves();
-      if (!res.ok) {
-        setMessage(res.message);
+      try {
+        const res = await getEnvironmentCves();
+        if (!res.ok) {
+          setMessage(res.message);
+          return [];
+        }
+        setMessage("");
+        applyCves(res.cves);
+        if (seedSeen) {
+          seenRef.current = new Set(res.cves.map((c) => c.cve));
+        }
+        return res.cves;
+      } catch {
+        // A transient failure (aborted request on navigation, slow network, dev
+        // fast-refresh) must not bubble up as an unhandled rejection / error
+        // overlay — just keep the current data and try again next poll.
         return [];
       }
-      setMessage("");
-      applyCves(res.cves);
-      if (seedSeen) {
-        seenRef.current = new Set(res.cves.map((c) => c.cve));
-      }
-      return res.cves;
     },
     [applyCves],
   );
@@ -460,6 +467,8 @@ export default function ThreatIntelPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "start", intervalMs: ms, auto: true }),
+      }).catch(() => {
+        /* ignore — the 5s poll will reconcile the real state */
       });
     }
   }
