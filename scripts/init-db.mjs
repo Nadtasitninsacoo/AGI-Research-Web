@@ -65,10 +65,13 @@ const MIGRATIONS = [
   `ALTER TABLE saved_ports ADD COLUMN scanned_at TIMESTAMP NULL DEFAULT NULL`,
 ];
 
-// Admin (root) connection — needed to CREATE the database/tables. The app user in
-// .env.local normally has DML only, so use root here.
-const adminUser = process.argv[2] || process.env.MYSQL_ADMIN_USER || 'root';
-const adminPassword = process.argv[3] ?? process.env.MYSQL_ADMIN_PASSWORD ?? '';
+// Connection for creating the DB/tables. Default to the .env.local DATABASE_USER
+// (the same creds the app uses — on a fresh Laragon they usually have CREATE), or
+// pass an admin user/password as args: `scripts/init-db.mjs <user> <password>`.
+const adminUser =
+  process.argv[2] || process.env.MYSQL_ADMIN_USER || process.env.DATABASE_USER || 'root';
+const adminPassword =
+  process.argv[3] ?? process.env.MYSQL_ADMIN_PASSWORD ?? process.env.DATABASE_PASSWORD ?? '';
 
 let conn;
 try {
