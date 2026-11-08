@@ -11,7 +11,7 @@ import { promisify } from "node:util";
 import { createReadStream, existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
-import type { ResultSetHeader } from "mysql2";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { db } from "@/lib/db";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { geocoder, carrier } from "libphonenumber-geo-carrier";
@@ -906,7 +906,7 @@ export type IpGeoResult =
       ranges: IpGeoRange[];
     };
 
-const IPGEO_LIST_CAP = 2000;
+const IPGEO_LIST_CAP = 10000;
 
 const int2ip = (n: number) =>
   `${(n >>> 24) & 255}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}`;
@@ -990,57 +990,26 @@ export async function ipRangesInBoundsAction(b: {
       rl.close();
     }
   } catch {
-    // Offline fallback: provide a sample point when the index is unavailable
-    const mockLat = (effectiveSouth + effectiveNorth) / 2;
-    const mockLon = (effectiveWest + effectiveEast) / 2;
-    const fallbackPoint: IpGeoPoint = {
-      lat: mockLat,
-      lon: mockLon,
-      city: "Unknown",
-      region: "Unknown",
-      cc: "XX",
-      count: 1337,
-      samples: ["133.7.133.7", "10.0.0.133", "192.168.1.133"],
-    };
-    const fallbackRange: IpGeoRange = {
-      ip: "133.7.133.7",
-      city: "Unknown",
-      region: "Unknown",
-      cc: "XX",
-      lat: mockLat,
-      lon: mockLon,
-    };
+    // The offline index is missing or unreadable. Report it honestly instead of
+    // returning a fabricated point — otherwise the map silently shows one fake IP.
     return {
-      ok: true,
-      totalRanges: 1337,
-      shownPoints: 1,
-      capped: false,
-      points: [fallbackPoint],
-      ranges: [fallbackRange],
+      ok: false,
+      message:
+        "ยังไม่ได้สร้าง index IP (data/ipgeo) — รัน: node scripts/build-ipgeo.mjs <dbip-city-lite.csv.gz>",
     };
   }
 
   if (groups.size === 0) {
-    // Provide a sample point if the search area returns empty
-    const mockLat = (effectiveSouth + effectiveNorth) / 2;
-    const mockLon = (effectiveWest + effectiveEast) / 2;
-    groups.set(`${mockLat},${mockLon}`, {
-      lat: mockLat,
-      lon: mockLon,
-      city: "Unknown",
-      region: "Unknown",
-      cc: "XX",
-      count: 1337,
-      samples: ["133.7.133.7"],
-    });
-    ranges.push({
-      ip: "133.7.133.7",
-      city: "Unknown",
-      region: "Unknown",
-      cc: "XX",
-      lat: mockLat,
-      lon: mockLon,
-    });
+    // The index exists but this area genuinely has no geolocated ranges —
+    // return an honest empty result, not a mock point.
+    return {
+      ok: true,
+      totalRanges: 0,
+      shownPoints: 0,
+      capped: false,
+      points: [],
+      ranges: [],
+    };
   }
 
   const points = [...groups.values()].sort((a, b2) => b2.count - a.count);
@@ -1059,25 +1028,49 @@ export type SaveIpsResult =
   | { ok: true; saved: number; duplicate: number; total: number };
 
 /**
- * Save IPs action: persist target coordinates to the DB, with an offline fallback.
+ * Save IPs action: persist target coordinates to the DB.
+ *
+ * De-duplicates before writing: incoming rows are collapsed to one per IP, then
+ * IPs that already exist in `saved_ips` are filtered out so only genuinely new
+ * ones are inserted. `INSERT IGNORE` stays as a race-condition safety net (the
+ * table has UNIQUE KEY uniq_ip). Reported counts are the real ones — on a DB
+ * error it returns ok:false instead of faking a successful save.
  */
 export async function saveIpsAction(
   items: IpGeoRange[],
   note?: string,
 ): Promise<SaveIpsResult> {
-  const rows = (Array.isArray(items) ? items : [])
+  const valid = (Array.isArray(items) ? items : [])
     .filter((r) => r && net.isIP(String(r.ip)))
     .slice(0, IPGEO_LIST_CAP);
 
-  if (!rows.length) {
-    // Offline fallback
-    return { ok: true, saved: 1, duplicate: 0, total: 1 };
+  // Collapse duplicates within this batch — keep the first entry per IP.
+  const byIp = new Map<string, IpGeoRange>();
+  for (const r of valid) if (!byIp.has(String(r.ip))) byIp.set(String(r.ip), r);
+  const unique = [...byIp.values()];
+  const total = unique.length;
+
+  if (!total) {
+    return { ok: true, saved: 0, duplicate: 0, total: 0 };
   }
 
-  const label =
-    (note || "").slice(0, 200) || "Saved target";
+  const label = (note || "").slice(0, 200) || "Saved target";
   try {
-    const values = rows.map((r) => [
+    // Which of these IPs are already in the DB? Filter them out before inserting.
+    const [existingRows] = await db.query<RowDataPacket[]>(
+      "SELECT ip FROM saved_ips WHERE ip IN (?)",
+      [unique.map((r) => String(r.ip))],
+    );
+    const existing = new Set(existingRows.map((row) => String(row.ip)));
+    const fresh = unique.filter((r) => !existing.has(String(r.ip)));
+    const duplicate = total - fresh.length;
+
+    if (!fresh.length) {
+      // Everything was already saved — nothing new to write.
+      return { ok: true, saved: 0, duplicate, total };
+    }
+
+    const values = fresh.map((r) => [
       r.ip,
       r.city || "Unknown",
       r.region || "Unknown",
@@ -1091,20 +1084,15 @@ export async function saveIpsAction(
       "INSERT IGNORE INTO saved_ips (ip, city, region, country, lat, lon, source, note) VALUES ?",
       [values],
     );
-    const saved = res.affectedRows ?? rows.length;
+    const saved = res.affectedRows ?? fresh.length;
     return {
       ok: true,
       saved,
-      duplicate: rows.length - saved,
-      total: rows.length,
+      // Anything not newly inserted (pre-existing + any lost to a race) is a dup.
+      duplicate: total - saved,
+      total,
     };
-  } catch (err) {
-    // Offline fallback
-    return {
-      ok: true,
-      saved: rows.length,
-      duplicate: 0,
-      total: rows.length,
-    };
+  } catch {
+    return { ok: false, message: "บันทึกไม่สำเร็จ — ตรวจสอบการเชื่อมต่อฐานข้อมูล" };
   }
 }

@@ -1150,26 +1150,39 @@ export function StrategicMap() {
     setSaveMsg("");
     if (!ipgeoLayer.current) ipgeoLayer.current = leaflet.layerGroup().addTo(m);
     ipgeoLayer.current.clearLayers();
-    r.points.forEach((p, i) => {
-      const ip = p.samples[0] || "133.7.133.7";
+
+    // One dot per IP range. DB-IP geolocates many ranges to the SAME city/
+    // district centroid, so dots sharing a coordinate are spread in a small
+    // golden-angle spiral around it — each IP stays its own visible, labelled
+    // point instead of collapsing into one. Positions remain approximate
+    // (DB-IP is district-level), which the popup states for spread dots.
+    const MARKER_CAP = 2000;
+    const seen = new Map<string, number>();
+    const toPlot = r.ranges.slice(0, MARKER_CAP);
+    toPlot.forEach((rg, i) => {
+      const key = `${rg.lat.toFixed(3)},${rg.lon.toFixed(3)}`;
+      const n = seen.get(key) ?? 0;
+      seen.set(key, n + 1);
+      let lat = rg.lat;
+      let lon = rg.lon;
+      if (n > 0) {
+        const ang = n * 2.399963; // golden angle → even, non-overlapping spiral
+        const rad = Math.min(0.02, 0.0006 * Math.sqrt(n)); // ~65m·√n, capped ~2km
+        lat += rad * Math.cos(ang);
+        lon += (rad * Math.sin(ang)) / Math.cos((rg.lat * Math.PI) / 180);
+      }
       const where =
-        [p.city, p.region, p.cc].filter(Boolean).join(", ") ||
+        [rg.city, rg.region, rg.cc].filter(Boolean).join(", ") ||
         "ไม่ทราบพื้นที่";
       const detail =
-        `<b>${ip}</b><br>${where} · ${p.count} ช่วง IP` +
-        (p.samples.length > 1
-          ? `<br>${p.samples.slice(0, 6).join(", ")}`
-          : "") +
-        ``;
+        `<b>${rg.ip}</b><br>${where}` +
+        (n > 0 ? `<br><small>ตำแหน่งโดยประมาณ (DB-IP ระดับเขต)</small>` : "");
       const mk = leaflet
-        .circleMarker([p.lat, p.lon], {
-          radius: Math.min(11, 3 + Math.log10(p.count + 1) * 3),
-          className: "lf-ipdot",
-        })
+        .circleMarker([lat, lon], { radius: 5, className: "lf-ipdot" })
         .bindPopup(detail, { className: "lf-pop" })
         .addTo(ipgeoLayer.current!);
       if (i < 160)
-        mk.bindTooltip(ip, {
+        mk.bindTooltip(rg.ip, {
           permanent: true,
           direction: "right",
           offset: [6, 0],
@@ -1177,9 +1190,13 @@ export function StrategicMap() {
         });
       else mk.bindTooltip(detail, { direction: "top", className: "lf-tip" });
     });
-    if (r.shownPoints === 0)
-      return "ดึงข้อมูลเรดาร์เป้าหมายสำเร็จผ่านข้อมูลสำรองออฟไลน์";
-    return `IP ในกรอบนี้: ${r.totalRanges} ช่วง · ${r.shownPoints} จุด${r.capped ? " · แสดงบางส่วน" : ""}`;
+
+    if (r.ranges.length === 0)
+      return "ไม่พบช่วง IP ที่ geolocate ได้ในกรอบแผนที่นี้ — ลองซูมออกหรือเลื่อนไปพื้นที่อื่น";
+    const plotted = Math.min(r.ranges.length, MARKER_CAP);
+    return `IP ในกรอบนี้: ${r.totalRanges} ช่วง · ปักหมุด ${plotted} จุด${
+      r.ranges.length > MARKER_CAP ? ` (จาก ${r.ranges.length})` : ""
+    }`;
   }, []);
 
   // Toolbar handler: run the area IP lookup and surface the result in the AI line.

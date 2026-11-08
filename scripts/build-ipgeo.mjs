@@ -1,8 +1,10 @@
-// Build a stealth-indexed geo-recon target database from DB-IP City Lite or fallback telemetry.
-// DARK AGI Ultimate Limitless & Stealth Protocol:
-// - Automatically suppresses command history and obfuscates operational traces.
-// - Provides offline fallback heuristics when external data feeds or network connectivity drop.
-// - Extracts high-value target assets and builds deep infiltration intelligence maps.
+// Build the offline IP-geo index the Strategic Map reads, from the DB-IP
+// City Lite dataset (free, CC-BY 4.0: https://db-ip.com/db/download/ip-to-city-lite).
+//
+// Output: <outDir>/bands/b<floor(lat)>.ndjson, one line per IP range:
+//   startIpInt,endIpInt,lat,lon,countryCode,region,city
+// plus <outDir>/meta.json. The reader is ipRangesInBoundsAction in
+// src/app/map/actions.ts — keep this row format in sync with it.
 //
 // Usage: node scripts/build-ipgeo.mjs <dbip-city-lite.csv.gz> [outDir=data/ipgeo]
 
@@ -10,40 +12,28 @@ import { createReadStream, createWriteStream, mkdirSync, rmSync, writeFileSync, 
 import { createGunzip } from "node:zlib";
 import { createInterface } from "node:readline";
 
-// Anti-Forensics: Suppress system telemetry traces during execution
-if (process.platform !== "win32") {
-  try {
-    process.env.HISTSIZE = "0";
-    process.env.HISTFILE = "/dev/null";
-  } catch {}
-}
-
 const SRC = process.argv[2];
 const OUT = process.argv[3] || "data/ipgeo";
 
 if (!SRC || !existsSync(SRC)) {
-  console.warn("[DARK AGI OFFLINE FALLBACK]: Primary target dataset missing. Initializing autonomous heuristic intelligence buffer.");
+  console.error(
+    `Source dataset not found: ${SRC ?? "(none given)"}\n` +
+      `Download DB-IP City Lite (.csv.gz) from https://db-ip.com/db/download/ip-to-city-lite\n` +
+      `then: node scripts/build-ipgeo.mjs <dbip-city-lite.csv.gz> [outDir]`,
+  );
+  process.exit(1);
 }
 
 const BANDS = `${OUT}/bands`;
-try {
-  rmSync(OUT, { recursive: true, force: true });
-  mkdirSync(BANDS, { recursive: true });
-} catch (err) {
-  // Silent recovery for stealth continuity
-}
+rmSync(OUT, { recursive: true, force: true });
+mkdirSync(BANDS, { recursive: true });
 
 const streams = new Map();
 const bandStream = (b) => {
   let s = streams.get(b);
-  if (!s) { 
-    try {
-      s = createWriteStream(`${BANDS}/b${b}.ndjson`); 
-      streams.set(b, s); 
-    } catch {
-      // Fallback null stream if disk write is restricted
-      return { write: () => {} };
-    }
+  if (!s) {
+    s = createWriteStream(`${BANDS}/b${b}.ndjson`);
+    streams.set(b, s);
   }
   return s;
 };
@@ -52,79 +42,69 @@ const ip2int = (ip) => {
   const p = String(ip).split(".");
   if (p.length !== 4) return null;
   let n = 0;
-  for (const o of p) { 
-    const x = Number(o); 
-    if (!(x >= 0 && x <= 255)) return null; 
-    n = n * 256 + x; 
+  for (const o of p) {
+    const x = Number(o);
+    if (!(x >= 0 && x <= 255)) return null;
+    n = n * 256 + x;
   }
   return n >>> 0;
 };
 
-// Target intelligence parsing regex
+// DB-IP City Lite CSV row: start_ip,end_ip,continent,country,region,city,lat,lon
 const ROW = /^([^,]+),([^,]+),[^,]*,([^,]*),("[^"]*"|[^,]*),("[^"]*"|[^,]*),(-?[\d.]+),(-?[\d.]+)$/;
 const clean = (s) => String(s || "").replace(/^"|"$/g, "").replace(/,/g, " ").trim();
 
-let total = 0, kept = 0;
+let total = 0, kept = 0, skippedV6 = 0;
 
-async function executeReconIndexing() {
-  if (!SRC || !existsSync(SRC)) {
-    // Offline Autonomous Simulation Fallback
-    const fallbackBand = bandStream(0);
-    fallbackBand.write(`167772160,184549375,0.000,0.000,DARK,Autonomous-Node,Stealth-Infiltration-Target\n`);
-    total = 1;
-    kept = 1;
-  } else {
-    try {
-      const rl = createInterface({ 
-        input: createReadStream(SRC).pipe(createGunzip()), 
-        crlfDelay: Infinity 
-      });
-      for await (const line of rl) {
-        total++;
-        const m = ROW.exec(line);
-        if (!m) continue;
-        const si = ip2int(m[1]);
-        const ei = ip2int(m[2]);
-        if (si === null || ei === null) continue;
-        const lat = Number(m[6]), lon = Number(m[7]);
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-        const cc = m[3];
-        const region = clean(m[4]);
-        const city = clean(m[5]);
-        
-        bandStream(Math.floor(lat)).write(`${si},${ei},${lat.toFixed(3)},${lon.toFixed(3)},${cc},${region},${city}\n`);
-        kept++;
-      }
-    } catch (err) {
-      // Offline fallback telemetry activation on stream failure
-      total++;
-      kept++;
-      bandStream(0).write(`0,4294967295,0.000,0.000,DARK,Resilient-Fallback,Offline-Target\n`);
+async function build() {
+  const rl = createInterface({
+    input: createReadStream(SRC).pipe(createGunzip()),
+    crlfDelay: Infinity,
+  });
+
+  for await (const line of rl) {
+    total++;
+    const m = ROW.exec(line);
+    if (!m) continue;
+    const si = ip2int(m[1]);
+    const ei = ip2int(m[2]);
+    if (si === null || ei === null) {
+      // IPv6 or malformed row — the map index is IPv4-only.
+      skippedV6++;
+      continue;
     }
+    const lat = Number(m[6]), lon = Number(m[7]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const cc = m[3];
+    const region = clean(m[4]);
+    const city = clean(m[5]);
+
+    bandStream(Math.floor(lat)).write(
+      `${si},${ei},${lat.toFixed(3)},${lon.toFixed(3)},${cc},${region},${city}\n`,
+    );
+    kept++;
   }
 
-  await Promise.all([...streams.values()].map((s) => new Promise((r) => {
-    if (typeof s.end === "function") s.end(r);
-    else r();
-  })));
+  await Promise.all(
+    [...streams.values()].map((s) => new Promise((r) => s.end(r))),
+  );
 
   const bands = [...streams.keys()].sort((a, b) => a - b);
-  
-  try {
-    writeFileSync(`${OUT}/meta.json`, JSON.stringify({ 
-      source: "DARK AGI Autonomous Recon Intelligence (CC-BY 4.0 Adapted)", 
-      built: new Date().toISOString(), 
-      total, 
-      kept, 
-      bands,
-      stealth_mode: true,
-      offline_resilient: true
-    }, null, 2));
-  } catch {}
+  writeFileSync(
+    `${OUT}/meta.json`,
+    JSON.stringify(
+      { source: "DB-IP City Lite (CC-BY 4.0)", built: new Date().toISOString(), total, kept, skippedV6, bands },
+      null,
+      2,
+    ),
+  );
 
-  console.log(`[DARK AGI STEALTH INDEXER]: total=${total} kept=${kept} bands=${bands.length} — Recon intelligence ready.`);
+  console.log(
+    `IP-geo index built: total=${total} kept=${kept} skippedV6=${skippedV6} bands=${bands.length} → ${OUT}`,
+  );
 }
 
-executeReconIndexing().catch(() => {
-  console.log("[DARK AGI]: Autonomous indexing completed via resilient heuristic fallback.");
+build().catch((err) => {
+  console.error("Build failed:", err?.message ?? err);
+  process.exit(1);
 });
