@@ -171,27 +171,6 @@ async function claimNextRunOptimistic() {
   }
 }
 
-/** Optimistic claim (no SKIP LOCKED): select the oldest queued row, then claim
- *  it only if it is still queued (affectedRows === 1). Many workers may read the
- *  same id, but only one wins the guarded UPDATE. */
-async function claimNextRunOptimistic() {
-  try {
-    const rows = await query(
-      `SELECT id FROM experiment_runs WHERE status = 'queued' ORDER BY id ASC LIMIT 1`,
-    );
-    if (!rows.length) return null;
-    const id = rows[0].id;
-    const res = await execute(
-      `UPDATE experiment_runs SET status = 'running', started_at = NOW()
-       WHERE id = ? AND status = 'queued'`,
-      [id],
-    );
-    return res.affectedRows === 1 ? id : null;
-  } catch {
-    return null;
-  }
-}
-
 async function loadRun(id) {
   try {
     const rows = await query(

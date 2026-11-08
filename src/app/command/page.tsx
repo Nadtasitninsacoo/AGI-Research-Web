@@ -82,7 +82,7 @@ async function CommandContent() {
       <PageHero
         kicker="AGI RESEARCH // COMMAND CENTER"
         title="Command"
-        strong="Command Center"
+        strong="Center"
         note={`${agents.length} nodes ready`}
       />
 
