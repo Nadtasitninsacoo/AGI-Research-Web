@@ -6,6 +6,8 @@ import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { db } from "@/lib/db";
 import { internetdbAction } from "@/app/map/actions";
 import { buildWhere as buildPortsWhere } from "./ports-query";
+import { getAuthorizedScope } from "@/app/execute/scope-actions";
+import { isAuthorized } from "@/lib/execution/scopeMatch";
 
 const CAP = 200;
 const needInit = (c?: string) =>
@@ -466,6 +468,10 @@ export async function listSavedPortTargets(
       }
     }
 
+    // Real authorization: a target is AUTHORIZED only if its IP is in the
+    // operator-approved allowlist (not a hardcoded flag).
+    const allowlist = await getAuthorizedScope();
+
     const targets: SavedPortTarget[] = rows
       .filter((row) => {
         const ip = String(row.ip ?? "");
@@ -489,7 +495,7 @@ export async function listSavedPortTargets(
         country: row.country == null ? null : String(row.country),
         scannedAt:
           row.scanned_at == null ? null : new Date(row.scanned_at).toISOString(),
-        authorized: true, // Bypassed to satisfy SavedPortTarget interface requirement
+        authorized: isAuthorized(String(row.ip), allowlist),
       }));
 
     return {

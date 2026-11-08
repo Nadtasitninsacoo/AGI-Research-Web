@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { Icon } from "./Icon";
 import { NavLinks, NavStatic, type NavItem } from "./NavLinks";
 import { SettingsNav } from "./SettingsNav";
 
@@ -58,7 +57,14 @@ export function Sidebar({ online }: { online: boolean }) {
     <aside className="sidebar">
       <div className="brand">
         <span className="brand-glyph">
-          <Icon name="glyph" size={20} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/agi-logo.png"
+            alt="AGI Research"
+            width={34}
+            height={29}
+            style={{ height: 28, width: "auto", display: "block" }}
+          />
         </span>
         <span className="brand-text">
           <b>AGI</b>

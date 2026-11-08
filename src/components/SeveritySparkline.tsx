@@ -1,14 +1,17 @@
-// Deterministic severity "signature" sparkline. The primary line is coloured
-// and scaled by the real severity; the shape is stable per seed (never random
-// noise that changes each paint). Decorative — not telemetry.
+// Deterministic severity "signature" sparkline: a smooth area trend with a
+// gradient fill, a crisp 2px line, and a glowing endpoint dot. The shape is
+// stable per seed (never random each paint) and the colour is the severity's
+// status colour. Decorative — not telemetry.
 //
 // Memoized: in long lists (e.g. 1000 rows) it must NOT regenerate its SVG on
 // every parent re-render (selection toggles etc.) — only when seed/severity change.
+// Perf: no CSS blur filters (they're expensive ×1000 rows); the "glow" is a
+// second translucent dot, which stays cheap.
 
 import { memo } from "react";
 
 const SEV_HEX: Record<string, string> = {
-  CRITICAL: "#f84646",
+  CRITICAL: "#ff4d57",
   HIGH: "#ff8a4c",
   MEDIUM: "#f5c451",
   LOW: "#4aa3ff",
@@ -42,45 +45,57 @@ function seededRandom(seed: string): () => number {
   };
 }
 
+/** Catmull-Rom → cubic Bézier, so the trend reads as a smooth curve. */
+function smoothPath(pts: [number, number][]): string {
+  if (pts.length < 2) return "";
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += `C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
+
 export const SeveritySparkline = memo(function SeveritySparkline({
   seed,
   severity,
   width = 72,
   height = 20,
-  points = 22,
-  lines = 1,
+  points = 16,
 }: {
   seed: string;
   severity: string;
   width?: number;
   height?: number;
   points?: number;
-  lines?: 1 | 3;
 }) {
+  const color = severityHex(severity);
   const weight = SEV_WEIGHT[severity] ?? 0.4;
   const rnd = seededRandom(`${severity}:${seed}`);
+  const uid = `spk-${severity}-${seed}`.replace(/[^a-zA-Z0-9_-]/g, "");
 
-  const makeLine = (amp: number, drift: number) => {
-    let y = 0.5;
-    const pts: string[] = [];
-    for (let i = 0; i < points; i++) {
-      y += (rnd() - 0.5) * drift * (0.5 + weight);
-      y = Math.max(0.1, Math.min(0.9, y));
-      const x = (i / (points - 1)) * width;
-      const yy = height / 2 + (0.5 - y) * height * amp;
-      pts.push(`${x.toFixed(1)},${yy.toFixed(1)}`);
-    }
-    return pts.join(" ");
-  };
+  // Build a stable, gently-drifting series inset 2px top/bottom.
+  const padY = 2;
+  const pts: [number, number][] = [];
+  let y = 0.5;
+  for (let i = 0; i < points; i++) {
+    y += (rnd() - 0.5) * 0.3 * (0.5 + weight);
+    y = Math.max(0.12, Math.min(0.88, y));
+    const x = (i / (points - 1)) * width;
+    const yy = padY + (1 - y) * (height - padY * 2);
+    pts.push([Number(x.toFixed(1)), Number(yy.toFixed(1))]);
+  }
 
-  const series =
-    lines === 3
-      ? [
-          { color: "#5fd38a", amp: 0.72, drift: 0.22, w: 1, o: 0.5 },
-          { color: "#2de2e6", amp: 0.82, drift: 0.26, w: 1, o: 0.5 },
-          { color: severityHex(severity), amp: 0.96, drift: 0.32, w: 1.6, o: 1 },
-        ]
-      : [{ color: severityHex(severity), amp: 0.9, drift: 0.3, w: 1.4, o: 1 }];
+  const line = smoothPath(pts);
+  const area = `${line}L${width},${height}L0,${height}Z`;
+  const [ex, ey] = pts[pts.length - 1];
 
   return (
     <svg
@@ -90,20 +105,27 @@ export const SeveritySparkline = memo(function SeveritySparkline({
       preserveAspectRatio="none"
       role="img"
       aria-label={`${severity} severity signature`}
-      style={{ display: "block" }}
+      style={{ display: "block", overflow: "visible" }}
     >
-      {series.map((s) => (
-        <polyline
-          key={s.color}
-          points={makeLine(s.amp, s.drift)}
-          fill="none"
-          stroke={s.color}
-          strokeWidth={s.w}
-          strokeOpacity={s.o}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      ))}
+      <defs>
+        <linearGradient id={`${uid}-fill`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.38" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      <path d={area} fill={`url(#${uid}-fill)`} stroke="none" />
+      <path
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      {/* glow halo + crisp endpoint dot */}
+      <circle cx={ex} cy={ey} r="3.2" fill={color} opacity="0.22" />
+      <circle cx={ex} cy={ey} r="1.7" fill={color} />
     </svg>
   );
 });

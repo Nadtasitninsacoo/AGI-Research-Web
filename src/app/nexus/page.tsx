@@ -258,7 +258,7 @@ async function NexusConsole() {
                 <OpLive live={live} />
               </header>
               <div className="nx-stage">
-                <Reactor agents={agents} successRate={successRate} />
+                <Reactor agents={agents} successRate={successRate} runningRuns={t.runsRunning} />
               </div>
             </section>
 

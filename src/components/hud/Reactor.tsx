@@ -9,14 +9,26 @@ const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
  * gauge row per agent (status colour + real success%). Used on /nexus so it
  * reads differently from the Overview orbit.
  */
-export function Reactor({ agents, successRate }: { agents: AgentStat[]; successRate: number }) {
+export function Reactor({
+  agents,
+  successRate,
+  runningRuns = 0,
+}: {
+  agents: AgentStat[];
+  successRate: number;
+  /** Runs actually in flight right now — the reliable "system is working"
+   *  signal (agents.status can be stale, and sub-agents under an orchestrator
+   *  never flip it). */
+  runningRuns?: number;
+}) {
   const runs = agents.reduce((s, a) => s + a.runs, 0);
-  // The atom reacts ONLY while agents are actually working, and the harder the
-  // fleet works the stronger it moves: intensity = share of agents running.
+  // React whenever real work is happening: any run in flight OR any agent marked
+  // running. The harder the fleet works, the stronger the motion.
   const runningCount = agents.filter((a) => a.status === "running").length;
-  const reacting = runningCount > 0;
-  const intensity =
-    agents.length > 0 ? Math.min(1, runningCount / agents.length) : 0;
+  const activeRuns = Math.max(0, runningRuns);
+  const reacting = activeRuns > 0 || runningCount > 0;
+  const byAgents = agents.length > 0 ? runningCount / agents.length : 0;
+  const intensity = reacting ? Math.min(1, Math.max(byAgents, activeRuns > 0 ? 0.6 : 0)) : 0;
   return (
     <div className="reactor">
       {/* Atom: a blue/black radiation nucleus with two numbered "electron" orbs

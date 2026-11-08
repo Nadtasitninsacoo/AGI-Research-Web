@@ -206,3 +206,15 @@
 @media (max-width: 1000px) {
   .rc-filters { grid-template-columns: 1fr; }
 }
+
+/* Live scan progress (chunked streaming) */
+.rc-scanprog {
+  flex: 1; min-width: 120px; height: 7px; border-radius: 999px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.06); align-self: center;
+}
+.rc-scanprog-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, #f81e36, #ff8a4c);
+  box-shadow: 0 0 12px rgba(248, 30, 54, 0.5);
+  transition: width 0.3s ease;
+}

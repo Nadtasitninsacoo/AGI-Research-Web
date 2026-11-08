@@ -140,6 +140,8 @@ export function Recon() {
   const [pulling, setPulling] = useState(false);
 
   const [scanning, setScanning] = useState(false);
+  // Live scan progress across chunks (null when idle).
+  const [scanProg, setScanProg] = useState<{ done: number; total: number } | null>(null);
 
   // Scan results persist so a refresh keeps the last sweep instead of blanking.
   const [results, setResults] = usePersistentState<ExposureRow[] | null>(
@@ -393,24 +395,38 @@ export function Recon() {
   const scan = async () => {
     if (!parsed.length || scanning) return;
 
+    // Scan in chunks so there's live progress and NO 200-IP ceiling — results
+    // stream in as each chunk finishes instead of freezing until the whole batch
+    // is done.
+    const CHUNK = 25;
     setScanning(true);
-    setResults(null);
+    setResults([]);
+    setPullMsg("");
+    setCat("all");
+    setScanProg({ done: 0, total: parsed.length });
 
+    const all: ExposureRow[] = [];
     try {
-      const r = await reconExpose(parsed);
-      if (!r.ok) {
-        setPullMsg(r.message ?? "สแกนล้มเหลว");
-        return;
+      for (let i = 0; i < parsed.length; i += CHUNK) {
+        const chunk = parsed.slice(i, i + CHUNK);
+        try {
+          const r = await reconExpose(chunk);
+          if (r.ok) {
+            all.push(...r.rows);
+            setResults([...all]);
+          }
+        } catch {
+          /* one chunk failed — keep going with the rest */
+        }
+        setScanProg({ done: Math.min(i + CHUNK, parsed.length), total: parsed.length });
       }
-
-      setResults(r.rows);
-      setCat("all");
+      const vuln = all.filter((r) => r.vulns?.length).length;
+      setPullMsg(`สแกนเสร็จ ${all.length} IP · พบช่องโหว่ ${vuln} · กด "บันทึกเข้าคลัง" เพื่อเก็บผล`);
     } catch (error: unknown) {
-      setPullMsg(
-        error instanceof Error ? error.message : "เกิดข้อผิดพลาดระหว่างสแกน",
-      );
+      setPullMsg(error instanceof Error ? error.message : "เกิดข้อผิดพลาดระหว่างสแกน");
     } finally {
       setScanning(false);
+      setScanProg(null);
     }
   };
 
@@ -842,12 +858,12 @@ export function Recon() {
             disabled={scanning || !parsed.length}
             onClick={scan}
           >
-            {scanning
-              ? `กำลังสแกน ${parsed.length} IP...`
+            {scanning && scanProg
+              ? `กำลังสแกน ${scanProg.done}/${scanProg.total}...`
               : `สแกน ${parsed.length} IP`}
           </button>
 
-          {raw && (
+          {raw && !scanning && (
             <button
               type="button"
               className="lf-mini"
@@ -858,6 +874,15 @@ export function Recon() {
             >
               <Icon name="trash" /> ล้าง
             </button>
+          )}
+
+          {scanProg && (
+            <div className="rc-scanprog" title={`${scanProg.done}/${scanProg.total}`}>
+              <div
+                className="rc-scanprog-fill"
+                style={{ width: `${scanProg.total ? Math.round((scanProg.done / scanProg.total) * 100) : 0}%` }}
+              />
+            </div>
           )}
         </div>
 

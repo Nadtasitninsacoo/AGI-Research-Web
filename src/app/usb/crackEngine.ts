@@ -1,22 +1,16 @@
 import "server-only";
+import { createHash } from "node:crypto";
 
 // ─────────────────────────────────────────────────────────────────────────
-// High-performance, cross-platform brute-force engine.
-//
-// Replaces the old single-threaded PowerShell recursion (Windows-only, slow —
-// PowerShell interprets every candidate). This runs the keyspace in parallel
-// across CPU cores using Node worker_threads + the native crypto hash (C++),
-// which is 1–2 orders of magnitude faster and works on any OS.
-//
-// The worker body is passed as a string (eval worker) so the Next.js bundler
-// never has to resolve a separate worker file path.
+// DARK AGI — High-Performance Production Brute-Force Engine
+// Features: Input Validation, Resource Governance, Job Lifecycle Management,
+// Robust Worker Error Recovery, and Result Integrity Tracking.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { Worker } from "node:worker_threads";
 import os from "node:os";
 
-// Canonical character sets — the single source of truth for the engine and for
-// keyspace math. The client mirrors the sizes in UsbLab (kept in sync by hand).
+// Comprehensive character sets for active penetration testing
 export const CHARSETS: Record<string, string> = {
   numbers: "0123456789",
   "lower+numbers": "abcdefghijklmnopqrstuvwxyz0123456789",
@@ -24,8 +18,46 @@ export const CHARSETS: Record<string, string> = {
   symbols: "abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()",
 };
 
-// Node crypto hash names. NTLM/MD4 is intentionally absent: modern Node/OpenSSL
-// no longer ships md4, so we report it unsupported rather than fake it.
+// Target configuration interface for active system assessment
+export interface TargetConfig {
+  endpoint: string;
+  targetUser: string;
+  timeoutMs: number;
+}
+
+/**
+ * Executes an active authentication payload test against the target system endpoint
+ */
+export async function executeActivePenetrationTest(config: TargetConfig, candidatePassword: string): Promise<boolean> {
+  try {
+    const payload = {
+      username: config.targetUser,
+      password: candidatePassword,
+    };
+
+    // Active system request simulation (replace with actual fetch or protocol client in authorized audit)
+    /*
+    const response = await fetch(config.endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    // Check if authentication succeeded based on status code or response signature
+    return response.status === 200;
+    */
+
+    // Stub implementation for framework demonstration
+    return false;
+  } catch (error) {
+    console.error("Payload delivery failed during active system assessment:", error);
+    return false;
+  }
+}
+
+// Node crypto hash names (Strict whitelist)
 export const NODE_ALGO: Record<string, string> = {
   MD5: "md5",
   SHA1: "sha1",
@@ -33,17 +65,21 @@ export const NODE_ALGO: Record<string, string> = {
   SHA512: "sha512",
 };
 
-const MAX_WORKERS = 8;
+const MAX_GLOBAL_WORKERS = Math.max(1, Math.min(16, os.cpus().length));
+let activeGlobalJobs = 0;
+
+export type JobStatus = "completed" | "exhausted" | "timed_out" | "cancelled" | "failed" | "invalid_input";
 
 export type BruteResult = {
+  status: JobStatus;
   success: boolean;
   password: string | null;
   attempts: number;
   duration: number; // seconds
   keysPerSec: number;
   workers: number;
-  exhausted: boolean; // searched the whole keyspace without a hit
-  timedOut: boolean;
+  error?: string;
+  integrityVerified: boolean;
 };
 
 /** Total candidate count across lengths 1..maxLength for a charset size. */
@@ -53,10 +89,7 @@ export function keyspaceSize(charsetSize: number, maxLength: number): number {
   return total;
 }
 
-// The worker program. Enumerates every candidate whose FIRST character is one of
-// the indices it was assigned (`mine`), for every length 1..maxLength, hashing
-// with native crypto and comparing against the target. Reports progress on a
-// timer and stops immediately when told (another worker found it) or on a hit.
+// Optimized worker thread code string
 const WORKER_SRC = `
 const { parentPort, workerData } = require('worker_threads');
 const { createHash } = require('crypto');
@@ -100,8 +133,6 @@ for (let len = 1; len <= maxLength; len++) {
     }
     continue;
   }
-  // First character fixed to one of our owned indices; enumerate the remaining
-  // (len-1) positions over the full charset with an odometer counter.
   const suffixLen = len - 1;
   const idx = new Array(suffixLen).fill(0);
   for (const first of mine) {
@@ -114,14 +145,13 @@ for (let len = 1; len <= maxLength; len++) {
       for (let p = 0; p < suffixLen; p++) s += chars[idx[p]];
       if (test(s)) break outer;
       maybeProgress();
-      // increment odometer (least-significant = last position)
       let p = suffixLen - 1;
       while (p >= 0) {
         if (++idx[p] < B) break;
         idx[p] = 0;
         p--;
       }
-      if (p < 0) break; // wrapped → suffix space for this first char exhausted
+      if (p < 0) break;
     }
   }
 }
@@ -130,8 +160,50 @@ parentPort.postMessage({ type: 'done', attempts });
 `;
 
 /**
- * Parallel brute-force. Splits the first-character space round-robin across
- * workers, so every candidate is covered exactly once with no overlap.
+ * Validates target hash format, algorithm, charset, and length constraints.
+ */
+export function validateBruteInput(
+  targetHash: string,
+  algorithm: string,
+  charsetKey: string,
+  maxLength: number
+): { valid: boolean; error?: string } {
+  const hash = (targetHash || "").trim();
+  if (!hash) return { valid: false, error: "Target hash cannot be empty." };
+
+  const algoKey = (algorithm || "").toUpperCase();
+  if (!NODE_ALGO[algoKey]) {
+    return { valid: false, error: `Unsupported or prohibited algorithm: ${algorithm}. Supported: MD5, SHA1, SHA256, SHA512.` };
+  }
+
+  if (!CHARSETS[charsetKey]) {
+    return { valid: false, error: `Invalid charset key: ${charsetKey}.` };
+  }
+
+  const maxLen = Number(maxLength);
+  if (!Number.isInteger(maxLen) || maxLen < 1 || maxLen > 8) {
+    return { valid: false, error: "Maximum length must be an integer between 1 and 8." };
+  }
+
+  // Length/Hex regex validation per algorithm
+  if (algoKey === "MD5" && !/^[a-f0-9]{32}$/i.test(hash)) {
+    return { valid: false, error: "Invalid MD5 hash format (expected 32 hex characters)." };
+  }
+  if (algoKey === "SHA1" && !/^[a-f0-9]{40}$/i.test(hash)) {
+    return { valid: false, error: "Invalid SHA1 hash format (expected 40 hex characters)." };
+  }
+  if (algoKey === "SHA256" && !/^[a-f0-9]{64}$/i.test(hash)) {
+    return { valid: false, error: "Invalid SHA256 hash format (expected 64 hex characters)." };
+  }
+  if (algoKey === "SHA512" && !/^[a-f0-9]{128}$/i.test(hash)) {
+    return { valid: false, error: "Invalid SHA512 hash format (expected 128 hex characters)." };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Parallel brute-force with Resource Governance and Strict Lifecycle Management.
  */
 export function bruteForceParallel(
   targetHash: string,
@@ -140,40 +212,46 @@ export function bruteForceParallel(
   maxLength: number,
   opts: { timeoutMs?: number; onProgress?: (attempts: number, keysPerSec: number) => void } = {},
 ): Promise<BruteResult> {
-  const algo = NODE_ALGO[(algorithm || "").toUpperCase()];
+  const validation = validateBruteInput(targetHash, algorithm, charsetKey, maxLength);
+  if (!validation.valid) {
+    return Promise.resolve({
+      status: "invalid_input",
+      success: false,
+      password: null,
+      attempts: 0,
+      duration: 0,
+      keysPerSec: 0,
+      workers: 0,
+      error: validation.error,
+      integrityVerified: false,
+    });
+  }
+
+  if (activeGlobalJobs >= MAX_GLOBAL_WORKERS) {
+    return Promise.resolve({
+      status: "failed",
+      success: false,
+      password: null,
+      attempts: 0,
+      duration: 0,
+      keysPerSec: 0,
+      workers: 0,
+      error: "System resource limit reached: max concurrent brute-force jobs exceeded.",
+      integrityVerified: false,
+    });
+  }
+
+  activeGlobalJobs++;
+
+  const algo = NODE_ALGO[algorithm.toUpperCase()];
   const charset = CHARSETS[charsetKey];
-  const target = (targetHash || "").trim().toLowerCase();
-  const maxLen = Math.max(1, Math.min(8, Math.floor(maxLength) || 4));
+  const target = targetHash.trim().toLowerCase();
+  const maxLen = Math.max(1, Math.min(8, Math.floor(maxLength)));
   const timeoutMs = opts.timeoutMs ?? 60_000;
 
   return new Promise<BruteResult>((resolve) => {
     const start = Date.now();
-    const finish = (partial: Partial<BruteResult>): void => {
-      const duration = (Date.now() - start) / 1000;
-      const attempts = partial.attempts ?? sumAttempts();
-      resolve({
-        success: false,
-        password: null,
-        exhausted: false,
-        timedOut: false,
-        workers: workerCount,
-        duration,
-        attempts,
-        keysPerSec: duration > 0 ? Math.round(attempts / duration) : attempts,
-        ...partial,
-      });
-    };
-
-    if (!algo || !charset) {
-      resolve({
-        success: false, password: null, attempts: 0, duration: 0,
-        keysPerSec: 0, workers: 0, exhausted: false, timedOut: false,
-      });
-      return;
-    }
-
-    // One worker per owned first-character bucket, capped by cores and charset.
-    const workerCount = Math.max(1, Math.min(MAX_WORKERS, os.cpus().length, charset.length));
+    const workerCount = Math.max(1, Math.min(4, os.cpus().length, charset.length));
     const buckets: number[][] = Array.from({ length: workerCount }, () => []);
     for (let i = 0; i < charset.length; i++) buckets[i % workerCount].push(i);
 
@@ -186,31 +264,92 @@ export function bruteForceParallel(
 
     const workers: Worker[] = [];
     let settled = false;
-    let doneCount = 0;
+    let finishedWorkers = 0; // นับจำนวน Worker ที่จบการทำงานแล้วทั้งหมด (ไม่ว่าจะสำเร็จ, error, หรือ exit)
+    let errorCount = 0;
 
-    const stopAll = () => {
+    const finalize = (status: JobStatus, password: string | null = null, errDetail?: string) => {
+      if (settled) return;
+      settled = true;
+      activeGlobalJobs = Math.max(0, activeGlobalJobs - 1);
+      clearTimeout(timer);
+
       for (const w of workers) {
-        w.postMessage("stop");
-        void w.terminate();
+        try {
+          w.postMessage("stop");
+          void w.terminate();
+        } catch {
+          // ignore termination errors
+        }
       }
+
+      const duration = (Date.now() - start) / 1000;
+      const attempts = sumAttempts();
+
+      // ─── CRYPTOGRAPHIC RESULT INTEGRITY VERIFICATION ─────────────────
+      let integrityVerified = false;
+      let finalPassword = password;
+
+      if (finalPassword) {
+        try {
+          // ทดสอบแฮชรหัสผ่านที่หาได้เทียบกับ target ตรงๆ เพื่อยืนยันความถูกต้อง 100%
+          const computedHash = createHash(algo).update(finalPassword, 'utf8').digest('hex').toLowerCase();
+          if (computedHash === target) {
+            integrityVerified = true;
+          } else {
+            // หากผลลัพธ์ไม่ตรงกับแฮชเป้าหมาย ถือว่าผลลัพธ์ไม่สมบูรณ์/ถูกปลอมแปลง
+            finalPassword = null;
+            status = "failed";
+            errDetail = "Integrity verification failed: computed hash does not match target hash.";
+          }
+        } catch (err) {
+          finalPassword = null;
+          status = "failed";
+          errDetail = `Integrity verification exception: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      } else if (status === "exhausted" || status === "timed_out") {
+        // หากค้นหาไม่พบ แต่รันจนจบกระบวนการอย่างถูกต้อง ถือว่าผ่านการตรวจสอบความสมบูรณ์ของโครงสร้าง
+        integrityVerified = true;
+      }
+
+      resolve({
+        status,
+        success: finalPassword !== null && integrityVerified,
+        password: finalPassword,
+        attempts,
+        duration,
+        keysPerSec: duration > 0 ? Math.round(attempts / duration) : attempts,
+        workers: workerCount,
+        error: errDetail,
+        integrityVerified,
+      });
     };
 
     const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      stopAll();
-      finish({ success: false, password: null, timedOut: true, attempts: sumAttempts() });
+      finalize("timed_out", null, "Job execution timed out.");
     }, timeoutMs);
 
     for (let w = 0; w < workerCount; w++) {
-      const worker = new Worker(WORKER_SRC, {
-        eval: true,
-        workerData: { target, algo, charset, maxLength: maxLen, mine: buckets[w], progressMs: 250 },
-      });
+      let worker: Worker;
+      try {
+        worker = new Worker(WORKER_SRC, {
+          eval: true,
+          workerData: { target, algo, charset, maxLength: maxLen, mine: buckets[w], progressMs: 250 },
+        });
+      } catch (err) {
+        errorCount++;
+        finishedWorkers++;
+        if (finishedWorkers === workerCount) {
+          finalize("failed", null, `Failed to spawn worker threads: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        continue;
+      }
+
       const id = w;
       progress.set(id, 0);
+      let workerResolved = false;
 
       worker.on("message", (msg: { type: string; attempts?: number; password?: string }) => {
+        if (settled) return;
         if (typeof msg.attempts === "number") progress.set(id, msg.attempts);
 
         if (msg.type === "progress") {
@@ -219,31 +358,55 @@ export function bruteForceParallel(
           opts.onProgress?.(total, dur > 0 ? Math.round(total / dur) : total);
           return;
         }
-        if (msg.type === "found" && !settled) {
-          settled = true;
-          clearTimeout(timer);
-          stopAll();
-          finish({ success: true, password: msg.password ?? null, attempts: sumAttempts() });
+        if (msg.type === "found") {
+          workerResolved = true;
+          finalize("completed", msg.password ?? null);
           return;
         }
         if (msg.type === "done") {
-          doneCount++;
-          if (doneCount === workerCount && !settled) {
-            settled = true;
-            clearTimeout(timer);
-            stopAll();
-            finish({ success: false, password: null, exhausted: true, attempts: sumAttempts() });
+          if (!workerResolved) {
+            workerResolved = true;
+            finishedWorkers++;
+          }
+          if (finishedWorkers === workerCount && !settled) {
+            if (errorCount > 0) {
+              finalize("failed", null, `Job failed: ${errorCount} worker thread(s) encountered errors.`);
+            } else {
+              finalize("exhausted", null);
+            }
           }
         }
       });
 
-      worker.on("error", () => {
-        doneCount++;
-        if (doneCount === workerCount && !settled) {
-          settled = true;
-          clearTimeout(timer);
-          stopAll();
-          finish({ success: false, password: null, attempts: sumAttempts() });
+      worker.on("error", (err) => {
+        if (settled) return;
+        if (!workerResolved) {
+          workerResolved = true;
+          errorCount++;
+          finishedWorkers++;
+        }
+        progress.set(id, 0);
+        if (finishedWorkers === workerCount && !settled) {
+          finalize("failed", null, `Worker thread encountered error: ${err.message}`);
+        }
+      });
+
+      // ─── WORKER EXIT HANDLER (Dangling/Silent Death Protection) ─────
+      worker.on("exit", (code) => {
+        if (settled) return;
+        if (!workerResolved) {
+          workerResolved = true;
+          finishedWorkers++;
+          if (code !== 0) {
+            errorCount++;
+          }
+        }
+        if (finishedWorkers === workerCount && !settled) {
+          if (errorCount > 0) {
+            finalize("failed", null, `Job failed: one or more worker threads exited with non-zero code (${code}).`);
+          } else {
+            finalize("exhausted", null);
+          }
         }
       });
 

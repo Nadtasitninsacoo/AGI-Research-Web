@@ -42,3 +42,12 @@ export async function execute(sql, params = []) {
   const [result] = await getPool().execute(sql, params);
   return result;
 }
+
+/**
+ * Check out a dedicated pooled connection for a multi-statement transaction
+ * (e.g. SELECT ... FOR UPDATE SKIP LOCKED + UPDATE as one atomic claim). The
+ * caller MUST release() it in a finally block.
+ */
+export async function getConnection() {
+  return getPool().getConnection();
+}

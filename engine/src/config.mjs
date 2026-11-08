@@ -40,6 +40,11 @@ export const config = {
   },
 
   worker: {
+    // How many runs to process concurrently (splits targets across N loops in a
+    // single process; each claims runs atomically so they never collide). 1 =
+    // sequential. Raise it to work several targets at once when the queue backs
+    // up — mind that each loop makes its own concurrent Ollama call.
+    count: Math.max(1, Math.min(16, int(process.env.WORKER_COUNT, 1))),
     // How often to poll for queued runs when idle.
     pollMs: int(process.env.ENGINE_POLL_MS, 1_000),
     // Cap on reasoning/tool steps per run.

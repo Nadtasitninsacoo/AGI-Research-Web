@@ -74,6 +74,15 @@ const EXTRA_TABLES: { name: string; sql: string }[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    name: "authorized_scope",
+    sql: `CREATE TABLE IF NOT EXISTS authorized_scope (
+      entry       VARCHAR(255) NOT NULL,
+      note        VARCHAR(255) NULL,
+      created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (entry)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     name: "cve_intel",
     sql: `CREATE TABLE IF NOT EXISTS cve_intel (
       cve_id VARCHAR(32) NOT NULL,

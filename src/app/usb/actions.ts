@@ -140,6 +140,9 @@ export async function bruteForceAction(
 
   try {
     const r = await bruteForceParallel(cleanHash, algorithm, charset, maxLength, { timeoutMs: 60_000 });
+    // The engine now reports a single `status`; derive the booleans the UI uses.
+    const timedOut = r.status === "timed_out";
+    const exhausted = r.status === "exhausted";
     const result: CrackingTargetResult = {
       hash: cleanHash,
       success: r.success,
@@ -148,17 +151,19 @@ export async function bruteForceAction(
       duration: r.duration,
       keysPerSec: r.keysPerSec,
       workers: r.workers,
-      exhausted: r.exhausted,
+      exhausted,
     };
 
     const kps = r.keysPerSec.toLocaleString("en-US");
     const tail = r.success
       ? `พบรหัสผ่าน -> ${r.password}`
-      : r.timedOut
+      : timedOut
         ? "หมดเวลา (timeout) — ยังไม่พบ"
-        : r.exhausted
+        : exhausted
           ? "ค้นครบ keyspace แล้วไม่พบ"
-          : "ไม่พบรหัสผ่านในเงื่อนไขที่กำหนด";
+          : r.error
+            ? `ข้อผิดพลาด: ${r.error}`
+            : "ไม่พบรหัสผ่านในเงื่อนไขที่กำหนด";
 
     return {
       ok: true,

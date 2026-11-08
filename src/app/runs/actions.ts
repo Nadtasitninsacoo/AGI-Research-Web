@@ -80,6 +80,60 @@ export async function createRunLocal(input: {
 }
 
 /** Current status for a set of run ids — for badging saved targets the user ran. */
+/** Full result of a finished run — output summary + findings recorded to the DB.
+ *  Used to carry a recon run's results forward into its final stage. */
+export type RunResult = {
+  id: number;
+  status: string;
+  output: string | null;
+  findings: { title: string; score: number; details: unknown }[];
+};
+
+export async function getRunResult(runId: number): Promise<RunResult | null> {
+  const id = Number(runId);
+  if (!Number.isInteger(id) || id < 1) return null;
+
+  const [rows] = await db.query<RowDataPacket[]>(
+    `SELECT id, status, metrics FROM experiment_runs WHERE id = ? LIMIT 1`,
+    [id],
+  );
+  if (!rows[0]) return null;
+
+  let metrics: Record<string, unknown> = {};
+  const m = rows[0].metrics;
+  if (m && typeof m === "object") metrics = m as Record<string, unknown>;
+  else if (typeof m === "string") {
+    try {
+      const parsed = JSON.parse(m);
+      if (parsed && typeof parsed === "object") metrics = parsed;
+    } catch {
+      /* leave empty */
+    }
+  }
+
+  const [evs] = await db.query<RowDataPacket[]>(
+    `SELECT benchmark, score, details FROM evaluations WHERE run_id = ? ORDER BY id`,
+    [id],
+  );
+
+  return {
+    id: rows[0].id as number,
+    status: rows[0].status as string,
+    output: typeof metrics.output === "string" ? metrics.output : null,
+    findings: evs.map((e) => {
+      let details: unknown = e.details;
+      if (typeof e.details === "string") {
+        try {
+          details = JSON.parse(e.details);
+        } catch {
+          /* keep raw string */
+        }
+      }
+      return { title: String(e.benchmark ?? ""), score: Number(e.score ?? 0), details };
+    }),
+  };
+}
+
 export type RunStatusInfo = { id: number; status: string };
 
 export async function getRunStatuses(
@@ -178,6 +232,21 @@ export async function listActiveRunTargets(): Promise<ActiveRun[]> {
 export async function cancelRunAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const id = posInt(formData.get("runId"));
   if (id === null) return { ok: false, message: "Run is invalid." };
+  return cancelRun(id);
+}
+
+/**
+ * Cancel a queued/running run directly (callable from the client). Marks it
+ * cancelled only if it is still queued or running; the engine worker checks the
+ * row status and stops claiming/continuing cancelled runs.
+ */
+export async function cancelRun(
+  runId: number,
+): Promise<{ ok: boolean; message: string; id?: number }> {
+  const id = Number(runId);
+  if (!Number.isInteger(id) || id < 1) {
+    return { ok: false, message: "Run is invalid." };
+  }
 
   try {
     const [res] = await db.query<ResultSetHeader>(
