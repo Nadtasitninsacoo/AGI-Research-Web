@@ -76,8 +76,10 @@ export function radarStatus(): RadarStatus {
 async function sweep(): Promise<void> {
   if (state.ticking) return;
   state.ticking = true;
+  let sweepError = null;
   try {
     const batch = await getRadarBatch(12);
+    if (!batch.ok) sweepError = batch.message;
     if (batch.ok && batch.ips.length) {
       state.lastBatchSize = batch.ips.length;
       const scan = await scanIpsForVulns(batch.ips);
@@ -87,6 +89,8 @@ async function sweep(): Promise<void> {
         state.totalSaved += scan.saved;
       } else {
         state.lastFound = 0;
+        // Surface why a sweep produced nothing (e.g. InternetDB unreachable).
+        sweepError = scan.message;
       }
       // Auto-enrich a few newly-discovered CVEs from NVD (throttled server-side).
       const env = await getEnvironmentCves();
@@ -106,7 +110,7 @@ async function sweep(): Promise<void> {
     state.sweeps += 1;
     state.lastTickAt = Date.now();
     state.history = [...state.history, state.lastFound].slice(-28);
-    state.lastError = null;
+    state.lastError = sweepError;
   } catch (e) {
     state.lastError = e instanceof Error ? e.message : String(e);
   } finally {
