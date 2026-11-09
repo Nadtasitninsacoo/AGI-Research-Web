@@ -2,6 +2,7 @@
 // offline-resilient multi-endpoint fallback, and autonomous penetration intelligence.
 // Uses native fetch in Node 18+; optimized for maximum uninterrupted execution.
 import { config } from "./config.mjs";
+import * as gemini from "./gemini.mjs";
 
 /** Exponential backoff with full jitter, capped at 30s. Pure (exported for tests). */
 export function backoffDelay(attempt, baseMs = config.ollama.retryBaseMs) {
@@ -92,6 +93,20 @@ export async function chat({ model, messages, tools }) {
       await sleep(backoffDelay(attempt));
     }
   }
+
+  // Ollama is fully unreachable (not installed / not running / model
+  // missing). If a Gemini API key is configured, fall back to it instead of
+  // failing outright — otherwise preserve the original honest failure.
+  if (config.gemini.apiKey) {
+    try {
+      return await gemini.chat({ model: config.gemini.model, messages, tools });
+    } catch (geminiErr) {
+      throw new NoModelError(
+        `Ollama unreachable (${lastErr?.message ?? lastErr}); Gemini fallback also failed (${geminiErr?.message ?? geminiErr})`,
+      );
+    }
+  }
+
   throw lastErr instanceof Error ? lastErr : new NoModelError(String(lastErr));
 }
 
@@ -108,11 +123,11 @@ export function toolArgs(call) {
 }
 
 /**
- * Honestly check whether the configured model is actually reachable and present.
- * Returns true only if an endpoint responds AND lists the wanted model — no
- * "offline bypass" that pretends a missing model is fine.
+ * Honestly check whether Ollama itself (not any fallback) is reachable and
+ * has the model. Used where the label specifically says "Ollama" so it never
+ * reports true because of a provider other than Ollama.
  */
-export async function isModelAvailable(model) {
+export async function isOllamaAvailable(model) {
   const endpoints = [
     config.ollama.url,
     config.ollama.fallbackUrl,
@@ -131,6 +146,25 @@ export async function isModelAvailable(model) {
       // try next endpoint
     }
   }
+  return false;
+}
+
+/**
+ * Honestly check whether SOME model is reachable for `chat()` to use — Ollama
+ * first, then the Gemini fallback if configured. Returns true only if an
+ * endpoint responds AND lists the wanted model — no "offline bypass" that
+ * pretends a missing model is fine.
+ */
+export async function isModelAvailable(model) {
+  if (await isOllamaAvailable(model)) return true;
+
+  // No Ollama endpoint has the model. Honestly check the Gemini fallback (if
+  // configured) before reporting "no model" — this is what lets runs proceed
+  // on a machine with Ollama not installed at all.
+  if (config.gemini.apiKey) {
+    return await gemini.isModelAvailable(config.gemini.model);
+  }
+
   return false;
 }
 

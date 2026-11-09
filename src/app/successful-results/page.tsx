@@ -18,6 +18,10 @@ import {
 
 import { Navbar } from "@/components/hud/Navbar";
 import { Sidebar } from "@/components/hud/Sidebar";
+import {
+  AssessmentTables,
+  type AssessmentData,
+} from "@/components/assessment/AssessmentTables";
 import "@/styles/ops.css";
 
 type Batch = {
@@ -297,10 +301,36 @@ export default function SuccessfulResultsPage() {
   const [obsPage, setObsPage] = useState(1);
   const [logPage, setLogPage] = useState(1);
   const [sumPage, setSumPage] = useState(1);
+  const [assessment, setAssessment] = useState<AssessmentData | null>(null);
+  const [assessmentError, setAssessmentError] = useState("");
+  const [assessmentLoading, setAssessmentLoading] = useState(true);
 
   const loadResults = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError("");
+    setAssessmentLoading(true);
+    setAssessmentError("");
+
+    fetch("/api/assessment-results", { cache: "no-store", signal })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(
+            `โหลดข้อมูล security_assessment ไม่สำเร็จ (${res.status})`,
+          );
+        }
+        setAssessment((await res.json()) as AssessmentData);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setAssessmentError(
+          err instanceof Error
+            ? err.message
+            : "โหลดข้อมูล security_assessment ไม่สำเร็จ",
+        );
+      })
+      .finally(() => {
+        if (!signal?.aborted) setAssessmentLoading(false);
+      });
 
     try {
       const batchResponse = await fetch("/api/run-batches", {
@@ -1182,6 +1212,15 @@ export default function SuccessfulResultsPage() {
               </div>
             )}
           </section>
+
+          {assessmentError && (
+            <div role="alert" className="op-alert">
+              <XCircle />
+              {assessmentError}
+            </div>
+          )}
+
+          <AssessmentTables data={assessment} loading={assessmentLoading} />
 
           <footer className="op-foot">
             <span>FILTER: STATUS = SUCCEEDED</span>

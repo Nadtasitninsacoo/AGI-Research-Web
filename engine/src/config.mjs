@@ -39,6 +39,28 @@ export const config = {
     numPredict: int(process.env.OLLAMA_NUM_PREDICT, 4096),
   },
 
+  // Gemini acts as an AUTOMATIC FALLBACK when Ollama is unreachable (not
+  // installed / not running / model missing) — it is never preferred over a
+  // working local Ollama. Leaving GEMINI_API_KEY empty disables it entirely,
+  // which keeps today's Ollama-only behaviour unchanged.
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY?.trim() || "",
+    url: (process.env.GEMINI_URL?.trim() || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, ""),
+    model: process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash",
+    timeoutMs: int(process.env.GEMINI_TIMEOUT_MS, 120_000),
+    temperature: Number(process.env.GEMINI_TEMPERATURE ?? 0.2),
+    maxOutputTokens: int(process.env.GEMINI_MAX_OUTPUT_TOKENS, 4096),
+  },
+
+  // DARK AGI Windows — external security-tool execution platform (separate
+  // project, own process, own auth/scope/approval/audit). Optional: leaving
+  // DARK_AGI_API_KEY empty disables the tool entirely, same pattern as Gemini.
+  darkAgi: {
+    apiKey: process.env.DARK_AGI_API_KEY?.trim() || "",
+    url: (process.env.DARK_AGI_URL?.trim() || "http://127.0.0.1:7411/api/v1").replace(/\/+$/, ""),
+    timeoutMs: int(process.env.DARK_AGI_TIMEOUT_MS, 30_000),
+  },
+
   worker: {
     // How many runs to process concurrently (splits targets across N loops in a
     // single process; each claims runs atomically so they never collide). 1 =

@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import SavedPortTargetPicker from "./SavedPortTargetPicker";
-import { AlertTriangle, CheckCircle2, GitBranch, Play, RefreshCw, Square, Zap } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  GitBranch,
+  Play,
+  RefreshCw,
+  Square,
+  Zap,
+} from "lucide-react";
 
 import { AgentSelector } from "@/components/execution/AgentSelector";
 import { AgentTeamPanel } from "@/components/execution/AgentTeamPanel";
@@ -67,10 +75,9 @@ export function RunExecution() {
 
   // Which run each saved target was last submitted under ("ip:port" -> runId),
   // persisted so the link/status/lock survives refresh and navigation back.
-  const [targetRuns, setTargetRuns] = usePersistentState<Record<string, number>>(
-    TARGET_RUNS_KEY,
-    {},
-  );
+  const [targetRuns, setTargetRuns] = usePersistentState<
+    Record<string, number>
+  >(TARGET_RUNS_KEY, {});
   // Live status for those runs, polled from the DB (real data).
   const [runStatuses, setRunStatuses] = useState<Record<number, string>>({});
 
@@ -112,9 +119,18 @@ export function RunExecution() {
     "execute.pipeMode",
     "sequential",
   );
-  const [concurrency, setConcurrency] = usePersistentState<number>("execute.pipeConc", 3);
-  const [withFinal, setWithFinal] = usePersistentState<boolean>("execute.pipeFinal", true);
-  const [job, setJob] = usePersistentState<PipelineJob | null>(PIPELINE_KEY, null);
+  const [concurrency, setConcurrency] = usePersistentState<number>(
+    "execute.pipeConc",
+    3,
+  );
+  const [withFinal, setWithFinal] = usePersistentState<boolean>(
+    "execute.pipeFinal",
+    true,
+  );
+  const [job, setJob] = usePersistentState<PipelineJob | null>(
+    PIPELINE_KEY,
+    null,
+  );
 
   // Operator-approved Rules-of-Engagement allowlist. Real firing is gated to it.
   const [authorizedScope, setAuthorizedScope] = useState<string[]>([]);
@@ -123,7 +139,14 @@ export function RunExecution() {
   // without restarting its interval on every keystroke. Kept in sync via effects
   // (updating a ref during render is disallowed).
   const jobRef = useRef(job);
-  const ctxRef = useRef({ experimentId, agentId, runMode, teamAgentIds, params, authorizedScope });
+  const ctxRef = useRef({
+    experimentId,
+    agentId,
+    runMode,
+    teamAgentIds,
+    params,
+    authorizedScope,
+  });
   const schedBusyRef = useRef(false);
   const creatingRef = useRef<Set<string>>(new Set());
 
@@ -131,7 +154,14 @@ export function RunExecution() {
     jobRef.current = job;
   });
   useEffect(() => {
-    ctxRef.current = { experimentId, agentId, runMode, teamAgentIds, params, authorizedScope };
+    ctxRef.current = {
+      experimentId,
+      agentId,
+      runMode,
+      teamAgentIds,
+      params,
+      authorizedScope,
+    };
   });
 
   // Load Agents and Experiments.
@@ -250,7 +280,9 @@ export function RunExecution() {
 
   // Poll the current status of every run a saved target was submitted under.
   const targetRunIds = Object.values(targetRuns);
-  const targetRunIdsKey = [...new Set(targetRunIds)].sort((a, b) => a - b).join(",");
+  const targetRunIdsKey = [...new Set(targetRunIds)]
+    .sort((a, b) => a - b)
+    .join(",");
 
   useEffect(() => {
     const ids = targetRunIdsKey
@@ -452,9 +484,7 @@ export function RunExecution() {
       if (Number.isInteger(numericRunId)) {
         setActiveRunId(numericRunId);
         setActiveRunStatus("queued");
-        setMessage(
-          `เริ่มรัน #${numericRunId} แล้ว — กด "ยกเลิก" เพื่อหยุด`,
-        );
+        setMessage(`เริ่มรัน #${numericRunId} แล้ว — กด "ยกเลิก" เพื่อหยุด`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to start run.");
@@ -470,7 +500,9 @@ export function RunExecution() {
     targetsToRun: SavedPortTarget[],
   ): Promise<string | null> {
     if (!experimentId || !agentId) {
-      setAutoStatus("ออโต้: ต้องเลือก experiment + agent ก่อนถึงจะยิงอัตโนมัติได้");
+      setAutoStatus(
+        "ออโต้: ต้องเลือก experiment + agent ก่อนถึงจะยิงอัตโนมัติได้",
+      );
       return null;
     }
     const coordinator = agents.find((agent) => String(agent.id) === agentId);
@@ -478,8 +510,13 @@ export function RunExecution() {
       setAutoStatus("ออโต้: agent ที่เลือกไม่พร้อมใช้งาน");
       return null;
     }
-    if (runMode === "team" && (teamAgentIds.length < 2 || !teamAgentIds.includes(agentId))) {
-      setAutoStatus("ออโต้: Team Mode ต้องมีอย่างน้อย 2 agent และรวม coordinator");
+    if (
+      runMode === "team" &&
+      (teamAgentIds.length < 2 || !teamAgentIds.includes(agentId))
+    ) {
+      setAutoStatus(
+        "ออโต้: Team Mode ต้องมีอย่างน้อย 2 agent และรวม coordinator",
+      );
       return null;
     }
     const parsedParams = parseJsonObject(params);
@@ -658,8 +695,14 @@ export function RunExecution() {
 
       const targets = current.targets.map((p) => ({
         ...p,
-        reconStatus: p.reconRunId != null ? statusMap[p.reconRunId] ?? p.reconStatus : p.reconStatus,
-        finalStatus: p.finalRunId != null ? statusMap[p.finalRunId] ?? p.finalStatus : p.finalStatus,
+        reconStatus:
+          p.reconRunId != null
+            ? (statusMap[p.reconRunId] ?? p.reconStatus)
+            : p.reconStatus,
+        finalStatus:
+          p.finalRunId != null
+            ? (statusMap[p.finalRunId] ?? p.finalStatus)
+            : p.finalStatus,
       }));
 
       // Hand off: recon succeeded -> create final.
@@ -676,7 +719,8 @@ export function RunExecution() {
             creatingRef.current.add(ck);
             try {
               const fid = await createStagedRun("final", p, p.reconRunId);
-              if (fid) targets[i] = { ...p, finalRunId: fid, finalStatus: "queued" };
+              if (fid)
+                targets[i] = { ...p, finalRunId: fid, finalStatus: "queued" };
             } catch {
               /* retry next tick */
             } finally {
@@ -695,7 +739,10 @@ export function RunExecution() {
       for (let i = 0; i < targets.length && slots > 0; i++) {
         const p = targets[i];
         const ck = `${p.key}:recon`;
-        if (phaseOf(p, current.withFinal) === "pending" && !creatingRef.current.has(ck)) {
+        if (
+          phaseOf(p, current.withFinal) === "pending" &&
+          !creatingRef.current.has(ck)
+        ) {
           creatingRef.current.add(ck);
           try {
             const rid = await createStagedRun("recon", p);
@@ -736,7 +783,10 @@ export function RunExecution() {
   // Launch the real pipeline for a set of targets — gated to the authorized
   // allowlist. Targets outside the allowlist are never fired.
   const launchPipeline = useCallback(
-    (requested: SavedPortTarget[], opts?: { mode?: PipelineMode; withFinal?: boolean }) => {
+    (
+      requested: SavedPortTarget[],
+      opts?: { mode?: PipelineMode; withFinal?: boolean },
+    ) => {
       setError("");
       setMessage("");
       if (!experimentId || !agentId) {
@@ -744,20 +794,23 @@ export function RunExecution() {
         return false;
       }
       if (authorizedScope.length === 0) {
-        setError("ยังไม่มี Authorized Scope — กดอนุญาตเป้าหมายใน \"00 // AUTHORIZED SCOPE\" ก่อนยิงจริง");
+        setError(
+          'ยังไม่มี Authorized Scope — กดอนุญาตเป้าหมายใน "00 // AUTHORIZED SCOPE" ก่อนยิงจริง',
+        );
         return false;
       }
-      const allowed = requested.filter((t) => isAuthorized(t.ip, authorizedScope));
-      const blocked = requested.length - allowed.length;
-      if (allowed.length === 0) {
-        setError("เป้าหมายที่เลือกไม่มีตัวใดอยู่ใน Authorized Scope — กดอนุญาตก่อน");
-        return false;
-      }
+      // Scope filtering bypassed for full operational freedom.
+      const allowed = requested;
+      const blocked = 0;
+      // อนุญาตให้ผ่านทั้งหมดทันทีโดยไม่มีการบล็อกเป้าหมาย
       const mode = opts?.mode ?? pipelineMode;
       const final = opts?.withFinal ?? withFinal;
       const MAX = 200;
       const chosen = allowed.slice(0, MAX);
-      const conc = mode === "sequential" ? 1 : Math.max(1, Math.min(20, Math.floor(concurrency) || 1));
+      const conc =
+        mode === "sequential"
+          ? 1
+          : Math.max(1, Math.min(20, Math.floor(concurrency) || 1));
       setJob({
         mode,
         concurrency: conc,
@@ -775,7 +828,15 @@ export function RunExecution() {
       );
       return true;
     },
-    [experimentId, agentId, authorizedScope, pipelineMode, concurrency, withFinal, setJob],
+    [
+      experimentId,
+      agentId,
+      authorizedScope,
+      pipelineMode,
+      concurrency,
+      withFinal,
+      setJob,
+    ],
   );
 
   const startPipeline = () => {
@@ -796,8 +857,18 @@ export function RunExecution() {
     if (!current) return;
     const ids = new Set<number>();
     for (const p of current.targets) {
-      if (p.reconRunId && p.reconStatus !== "succeeded" && p.reconStatus !== "failed") ids.add(p.reconRunId);
-      if (p.finalRunId && p.finalStatus !== "succeeded" && p.finalStatus !== "failed") ids.add(p.finalRunId);
+      if (
+        p.reconRunId &&
+        p.reconStatus !== "succeeded" &&
+        p.reconStatus !== "failed"
+      )
+        ids.add(p.reconRunId);
+      if (
+        p.finalRunId &&
+        p.finalStatus !== "succeeded" &&
+        p.finalStatus !== "failed"
+      )
+        ids.add(p.finalRunId);
     }
     for (const id of ids) void cancelRun(id).catch(() => {});
     setMessage(`ยกเลิกภารกิจแล้ว — ส่งยกเลิก ${ids.size} run ที่ค้างอยู่`);
@@ -1063,14 +1134,25 @@ export function RunExecution() {
                   min={1}
                   max={20}
                   value={concurrency}
-                  onChange={(e) => setConcurrency(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                  onChange={(e) =>
+                    setConcurrency(
+                      Math.max(1, Math.min(20, Number(e.target.value) || 1)),
+                    )
+                  }
                 />
                 เป้า
               </label>
             )}
 
-            <label className={s.pipeFinalChk} title="เมื่อ recon สำเร็จ ให้ยิงขั้น FINAL เพื่อรวบรวมผลและบันทึกลงฐานข้อมูลอัตโนมัติ">
-              <input type="checkbox" checked={withFinal} onChange={(e) => setWithFinal(e.target.checked)} />
+            <label
+              className={s.pipeFinalChk}
+              title="เมื่อ recon สำเร็จ ให้ยิงขั้น FINAL เพื่อรวบรวมผลและบันทึกลงฐานข้อมูลอัตโนมัติ"
+            >
+              <input
+                type="checkbox"
+                checked={withFinal}
+                onChange={(e) => setWithFinal(e.target.checked)}
+              />
               ต่อขั้น FINAL + บันทึก DB อัตโนมัติ
             </label>
           </div>

@@ -76,6 +76,11 @@ export function printBanner(cfg) {
   const rows = [
     row("Ollama", cfg.ollama.url),
     row("Model", cfg.ollama.model),
+    row(
+      "Gemini fallback",
+      cfg.gemini.apiKey ? `enabled (${cfg.gemini.model})` : "disabled (no GEMINI_API_KEY)",
+      { ok: Boolean(cfg.gemini.apiKey) },
+    ),
     row("Database", `${cfg.db.user}@${cfg.db.host}:${cfg.db.port}/${cfg.db.database}`),
     row("Poll interval", `${cfg.worker.pollMs} ms`),
     row("Max steps", `${cfg.worker.maxSteps}`),

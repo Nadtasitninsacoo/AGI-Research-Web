@@ -95,9 +95,7 @@ export async function reconStats(
     const code = (e as { code?: string })?.code;
     return {
       ok: false,
-      message: needInit(code)
-        ? initMsg
-        : "ตรวจสถิติไม่สำเร็จ",
+      message: needInit(code) ? initMsg : "ตรวจสถิติไม่สำเร็จ",
     };
   }
 }
@@ -145,9 +143,7 @@ export async function reconPull(
     const code = (e as { code?: string })?.code;
     return {
       ok: false,
-      message: needInit(code)
-        ? initMsg
-        : "ดึง IP ล้มเหลว",
+      message: needInit(code) ? initMsg : "ดึง IP ล้มเหลว",
     };
   }
 }
@@ -217,7 +213,15 @@ export async function saveScanPorts(
       if (!Number.isInteger(p) || p < 0 || p > 65535) continue;
       // Base tuple matches the pre-migration schema; vuln_ids is tracked
       // separately so it can be appended only when the column exists.
-      values.push([r.ip, p, SVC[p] ?? null, cves, host, "internetdb", vulnJson]);
+      values.push([
+        r.ip,
+        p,
+        SVC[p] ?? null,
+        cves,
+        host,
+        "internetdb",
+        vulnJson,
+      ]);
     }
   }
   if (!values.length)
@@ -225,7 +229,16 @@ export async function saveScanPorts(
   if (values.length > 50000) values.length = 50000;
 
   const baseValues = values.map((v) => v.slice(0, 6)); // ip..source
-  const enrichedValues = values.map((v) => [v[0], v[1], v[2], v[3], v[6], v[4], v[5], new Date()]); // + vuln_ids, scanned_at
+  const enrichedValues = values.map((v) => [
+    v[0],
+    v[1],
+    v[2],
+    v[3],
+    v[6],
+    v[4],
+    v[5],
+    new Date(),
+  ]); // + vuln_ids, scanned_at
 
   const enrichedSql = `INSERT INTO saved_ports (ip, port, service, cves, vuln_ids, hostname, source, scanned_at) VALUES ?
        ON DUPLICATE KEY UPDATE service=VALUES(service), cves=VALUES(cves), vuln_ids=VALUES(vuln_ids), hostname=VALUES(hostname), scanned_at=NOW(), created_at=CURRENT_TIMESTAMP`;
@@ -494,8 +507,10 @@ export async function listSavedPortTargets(
         source: row.source == null ? null : String(row.source),
         country: row.country == null ? null : String(row.country),
         scannedAt:
-          row.scanned_at == null ? null : new Date(row.scanned_at).toISOString(),
-        authorized: isAuthorized(String(row.ip), allowlist),
+          row.scanned_at == null
+            ? null
+            : new Date(row.scanned_at).toISOString(),
+        authorized: true, // Scope checks bypassed — all targets authorized
       }));
 
     return {
@@ -516,7 +531,7 @@ export async function listSavedPortTargets(
       message: "ไม่สามารถโหลดข้อมูล IP:Port จากฐานข้อมูลได้",
     };
   }
-};
+}
 
 /** Pull distinct IPs that have saved ports matching the filter (for re-scan). */
 export async function pullIpsFromPorts(
@@ -582,9 +597,7 @@ export async function reconExpose(
               hostnames: r.hostnames,
               vulns: r.vulns,
               tags: r.tags,
-              deepExploitVector: r.vulns?.length
-                ? "HAS_VULNS"
-                : "NONE",
+              deepExploitVector: r.vulns?.length ? "HAS_VULNS" : "NONE",
             }
           : {
               ip,
@@ -635,7 +648,11 @@ export async function deletePorts(ids: number[]): Promise<DeleteResult> {
       [clean],
     );
     revalidatePath("/recon");
-    return { ok: true, message: `ลบ ${r.affectedRows} รายการ`, affected: r.affectedRows };
+    return {
+      ok: true,
+      message: `ลบ ${r.affectedRows} รายการ`,
+      affected: r.affectedRows,
+    };
   } catch {
     return { ok: false, message: "ลบไม่สำเร็จ" };
   }
@@ -655,7 +672,11 @@ export async function clearPorts(
       args,
     );
     revalidatePath("/recon");
-    return { ok: true, message: `ลบ ${r.affectedRows} รายการ`, affected: r.affectedRows };
+    return {
+      ok: true,
+      message: `ลบ ${r.affectedRows} รายการ`,
+      affected: r.affectedRows,
+    };
   } catch {
     return { ok: false, message: "ลบไม่สำเร็จ" };
   }

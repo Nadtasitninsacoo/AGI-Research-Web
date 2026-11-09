@@ -11,6 +11,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
       { label: "Command", icon: "command", href: "/command", match: "/command" },
       { label: "Execute", icon: "rocket", href: "/execute", match: "/execute" },
       { label: "Map", icon: "map", href: "/map", match: "/map" },
+      { label: "DARK AGI", icon: "command", href: "/dark-agi", match: "/dark-agi" },
     ],
   },
   {
