@@ -35,18 +35,40 @@ type Operation = {
   unavailableReason: string | null;
 };
 
+type RemoteHost = {
+  id: string;
+  host: string;
+  label: string | null;
+  status: "PENDING_APPROVAL" | "APPROVED" | "REVOKED";
+  hasCredential: boolean;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-/** The example instruction text for an operation.
- * - "local": never mention a target — the operation doesn't take one.
- * - "network": omit the target by default too. The backend auto-resolves it
- *   from the operator's one currently-approved Scope when none is given — a
- *   human only adds "on <host>" themselves when they mean a specific host,
- *   never a placeholder we invented. */
+/** "*-remote" operations need an explicit, pre-registered Remote Host with a
+ * credential on file AND operator approval — Scope alone never covers this
+ * (Scope says a target may be touched at all; a Remote Host additionally
+ * says this platform may run PowerShell ON it). Never auto-resolved. */
+function isRemoteOp(op: Operation): boolean {
+  return op.operationId.endsWith("-remote");
+}
+
+function usableRemoteHosts(hosts: RemoteHost[]): RemoteHost[] {
+  return hosts.filter((h) => h.status === "APPROVED" && h.hasCredential);
+}
+
+/** The actual, ready-to-run command for an operation — DARK AGI's own
+ * canonical `toolId:operationId` syntax (not a description, not a title).
+ * Works unmodified in both Terminal modes: DIRECT submits it as-is, and AI
+ * mode recognizes this exact form as DARK AGI's own command language, so it
+ * never needs guessing. No target is appended — for a "network" operation
+ * the backend auto-resolves it from the operator's one currently-approved
+ * Scope when none is given; a human adds "on <host>" themselves only when
+ * they mean a specific host, never a placeholder we invented. */
 function exampleCommand(op: Operation): string {
-  return op.title;
+  return `${op.toolId}:${op.operationId}`;
 }
 
 function riskClass(risk: string): string {
@@ -62,8 +84,27 @@ export default function DarkAgiPage() {
   const [opsLoading, setOpsLoading] = useState(true);
   const [opsError, setOpsError] = useState("");
   const [search, setSearch] = useState("");
+  const [remoteHosts, setRemoteHosts] = useState<RemoteHost[]>([]);
 
   const terminal = useDarkAgiTerminal();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/dark-agi/remote-hosts", { cache: "no-store", signal: controller.signal })
+      .then((res) => res.json())
+      .then((payload: unknown) => {
+        if (isRecord(payload) && Array.isArray(payload.items)) {
+          setRemoteHosts(payload.items as RemoteHost[]);
+        }
+      })
+      .catch(() => {
+        // Non-fatal: *-remote ops just show as unavailable below, same as
+        // any other reachability failure.
+      });
+    return () => controller.abort();
+  }, []);
+
+  const hasUsableRemoteHost = usableRemoteHosts(remoteHosts).length > 0;
 
   // Command reference: refetched fresh every time this page loads — never
   // baked into source, since DARK AGI's own catalogue changes over time.
@@ -101,7 +142,10 @@ export default function DarkAgiPage() {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return operations;
     return operations.filter((op) =>
-      [op.toolId, op.operationId, op.title, op.description, op.category]
+      // Include the colon form explicitly — it's exactly what the copy
+      // button and the command box show, so searching with it (as copied)
+      // must match, not just the space-joined fields below.
+      [`${op.toolId}:${op.operationId}`, op.toolId, op.operationId, op.title, op.description, op.category]
         .join(" ")
         .toLowerCase()
         .includes(keyword),
@@ -227,7 +271,10 @@ export default function DarkAgiPage() {
                     <p className="op-emptyTitle">ไม่พบ operation</p>
                   </div>
                 ) : (
-                  filteredOperations.map((op) => (
+                  filteredOperations.map((op) => {
+                    const remoteBlocked = isRemoteOp(op) && !hasUsableRemoteHost;
+                    const usable = op.available && !remoteBlocked;
+                    return (
                     <div
                       key={`${op.toolId}:${op.operationId}`}
                       style={{
@@ -235,7 +282,7 @@ export default function DarkAgiPage() {
                         borderRadius: 8,
                         padding: "8px 10px",
                         marginBottom: 6,
-                        opacity: op.available ? 1 : 0.45,
+                        opacity: usable ? 1 : 0.45,
                       }}
                     >
                       <div
@@ -261,6 +308,13 @@ export default function DarkAgiPage() {
                       {!op.available && (
                         <div style={{ fontSize: 10, marginTop: 4, color: "#ff9aa5" }}>
                           {op.unavailableReason ?? "ยังไม่พร้อมใช้งานบนเครื่องนี้"}
+                        </div>
+                      )}
+                      {remoteBlocked && (
+                        <div style={{ fontSize: 10, marginTop: 4, color: "#ff9aa5" }}>
+                          ต้องมี Remote Host ที่อนุมัติแล้วและตั้งค่า credential ไว้อย่างน้อย 1
+                          เครื่อง (ตอนนี้ยังไม่มี) — ไปตั้งค่าที่ DARK AGI console →
+                          Remote Hosts ก่อน
                         </div>
                       )}
 
@@ -311,7 +365,7 @@ export default function DarkAgiPage() {
                         <button
                           type="button"
                           onClick={() => fillExample(op)}
-                          disabled={!op.available}
+                          disabled={!usable}
                           className="op-btn op-btnXs"
                           style={{ flex: 1, justifyContent: "center" }}
                           title="เติมคำสั่งลงช่อง Terminal ให้แก้ไขก่อนกด Run เอง — DARK AGI ใช้ AI ตีความ (ต้องตั้งโมเดลใน Model Registry ก่อน)"
@@ -322,7 +376,7 @@ export default function DarkAgiPage() {
                         <button
                           type="button"
                           onClick={() => terminal.runDirect(op.toolId, op.operationId, op.title)}
-                          disabled={!op.available || terminal.submitting}
+                          disabled={!usable || terminal.submitting}
                           className="op-btn op-btnOk op-btnXs"
                           style={{ flex: 1, justifyContent: "center" }}
                           title="รันทันทีด้วย operation ที่เลือกไว้แน่นอนแล้ว — ไม่ผ่าน AI เลย ไม่ต้องตั้งโมเดล"
@@ -332,7 +386,8 @@ export default function DarkAgiPage() {
                         </button>
                       </div>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </section>
@@ -340,7 +395,7 @@ export default function DarkAgiPage() {
             {/* ── Terminal ─────────────────────────────────────────────── */}
             <section
               className="op-panel"
-              style={{ display: "flex", flexDirection: "column", minHeight: 640 }}
+              style={{ display: "flex", flexDirection: "column", height: 640 }}
             >
               <div className="op-head">
                 <h2 className="op-title">
@@ -363,6 +418,9 @@ export default function DarkAgiPage() {
                   setInput={terminal.setInput}
                   mode={terminal.mode}
                   setMode={terminal.setMode}
+                  search={terminal.search}
+                  setSearch={terminal.setSearch}
+                  onClear={terminal.clearLog}
                   submitting={terminal.submitting}
                   onSubmit={terminal.submit}
                   minHeight={420}

@@ -15,6 +15,7 @@ export function ConfirmModal({
   pending = false,
   onConfirm,
   onCancel,
+  zIndex,
 }: {
   open: boolean;
   title: string;
@@ -25,6 +26,10 @@ export function ConfirmModal({
   pending?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Override the overlay's z-index (default from .modal-overlay, 100) — for
+   * callers rendered inside their own high-z-index floating UI (e.g. a
+   * draggable panel), so the dialog still shows above it. */
+  zIndex?: number;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -40,7 +45,7 @@ export function ConfirmModal({
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" role="presentation" onClick={() => !pending && onCancel()} style={{ background: "rgba(5,5,5,0.85)" }}>
+    <div className="modal-overlay" role="presentation" onClick={() => !pending && onCancel()} style={{ background: "rgba(5,5,5,0.85)", ...(zIndex !== undefined ? { zIndex } : {}) }}>
       <div className="modal" role="alertdialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} style={{ background: "#0a0a0a", border: "1px solid #f81e3666", color: "#f81e36" }}>
         <h3 className="modal-title" style={{ color: "#f81e36" }}>{title}</h3>
         {body && <div className="modal-body" style={{ color: "#ffb3bb" }}>{body}</div>}

@@ -24,6 +24,10 @@ export function TerminalFloatButton() {
 
   function onDragStart(event: ReactPointerEvent<HTMLDivElement>) {
     if (maximized || minimized) return;
+    // Don't start a drag (and don't capture the pointer) when the press
+    // started on one of the title-bar buttons — pointer capture on this
+    // header would otherwise swallow their click (minimize/maximize/close).
+    if ((event.target as HTMLElement).closest("button")) return;
     dragRef.current = { startX: event.clientX, startY: event.clientY, origX: pos.x, origY: pos.y };
     event.currentTarget.setPointerCapture(event.pointerId);
   }
@@ -42,18 +46,50 @@ export function TerminalFloatButton() {
     dragRef.current = null;
   }
 
+  /** Explicit pixel dimensions always — never CSS vw/vh or a mix of
+   * top+bottom+width:"auto", both of which turned out fragile (vw includes
+   * the scrollbar gutter in some browsers; stretch-via-inset with "auto"
+   * sizing interacting with the flex column inside collapsed to nothing in
+   * at least one case). Recomputed from the real window size every render,
+   * which is cheap and always correct. */
+  function windowBox(): { left: number; top: number; width: number; height: number } {
+    if (maximized) {
+      const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
+      const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+      return { left: 24, top: 24, width: Math.max(320, vw - 48), height: Math.max(240, vh - 48) };
+    }
+    return { left: pos.x, top: pos.y, width: 680, height: minimized ? 44 : 600 };
+  }
+
+  const box = windowBox();
+
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => {
+            const next = !v;
+            // Reopening always starts from a known-good size — a previous
+            // session's maximize/minimize glitch must never persist into a
+            // "stuck invisible" state that toggling open can't recover from.
+            if (next) {
+              setMaximized(false);
+              setMinimized(false);
+            }
+            return next;
+          });
+        }}
         className="chip"
         title="DARK AGI Terminal"
         style={{
           cursor: "pointer",
-          background: open ? "rgba(248,30,54,0.14)" : undefined,
-          borderColor: open ? "var(--red-hot, #f81e36)" : undefined,
+          background: open ? "rgba(248,30,54,0.14)" : "rgba(248,30,54,0.05)",
+          border: open
+            ? "1px solid var(--red-hot, #f81e36)"
+            : "1px solid rgba(248,30,54,0.5)",
           color: open ? "#fff" : undefined,
+          boxShadow: open ? "0 0 0 2px var(--red-glow, rgba(248,30,54,0.25))" : undefined,
         }}
       >
         <TerminalIcon size={11} />
@@ -64,10 +100,10 @@ export function TerminalFloatButton() {
         <div
           style={{
             position: "fixed",
-            left: maximized ? 24 : pos.x,
-            top: maximized ? 24 : pos.y,
-            width: maximized ? "calc(100vw - 48px)" : 680,
-            height: maximized ? "calc(100vh - 48px)" : minimized ? "auto" : 600,
+            left: box.left,
+            top: box.top,
+            width: box.width,
+            height: box.height,
             zIndex: 999,
             display: "flex",
             flexDirection: "column",
@@ -156,6 +192,9 @@ export function TerminalFloatButton() {
                 setInput={terminal.setInput}
                 mode={terminal.mode}
                 setMode={terminal.setMode}
+                search={terminal.search}
+                setSearch={terminal.setSearch}
+                onClear={terminal.clearLog}
                 submitting={terminal.submitting}
                 onSubmit={terminal.submit}
                 minHeight={maximized ? 300 : 260}

@@ -514,3 +514,90 @@
   font-size: 10px;
   text-align: right;
 }
+
+/* ---------- DARK AGI job result banner ---------- */
+@keyframes jobPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px currentColor; }
+  50% { opacity: 0.4; box-shadow: 0 0 2px currentColor; }
+}
+@keyframes jobFlash {
+  0% { box-shadow: 0 0 0 0 currentColor, inset 0 0 0 0 currentColor; }
+  30% { box-shadow: 0 0 16px 1px currentColor, inset 0 0 12px -4px currentColor; }
+  100% { box-shadow: 0 0 0 0 transparent, inset 0 0 0 0 transparent; }
+}
+.job-banner {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 2px 0 10px;
+  background: rgba(255, 255, 255, 0.02);
+  animation: jobFlash 900ms ease-out;
+}
+.job-banner-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.job-banner-row {
+  display: flex;
+  gap: 10px;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.job-banner-row + .job-banner-row { margin-top: 2px; }
+.job-banner-label {
+  flex: 0 0 72px;
+  color: var(--faint);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding-top: 2px;
+}
+.job-banner-value {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-strong);
+  word-break: break-word;
+}
+.job-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.job-dot.is-live { animation: jobPulse 1.2s ease-in-out infinite; }
+.job-status-ok { color: var(--ok); }
+.job-status-bad { color: var(--error); }
+.job-status-warn { color: var(--warn); }
+
+/* A travelling light along the top edge while a job is still in flight
+   (QUEUED / RUNNING / AWAITING_APPROVAL) — distinct from the one-shot
+   jobFlash on a status transition, so a long-queued job still visibly
+   reads as "alive", not stuck. */
+@keyframes jobChase {
+  0% { background-position: -40% 0; }
+  100% { background-position: 140% 0; }
+}
+.job-banner.is-live {
+  position: relative;
+  overflow: hidden;
+}
+.job-banner.is-live::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--warn) 45%, var(--warn) 55%, transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: jobChase 1.8s linear infinite;
+}
