@@ -102,3 +102,75 @@ export async function callDarkAgiTool(name, args) {
     return `ERROR: DARK AGI call failed: ${err?.message ?? err}`;
   }
 }
+
+// ── Plain REST calls (jobs/scopes/engine) ──────────────────────────────────
+// Separate from the MCP `rpc()` helper above: these give full control over
+// the request (needed to submit a job without blocking on its result, and to
+// poll it on our own schedule) and a structured error with the real HTTP
+// status, so callers can tell a 401/403/422 apart from a network failure and
+// never retry a rejection as if it were transient.
+
+export class DarkAgiHttpError extends Error {
+  constructor(status, body) {
+    const message =
+      (body && typeof body === "object" && typeof body.message === "string" && body.message) ||
+      `DARK AGI HTTP ${status}`;
+    super(message);
+    this.name = "DarkAgiHttpError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+async function restFetch(path, init) {
+  if (!isDarkAgiEnabled()) {
+    throw new Error("DARK AGI is not configured (set DARK_AGI_API_KEY in .env.local).");
+  }
+  const res = await fetch(`${config.darkAgi.url}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.darkAgi.apiKey}`,
+      ...(init?.headers ?? {}),
+    },
+    signal: AbortSignal.timeout(config.darkAgi.timeoutMs),
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new DarkAgiHttpError(res.status, body);
+  return body;
+}
+
+/** Submit one job. Returns immediately with whatever status DARK AGI gives
+ * back first (often AWAITING_APPROVAL for a high-risk operation) — never
+ * waits for it to finish. Poll with getJob(). */
+export async function submitJob(toolId, operationId, input) {
+  return restFetch("/jobs", {
+    method: "POST",
+    body: JSON.stringify({ toolId, operationId, input }),
+  });
+}
+
+/** Current state of one job (AWAITING_APPROVAL/QUEUED/RUNNING/terminal). */
+export async function getJob(jobId) {
+  return restFetch(`/jobs/${encodeURIComponent(jobId)}`);
+}
+
+/** Cancel a job this API key's own user submitted. */
+export async function cancelJob(jobId) {
+  return restFetch(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+}
+
+/** Active, enabled scopes — used to warn the agent BEFORE submitting a job
+ * against a target no scope covers (DARK AGI's own server-side check is the
+ * real gate; this only avoids wasting a submission on something it will
+ * reject anyway). Never creates or modifies a scope. */
+export async function listScopes() {
+  const data = await restFetch("/scopes");
+  const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+  return items.filter((s) => s && s.enabled !== false);
+}
+
+/** Engine run state — paused (emergency-stop) vs resumed. */
+export async function getEngineStatus() {
+  return restFetch("/engine");
+}

@@ -26,10 +26,20 @@ const FILE_EXT = new Set([
 
 const isIpv4 = (s) => /^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/.test(s);
 
+// HOST requires at least one dot (it's built for FQDNs), so a bare
+// single-label name like "localhost" never matches it and was silently
+// slipping past the self-protection check below — check for it directly.
+// Bounded on both sides by "not a word/dot/hyphen char", so it catches
+// standalone "localhost" (any case, any surrounding punctuation like
+// "://" or ":3000") without misfiring on an unrelated hostname that merely
+// contains the word, e.g. "localhost.example.com" or "my-localhost-app.com".
+const LOCAL_WORD = /(?<![\w.-])localhost(?![\w.-])/i;
+
 /** Pull candidate network targets out of a raw command string. */
 export function extractTargets(command) {
   const found = new Set();
   if (!command) return [];
+  if (LOCAL_WORD.test(command)) found.add("localhost");
   for (const m of command.matchAll(IPV4)) found.add(m[0].toLowerCase());
   for (const m of command.matchAll(HOST)) {
     const h = m[0].toLowerCase();

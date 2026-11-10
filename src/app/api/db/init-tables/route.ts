@@ -83,6 +83,26 @@ const EXTRA_TABLES: { name: string; sql: string }[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    name: "dark_agi_scan_results",
+    sql: `CREATE TABLE IF NOT EXISTS dark_agi_scan_results (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      job_id VARCHAR(64) NOT NULL,
+      tool_id VARCHAR(40) NOT NULL,
+      operation_id VARCHAR(60) NOT NULL,
+      host VARCHAR(255) NOT NULL,
+      os_name VARCHAR(160) NULL,
+      os_accuracy INT NULL,
+      scripts JSON NULL,
+      status VARCHAR(24) NOT NULL,
+      raw_result JSON NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uniq_job_host (job_id, host),
+      KEY idx_host (host)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     name: "cve_intel",
     sql: `CREATE TABLE IF NOT EXISTS cve_intel (
       cve_id VARCHAR(32) NOT NULL,

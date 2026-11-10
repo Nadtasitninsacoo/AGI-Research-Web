@@ -642,6 +642,9 @@
   border-radius: 4px;
 }
 .smap-ipitem b { color: #ff9aa2; font-weight: 600; }
+/* Already stored in saved_ips — dimmed green so new IPs stand out. */
+.smap-ipitem.is-saved { border-color: rgba(95, 211, 138, 0.35); opacity: 0.6; }
+.smap-ipitem.is-saved b { color: #5fd38a; }
 
 .smap-ports { max-height: 240px; overflow: auto; border: 1px solid var(--line, #26303d); border-radius: 6px; }
 .smap-ports table { width: 100%; border-collapse: collapse; font-size: 12px; }

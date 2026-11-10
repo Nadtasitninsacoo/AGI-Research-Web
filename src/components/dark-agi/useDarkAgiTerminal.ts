@@ -323,14 +323,23 @@ async function runCommand(instruction: string) {
  * the Command Reference) and doesn't need DARK AGI's own Model Registry
  * configured at all. A target, if the operation needs one, is auto-resolved
  * from the operator's one active Scope. */
-async function runDirect(toolId: string, operationId: string, label: string) {
+async function runDirect(
+  toolId: string,
+  operationId: string,
+  label: string,
+  input?: Record<string, unknown>,
+) {
   patchStore({ submitting: true });
-  appendLog("input", `$ ${toolId}:${operationId}`);
+  const targets = Array.isArray(input?.targets) ? (input.targets as string[]) : [];
+  appendLog(
+    "input",
+    `$ ${toolId}:${operationId}${targets.length > 0 ? ` on ${targets.length} รายการ: ${targets.join(", ")}` : ""}`,
+  );
   try {
     const res = await fetch("/api/dark-agi/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toolId, operationId }),
+      body: JSON.stringify({ toolId, operationId, input: input ?? {} }),
     });
     const payload: unknown = await res.json().catch(() => null);
     if (!res.ok) {
@@ -377,6 +386,33 @@ async function runLocalCommand(text: string): Promise<boolean> {
   return true;
 }
 
+export type ParsedDirectCommand =
+  | { ok: true; toolId: string; operationId: string; targets: string[] }
+  | { ok: false };
+
+/** Pure parser for one DIRECT-mode line: `toolId:operationId`, with an
+ * optional trailing `on <target>[, <target>...]` — exactly what the Command
+ * Reference's own hint text tells people to type, so this has to actually
+ * split it out instead of letting " on <target>" end up stuffed verbatim
+ * into operationId (which DARK AGI then rejects as an unknown operation
+ * name). Multiple comma-separated targets are supported so a human can send
+ * a whole batch in one line; `targets` is always an array (empty = none
+ * given — the backend auto-resolves from the active Scope) so the count of
+ * what was actually sent in is never ambiguous. Exported and side-effect-free
+ * so it's independently testable without the hook/network. */
+export function parseDirectCommand(text: string): ParsedDirectCommand {
+  const match = text.match(/^([^:\s]+):(\S+)(?:\s+on\s+(.+))?$/i);
+  if (!match) return { ok: false };
+  const [, toolId, operationId, targetList] = match;
+  const targets = targetList
+    ? targetList
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : [];
+  return { ok: true, toolId: toolId.trim(), operationId: operationId.trim(), targets };
+}
+
 /** What a Terminal's input box does on Run, given its own local `text` and
  * `mode` (per-surface — see the module doc comment above).
  * 1. A locally-handled word ("banner", …) is intercepted here first — it
@@ -389,15 +425,20 @@ function dispatchSubmit(text: string, mode: TerminalMode) {
     if (await runLocalCommand(text)) return;
 
     if (mode === "direct") {
-      const sep = text.indexOf(":");
-      if (sep <= 0 || sep === text.length - 1) {
+      const parsed = parseDirectCommand(text);
+      if (!parsed.ok) {
         appendLog(
           "error",
-          `รูปแบบไม่ถูกต้องสำหรับโหมด "รันทันที" — ต้องเป็น toolId:operationId เช่น nmap:host-discovery (พิมพ์มา: "${text}")`,
+          `รูปแบบไม่ถูกต้องสำหรับโหมด "รันทันที" — ต้องเป็น toolId:operationId หรือ toolId:operationId on <target> เช่น nmap:host-discovery on 10.0.0.5 (พิมพ์มา: "${text}")`,
         );
         return;
       }
-      await runDirect(text.slice(0, sep).trim(), text.slice(sep + 1).trim(), text);
+      await runDirect(
+        parsed.toolId,
+        parsed.operationId,
+        text,
+        parsed.targets.length > 0 ? { targets: parsed.targets } : undefined,
+      );
       return;
     }
 

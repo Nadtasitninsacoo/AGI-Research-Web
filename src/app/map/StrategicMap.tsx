@@ -9,6 +9,7 @@ import {
   useActionState,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -23,10 +24,12 @@ import {
   internetdbAction,
   ipRangesInBoundsAction,
   saveIpsAction,
+  checkSavedIpsAction,
   type PortRow,
   type IpGeoRange,
 } from "./actions";
 import { Icon } from "@/components/Icon";
+import { ToastStack, type ToastItem } from "@/components/hud/Toast";
 
 // Mark the map session as active in localStorage (best-effort)
 if (typeof window !== "undefined") {
@@ -278,8 +281,18 @@ export function StrategicMap() {
   const [ports, setPorts] = useState<PortRow[] | null>(null);
   const [ipList, setIpList] = useState<IpGeoRange[] | null>(null);
   const [ipTotal, setIpTotal] = useState(0);
+  // IPs from the current list that already exist in saved_ips (null = not checked yet).
+  const [existingIps, setExistingIps] = useState<Set<string> | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastSeq = useRef(0);
+  const pushToast = useCallback((toast: Omit<ToastItem, "id">) => {
+    setToasts((current) => [...current, { ...toast, id: ++toastSeq.current }].slice(-4));
+  }, []);
+  const dismissToast = useCallback((toastId: number) => {
+    setToasts((current) => current.filter((t) => t.id !== toastId));
+  }, []);
 
   // Leaflet objects live in a ref so React re-renders never recreate the map.
   const elRef = useRef<HTMLDivElement>(null);
@@ -1148,6 +1161,11 @@ export function StrategicMap() {
     setIpList(r.ranges);
     setIpTotal(r.totalRanges);
     setSaveMsg("");
+    setExistingIps(null);
+    // Split the list into "already in DB" vs "new" (non-blocking).
+    void checkSavedIpsAction(r.ranges.map((x) => x.ip)).then((c) => {
+      if (c.ok) setExistingIps(new Set(c.existing));
+    });
     if (!ipgeoLayer.current) ipgeoLayer.current = leaflet.layerGroup().addTo(m);
     ipgeoLayer.current.clearLayers();
 
@@ -1194,8 +1212,15 @@ export function StrategicMap() {
     if (r.ranges.length === 0)
       return "ไม่พบช่วง IP ที่ geolocate ได้ในกรอบแผนที่นี้ — ลองซูมออกหรือเลื่อนไปพื้นที่อื่น";
     const plotted = Math.min(r.ranges.length, MARKER_CAP);
+    // r.rangesCapped: the area has MORE ranges than the 10,000-item save
+    // cap — say so up front, before the operator tries to save and finds
+    // out only some of what they saw actually got captured.
     return `IP ในกรอบนี้: ${r.totalRanges} ช่วง · ปักหมุด ${plotted} จุด${
       r.ranges.length > MARKER_CAP ? ` (จาก ${r.ranges.length})` : ""
+    }${
+      r.rangesCapped
+        ? ` · ⚠ พื้นที่นี้มีมากกว่าที่บันทึกได้ — บันทึกได้สูงสุด ${r.ranges.length.toLocaleString()} รายการแรกเท่านั้น (ลองซูมเข้าแคบลงเพื่อเก็บครบทุกรายการ)`
+        : ""
     }`;
   }, []);
 
@@ -1209,18 +1234,78 @@ export function StrategicMap() {
   }, [ipsInBounds]);
 
   // Save the currently-listed IPs into the DB.
+  // Only IPs not yet in the DB are sent (server re-checks as a safety net).
+  const newIps = useMemo(
+    () => (ipList && existingIps ? ipList.filter((r) => !existingIps.has(r.ip)) : null),
+    [ipList, existingIps],
+  );
   const saveIps = useCallback(async () => {
-    if (!ipList?.length || saveBusy) return;
+    if (!newIps?.length || saveBusy) return;
     setSaveBusy(true);
-    setSaveMsg("กำลังบันทึกเป้าหมาย...");
-    const r = await saveIpsAction(ipList);
+
+    // Sent in chunks, never the whole list in one Server Action call — each
+    // IpGeoRange serializes to ~100-150 bytes, so a batch near the map's own
+    // 10,000-item cap can exceed Next.js's 1MB Server Action body limit and
+    // get rejected before saveIpsAction ever runs (the "Body exceeded 1 MB
+    // limit" runtime error, with nothing saved at all).
+    const CHUNK = 1500;
+    let saved = 0;
+    let duplicate = 0;
+    let total = 0;
+    let failedChunks = 0;
+    let lastFailMsg = "";
+
+    // Best-effort: one chunk failing (a transient DB hiccup, say) must not
+    // throw away every chunk after it — keep going and save as much as
+    // actually can be saved, then report successes AND failures honestly
+    // rather than an all-or-nothing result.
+    for (let i = 0; i < newIps.length; i += CHUNK) {
+      const batch = newIps.slice(i, i + CHUNK);
+      setSaveMsg(
+        `กำลังบันทึกเป้าหมาย... ${Math.min(i + CHUNK, newIps.length)}/${newIps.length}`,
+      );
+      const r = await saveIpsAction(batch);
+      if (!r.ok) {
+        failedChunks += 1;
+        lastFailMsg = r.message;
+        continue;
+      }
+      saved += r.saved;
+      duplicate += r.duplicate;
+      total += r.total;
+    }
+
+    if (saved > 0 || failedChunks === 0) {
+      const c = await checkSavedIpsAction((ipList ?? []).map((x) => x.ip));
+      if (c.ok) setExistingIps(new Set(c.existing));
+    }
+
     setSaveBusy(false);
-    setSaveMsg(
-      r.ok
-        ? `บันทึกเป้าหมายแล้ว ${r.saved} รายการ (ซ้ำ/ข้าม ${r.duplicate}) จาก ${r.total}`
-        : r.message,
-    );
-  }, [ipList, saveBusy]);
+    const base = `บันทึก IP ใหม่แล้ว ${saved} รายการ (ซ้ำ/ข้าม ${duplicate}) จาก ${total}`;
+
+    if (failedChunks > 0) {
+      if (saved > 0) {
+        const msg = `${base} — แต่ ${failedChunks} ชุดล้มเหลว (${lastFailMsg}) ลองกดบันทึกซ้ำอีกครั้งเพื่อเก็บส่วนที่เหลือ`;
+        setSaveMsg(msg);
+        pushToast({
+          tone: "info",
+          title: `บันทึกสำเร็จบางส่วน (${saved} รายการ)`,
+          body: `${failedChunks} ชุดล้มเหลว — กดบันทึกซ้ำเพื่อเก็บส่วนที่เหลือ`,
+        });
+      } else {
+        const msg = `บันทึกไม่สำเร็จเลย (${lastFailMsg})`;
+        setSaveMsg(msg);
+        pushToast({ tone: "info", title: "บันทึกไม่สำเร็จ", body: lastFailMsg });
+      }
+    } else {
+      setSaveMsg(base);
+      pushToast({
+        tone: "done",
+        title: "บันทึกเป้าหมายสำเร็จ",
+        body: `${saved} รายการใหม่ (ซ้ำ/ข้าม ${duplicate}) จากทั้งหมด ${total}`,
+      });
+    }
+  }, [newIps, ipList, saveBusy, pushToast]);
 
   // Fullscreen the map stage (Fullscreen API), re-fitting Leaflet afterwards.
   const toggleFullscreen = useCallback(() => {
@@ -1743,12 +1828,16 @@ export function StrategicMap() {
                 type="button"
                 className="btn btn-sm btn-danger"
                 onClick={saveIps}
-                disabled={saveBusy}
+                disabled={saveBusy || !newIps || newIps.length === 0}
               >
                 <Icon name="download" />{" "}
                 {saveBusy
                   ? "กำลังบันทึก..."
-                  : `บันทึก ${ipList.length} เลข IP ลงฐานระบบ`}
+                  : !newIps
+                    ? "กำลังตรวจสอบฐานข้อมูล..."
+                    : newIps.length === 0
+                      ? "IP ทั้งหมดมีในฐานข้อมูลแล้ว"
+                      : `บันทึก IP ที่ยังไม่มีในฐานข้อมูล (${newIps.length})`}
               </button>
               <button
                 type="button"
@@ -1763,13 +1852,25 @@ export function StrategicMap() {
               </button>
             </span>
           </div>
+          {newIps && existingIps && (
+            <p className="smap-iplist-msg">
+              มีในฐานข้อมูลแล้ว {existingIps.size} · ยังไม่มี {newIps.length}
+            </p>
+          )}
           {saveMsg && <p className="smap-iplist-msg">{saveMsg}</p>}
           <div className="smap-iplist-body">
             {ipList.map((r, i) => (
               <span
                 key={`${r.ip}-${i}`}
-                className="smap-ipitem"
-                title={[r.city, r.region, r.cc].filter(Boolean).join(", ")}
+                className={`smap-ipitem ${existingIps?.has(r.ip) ? "is-saved" : ""}`}
+                title={[
+                  existingIps?.has(r.ip) ? "มีในฐานข้อมูลแล้ว" : "",
+                  r.city,
+                  r.region,
+                  r.cc,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
               >
                 <b>{r.ip}</b>
               </span>
@@ -2163,6 +2264,8 @@ export function StrategicMap() {
         ระบบสแกนเป้าหมายด้วย <b>Nmap / InternetDB</b>{" "}
         และทำงานได้แม้ในสภาวะออฟไลน์
       </p>
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

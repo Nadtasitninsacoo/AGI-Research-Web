@@ -59,6 +59,10 @@ export const config = {
     apiKey: process.env.DARK_AGI_API_KEY?.trim() || "",
     url: (process.env.DARK_AGI_URL?.trim() || "http://127.0.0.1:7411/api/v1").replace(/\/+$/, ""),
     timeoutMs: int(process.env.DARK_AGI_TIMEOUT_MS, 30_000),
+    // Ceiling the agent's own os_fingerprint/nse_scan tools may ever request
+    // for --max-rate, regardless of what the model asks for. DARK AGI's own
+    // per-operation field cap (10000) still applies on top of this.
+    maxRateCap: int(process.env.DARK_AGI_MAX_RATE_CAP, 1000),
   },
 
   worker: {

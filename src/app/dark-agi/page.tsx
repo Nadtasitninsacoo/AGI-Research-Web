@@ -16,7 +16,13 @@ import { Sidebar } from "@/components/hud/Sidebar";
 import { useDarkAgiTerminal } from "@/components/dark-agi/useDarkAgiTerminal";
 import { TerminalPanel } from "@/components/dark-agi/TerminalPanel";
 import { CopyButton } from "@/components/dark-agi/CopyButton";
+import { NmapAdvancedForm } from "@/components/dark-agi/NmapAdvancedForm";
 import "@/styles/ops.css";
+
+// Operations with required fields the plain "รันทันที" button can't fill in
+// (just toolId/operationId, no input) — these get the dedicated form instead.
+const NMAP_ADVANCED_OPS = new Set(["os-fingerprint", "script-scan"]);
+const NMAP_MAX_RATE_CAP = 1000; // mirrors engine config.darkAgi.maxRateCap default
 
 // ── Types mirroring DARK AGI's own contract (execution.contract.ts) ────────
 
@@ -385,6 +391,17 @@ export default function DarkAgiPage() {
                           รันทันที (ไม่ใช้ AI)
                         </button>
                       </div>
+
+                      {op.toolId === "nmap" && NMAP_ADVANCED_OPS.has(op.operationId) && (
+                        <NmapAdvancedForm
+                          operationId={op.operationId as "os-fingerprint" | "script-scan"}
+                          maxRateCap={NMAP_MAX_RATE_CAP}
+                          disabled={!usable || terminal.submitting}
+                          onRun={(input) =>
+                            terminal.runDirect(op.toolId, op.operationId, op.title, input)
+                          }
+                        />
+                      )}
                     </div>
                     );
                   })

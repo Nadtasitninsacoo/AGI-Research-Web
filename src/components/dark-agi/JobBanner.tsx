@@ -63,7 +63,13 @@ function summarize(job: Job): string {
 
 export function JobBanner({ job }: { job: Job }) {
   const visual = statusVisual(job.status);
-  const target = job.targets.length > 0 ? job.targets.join(", ") : job.scope?.name ?? "(auto-resolved scope)";
+  // Always show how many targets were actually sent in — a job built from a
+  // scope or a multi-target "on a,b,c" line can carry dozens of addresses;
+  // silently joining them with no count makes the real size invisible.
+  const target =
+    job.targets.length > 0
+      ? `${job.targets.length} รายการ: ${job.targets.join(", ")}`
+      : (job.scope?.name ?? "(auto-resolved scope)");
 
   return (
     <div className={`job-banner ${visual.live ? "is-live" : ""}`}>

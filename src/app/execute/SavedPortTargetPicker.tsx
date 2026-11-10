@@ -93,16 +93,26 @@ export default function SavedPortTargetPicker({
   onSelectionChange,
 }: SavedPortTargetPickerProps) {
   const [query, setQuery] = useState("");
+  // Quick filter: only rows with a confirmed/identified open service — hides
+  // "Unknown service" ports whose banner couldn't be identified.
+  const [onlyOpenPorts, setOnlyOpenPorts] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
     () => new Set(),
+  );
+
+  const openPortCount = useMemo(
+    () => targets.filter((target) => Boolean(target.service)).length,
+    [targets],
   );
 
   const filteredTargets = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    if (!normalizedQuery) return targets;
-
     return targets.filter((target) => {
+      if (onlyOpenPorts && !target.service) return false;
+
+      if (!normalizedQuery) return true;
+
       const searchableText = [
         target.ip,
         String(target.port),
@@ -116,7 +126,7 @@ export default function SavedPortTargetPicker({
 
       return searchableText.includes(normalizedQuery);
     });
-  }, [query, targets]);
+  }, [query, targets, onlyOpenPorts]);
 
   // Compute each target's severity ONCE per target set (not per render/selection).
   const severityByKey = useMemo(() => {
@@ -230,6 +240,20 @@ export default function SavedPortTargetPicker({
           className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
         >
           ยกเลิกทั้งหมด
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setOnlyOpenPorts((v) => !v)}
+          aria-pressed={onlyOpenPorts}
+          title="แสดงเฉพาะ Port ที่ระบุ Service ได้ (ซ่อนรายการ Unknown service)"
+          className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+            onlyOpenPorts
+              ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-300"
+              : "border-slate-600 text-slate-300 hover:bg-slate-800"
+          }`}
+        >
+          {onlyOpenPorts ? "✓ " : ""}เฉพาะ Port ที่เปิดอยู่ ({openPortCount})
         </button>
 
         <span className="text-xs text-slate-500">

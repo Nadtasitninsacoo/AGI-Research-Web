@@ -902,6 +902,11 @@ export type IpGeoResult =
       totalRanges: number;
       shownPoints: number;
       capped: boolean;
+      /** True when `ranges` (the save-able list) was truncated to
+       * IPGEO_LIST_CAP — i.e. `totalRanges` found more than `ranges` holds.
+       * Distinct from `capped`, which is about the map's marker clustering,
+       * not about how many ranges are actually available to save. */
+      rangesCapped: boolean;
       points: IpGeoPoint[];
       ranges: IpGeoRange[];
     };
@@ -1007,6 +1012,7 @@ export async function ipRangesInBoundsAction(b: {
       totalRanges: 0,
       shownPoints: 0,
       capped: false,
+      rangesCapped: false,
       points: [],
       ranges: [],
     };
@@ -1018,9 +1024,40 @@ export async function ipRangesInBoundsAction(b: {
     totalRanges: totalRanges || 0,
     shownPoints: points.length,
     capped,
+    rangesCapped: totalRanges > ranges.length,
     points,
     ranges,
   };
+}
+
+export type CheckIpsResult =
+  | { ok: false; message: string }
+  | { ok: true; existing: string[] };
+
+/**
+ * Which of these IPs are already stored in `saved_ips`? Read-only — used by the
+ * map UI to split the listed IPs into "already in DB" vs "new" before saving.
+ */
+export async function checkSavedIpsAction(ips: string[]): Promise<CheckIpsResult> {
+  const list = [
+    ...new Set(
+      (Array.isArray(ips) ? ips : []).map(String).filter((ip) => net.isIP(ip)),
+    ),
+  ].slice(0, IPGEO_LIST_CAP);
+  if (!list.length) return { ok: true, existing: [] };
+  try {
+    const existing: string[] = [];
+    for (let i = 0; i < list.length; i += 2000) {
+      const [rows] = await db.query<RowDataPacket[]>(
+        "SELECT ip FROM saved_ips WHERE ip IN (?)",
+        [list.slice(i, i + 2000)],
+      );
+      for (const row of rows) existing.push(String(row.ip));
+    }
+    return { ok: true, existing };
+  } catch {
+    return { ok: false, message: "ตรวจสอบฐานข้อมูลไม่สำเร็จ" };
+  }
 }
 
 export type SaveIpsResult =
