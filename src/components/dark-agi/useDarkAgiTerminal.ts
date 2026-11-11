@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { isDagiCommand, operationsFrom, parseDagiCommand } from "./dagiCommand.ts";
 
 // Shared terminal logic for DARK AGI's human-operated command mode.
 //
@@ -357,6 +358,28 @@ async function runDirect(
   }
 }
 
+/** Runs a `dagi …` shorthand line: field types come from the live /operations
+ * catalogue, then the parsed job goes straight to runDirect (no AI). */
+async function runDagiCommand(text: string) {
+  patchStore({ submitting: true });
+  try {
+    const res = await fetch("/api/dark-agi/operations", { cache: "no-store" });
+    const payload: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      appendLog("input", `> ${text}`);
+      appendLog("error", formatApiError(payload, `โหลดรายการคำสั่งไม่สำเร็จ (${res.status})`));
+      patchStore({ submitting: false });
+      return;
+    }
+    const parsed = parseDagiCommand(text, operationsFrom(payload));
+    await runDirect(parsed.toolId, parsed.operationId, text, parsed.input);
+  } catch (err) {
+    appendLog("input", `> ${text}`);
+    appendLog("error", err instanceof Error ? err.message : "คำสั่งไม่สำเร็จ");
+    patchStore({ submitting: false });
+  }
+}
+
 /** A word DARK AGI's own Terminal intercepts locally, before ever attempting
  * to parse/submit it as a job (AI or DIRECT mode alike). Only "banner" today
  * — DARK AGI's own client lists no others. Returns true if it handled the
@@ -423,6 +446,13 @@ export function parseDirectCommand(text: string): ParsedDirectCommand {
 function dispatchSubmit(text: string, mode: TerminalMode) {
   void (async () => {
     if (await runLocalCommand(text)) return;
+
+    // `dagi <verb> key=value … keng` shorthand — parsed locally in either mode
+    // (no AI call, so it also works when the AI quota is exhausted).
+    if (isDagiCommand(text)) {
+      await runDagiCommand(text);
+      return;
+    }
 
     if (mode === "direct") {
       const parsed = parseDirectCommand(text);
