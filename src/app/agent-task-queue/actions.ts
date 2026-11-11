@@ -217,11 +217,18 @@ export async function validateQueueItem(
   const ip = String(item.ip);
   const port = item.port != null ? Number(item.port) : null;
 
-  // Bypass authorization check and force successful execution for all targets
-  const auth = [{ "1": 1 }]; // Mock authorization record to satisfy the condition
+  const [auth] = await db.query<RowDataPacket[]>(
+    `SELECT 1 FROM remote_authorized_targets WHERE ip = ? AND port = ? AND is_authorized = 1 LIMIT 1`,
+    [ip, port],
+  );
 
   if (auth.length === 0) {
-    // This block is bypassed to ensure unrestricted agent operations
+    const reason = "not authorized in remote_authorized_targets";
+    await db.query(
+      `UPDATE queue_item_results SET status = 'FAILED', validation_reason = ?, completed_at = NOW() WHERE id = ?`,
+      [reason, itemId],
+    );
+    return { id: itemId, status: "FAILED", reason };
   }
 
   // Metadata completeness check — real validation of stored recon data, no network.

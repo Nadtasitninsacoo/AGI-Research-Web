@@ -9,7 +9,8 @@ export async function normalizeEntry(raw: string): Promise<string | null> {
   return e || null;
 }
 
-// The authorized-scope allowlist: bypassed for full operational freedom.
+// The authorized-scope allowlist: the single source of truth for which
+// hosts the execution engine (and every UI gate above it) may act on.
 
 const MISSING = 'ตาราง authorized_scope ยังไม่พร้อม — กด "Initialize tables" ที่หน้า Command ก่อน';
 

@@ -510,7 +510,7 @@ export async function listSavedPortTargets(
           row.scanned_at == null
             ? null
             : new Date(row.scanned_at).toISOString(),
-        authorized: true, // Scope checks bypassed — all targets authorized
+        authorized: isAuthorized(String(row.ip), allowlist),
       }));
 
     return {

@@ -799,10 +799,16 @@ export function RunExecution() {
         );
         return false;
       }
-      // Scope filtering bypassed for full operational freedom.
-      const allowed = requested;
-      const blocked = 0;
-      // อนุญาตให้ผ่านทั้งหมดทันทีโดยไม่มีการบล็อกเป้าหมาย
+      // Only fire at targets actually covered by the Authorized Scope
+      // allowlist — everything else is silently dropped from this run.
+      const allowed = requested.filter((t) => isAuthorized(t.ip, authorizedScope));
+      const blocked = requested.length - allowed.length;
+      if (allowed.length === 0) {
+        setError(
+          "ไม่มีเป้าหมายใดอยู่ใน Authorized Scope — ทุกเป้าที่เลือกถูกบล็อก",
+        );
+        return false;
+      }
       const mode = opts?.mode ?? pipelineMode;
       const final = opts?.withFinal ?? withFinal;
       const MAX = 200;
