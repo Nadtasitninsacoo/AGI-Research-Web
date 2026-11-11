@@ -96,6 +96,9 @@ export default function SavedPortTargetPicker({
   // Quick filter: only rows with a confirmed/identified open service — hides
   // "Unknown service" ports whose banner couldn't be identified.
   const [onlyOpenPorts, setOnlyOpenPorts] = useState(false);
+  // Quick filter: only rows already in the Authorized Scope — hides targets
+  // a real strike couldn't touch anyway (engine gates execution to scope).
+  const [onlyAuthorized, setOnlyAuthorized] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
     () => new Set(),
   );
@@ -105,15 +108,22 @@ export default function SavedPortTargetPicker({
     [targets],
   );
 
+  const authorizedCount = useMemo(
+    () => targets.filter((target) => target.authorized).length,
+    [targets],
+  );
+
   const filteredTargets = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return targets.filter((target) => {
       if (onlyOpenPorts && !target.service) return false;
+      if (onlyAuthorized && !target.authorized) return false;
 
       if (!normalizedQuery) return true;
 
       const searchableText = [
+        `${target.ip}:${target.port}`, // so pasting the row's own "ip:port" label matches
         target.ip,
         String(target.port),
         target.service ?? "",
@@ -126,7 +136,7 @@ export default function SavedPortTargetPicker({
 
       return searchableText.includes(normalizedQuery);
     });
-  }, [query, targets, onlyOpenPorts]);
+  }, [query, targets, onlyOpenPorts, onlyAuthorized]);
 
   // Compute each target's severity ONCE per target set (not per render/selection).
   const severityByKey = useMemo(() => {
@@ -254,6 +264,20 @@ export default function SavedPortTargetPicker({
           }`}
         >
           {onlyOpenPorts ? "✓ " : ""}เฉพาะ Port ที่เปิดอยู่ ({openPortCount})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setOnlyAuthorized((v) => !v)}
+          aria-pressed={onlyAuthorized}
+          title="แสดงเฉพาะเป้าหมายที่อยู่ใน Authorized Scope แล้ว (ยิงจริงได้ทันที)"
+          className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+            onlyAuthorized
+              ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-300"
+              : "border-slate-600 text-slate-300 hover:bg-slate-800"
+          }`}
+        >
+          {onlyAuthorized ? "✓ " : ""}เฉพาะ Authorized ({authorizedCount})
         </button>
 
         <span className="text-xs text-slate-500">

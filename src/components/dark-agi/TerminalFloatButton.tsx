@@ -13,6 +13,9 @@ import {
 } from "lucide-react";
 import { useDarkAgiTerminal } from "./useDarkAgiTerminal";
 import { TerminalPanel } from "./TerminalPanel";
+// The floating terminal renders on every page, but op-btn / op-search styles
+// only shipped with a few pages — import them here so it never looks unstyled.
+import "@/styles/ops.css";
 
 const DOT_COLORS = ["#ff5f57", "#febc2e", "#28c840"]; // decorative traffic-light dots only
 

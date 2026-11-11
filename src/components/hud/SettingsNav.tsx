@@ -10,6 +10,17 @@ import { NotifySettings } from "./NotifySettings";
  */
 export function SettingsNav() {
   const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const signOut = async () => {
+    setSigningOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.assign("/login");
+    }
+  };
+
   return (
     <>
       <button
@@ -20,6 +31,16 @@ export function SettingsNav() {
       >
         <Icon name="settings" />
         <span>Settings</span>
+      </button>
+      <button
+        type="button"
+        className="nav-item nav-button"
+        onClick={signOut}
+        disabled={signingOut}
+        title="Sign Out"
+      >
+        <Icon name="logout" />
+        <span>{signingOut ? "Signing out…" : "Sign Out"}</span>
       </button>
       <NotifySettings open={open} onClose={() => setOpen(false)} />
     </>
