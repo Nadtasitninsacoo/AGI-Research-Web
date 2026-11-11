@@ -97,6 +97,19 @@
 .usb-ok { color: var(--ok); }
 .usb-bad { color: var(--warn); }
 .usb-table tbody tr { cursor: pointer; }
+.usb-hash-toggle {
+  margin-left: 6px;
+  padding: 0 6px;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.usb-hash-toggle:hover { color: var(--text-strong); border-color: rgba(255, 255, 255, 0.3); }
 .usb-table tr.is-sel { background: rgba(214, 22, 44, 0.08); }
 .usb-actions { display: flex; gap: 6px; justify-content: flex-end; }
 

@@ -123,6 +123,7 @@ export function UsbLab() {
     [],
   );
   const [selectedJob, setSelectedJob] = useState<CrackingJobItem | null>(null);
+  const [expandedHashId, setExpandedHashId] = useState<string | null>(null);
 
   // RECON — pre-crack weakness analysis (identify → dictionary → feasibility).
   const [analysis, setAnalysis] = useState<HashAnalysis | null>(null);
@@ -593,8 +594,33 @@ export function UsbLab() {
                     onClick={() => setSelectedJob(job)}
                   >
                     <td className="usb-name">{job.id}</td>
-                    <td className="usb-vid" style={{ maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {job.targetHash}
+                    <td
+                      className="usb-vid"
+                      style={
+                        expandedHashId === job.id
+                          ? { whiteSpace: "normal", wordBreak: "break-all" }
+                          : { maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis" }
+                      }
+                      title={job.targetHash}
+                    >
+                      {expandedHashId === job.id ? (
+                        job.targetHash
+                      ) : (
+                        <>
+                          {job.targetHash.slice(0, 18)}…
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        className="usb-hash-toggle"
+                        title={expandedHashId === job.id ? "ย่อแฮช" : "ดูแฮชเต็ม"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedHashId((prev) => (prev === job.id ? null : job.id));
+                        }}
+                      >
+                        {expandedHashId === job.id ? "ย่อ" : "⋯"}
+                      </button>
                     </td>
                     <td>{job.algorithm}</td>
                     <td>

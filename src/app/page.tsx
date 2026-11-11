@@ -190,7 +190,7 @@ async function DashboardFrame() {
                 AGI RESEARCH PLATFORM
               </div>
 
-              <h1>Dashboard</h1>
+              <h1>DASHBOARD</h1>
 
               <p className="hero-description">
                 Monitor your agents, experiments and research progress in

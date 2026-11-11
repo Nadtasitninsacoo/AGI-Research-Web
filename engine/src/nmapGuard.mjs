@@ -122,7 +122,7 @@ function ipToInt(ip) {
  * cover one requested target? Best-effort — DARK AGI's own server-side scope
  * check is the real authority; this only lets us warn the agent BEFORE
  * spending a job submission on something that's going to be rejected anyway. */
-function entryCoversTarget(entry, target) {
+export function entryCoversTarget(entry, target) {
   const e = entry.trim().toLowerCase();
   const t = target.trim().toLowerCase();
   if (e === "*" || e === t) return true;

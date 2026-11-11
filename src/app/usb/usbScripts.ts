@@ -47,46 +47,55 @@ export function identifyHash(raw: string): { algorithms: string[]; note: string;
   return { algorithms: [], note: "รูปแบบไม่ตรง hash hex มาตรฐาน — ตรวจสอบรูปแบบอีกครั้ง", riskLevel: "UNKNOWN" };
 }
 
-// Comprehensive weak base passwords list expanded for advanced security auditing and brute-force simulation
+// Comprehensive weak base passwords list expanded to maximum warfare-grade penetration auditing
 const COMPREHENSIVE_WEAK_BASES = new Set([
-  // Basic common passwords
-  "password", "123456", "123456789", "12345678", "12345", "qwerty", "abc123",
-  "football", "monkey", "letmein", "dragon", "111111", "baseball", "iloveyou",
-  "trustno1", "sunshine", "master", "welcome", "shadow", "ashley", "michael",
-  "superman", "batman", "admin", "root", "toor", "login", "guest", "test",
-  
-  // Database and server defaults
-  "oracle", "mysql", "postgres", "redis", "server", "changeme", "secret",
-  "pass", "passw0rd", "p@ssw0rd", "qazwsx", "zaq12wsx", "1q2w3e4r", "1qaz2wsx",
-  
-  // Names and pop culture
+  // ── 1. Basic & Ultra-Common Passwords ───────────────────────────────
+  "password", "123456", "123456789", "12345678", "12345", "1234", "123",
+  "qwerty", "abc123", "football", "monkey", "letmein", "dragon", "111111",
+  "baseball", "iloveyou", "trustno1", "sunshine", "master", "welcome",
+  "shadow", "ashley", "michael", "superman", "batman", "admin", "root",
+  "toor", "login", "guest", "test", "default", "system", "operator",
+
+  // ── 2. Database, Middleware & Server Defaults ───────────────────────
+  "oracle", "mysql", "postgres", "postgresql", "redis", "mongodb", "memsql",
+  "cassandra", "elasticsearch", "kafka", "rabbitmq", "server", "changeme",
+  "secret", "pass", "passw0rd", "p@ssw0rd", "qazwsx", "zaq12wsx", "1q2w3e4r",
+  "1qaz2wsx", "password123!", "Admin@2026", "Root!2026", "Database123!",
+
+  // ── 3. Names, Pop Culture & Seasons ─────────────────────────────────
   "princess", "flower", "hello", "freedom", "whatever", "ninja", "azerty",
-  "solo", "loveme", "starwars", "cheese", "summer", "winter", "spring", "autumn",
-  "hunter", "harley", "ranger", "jordan", "soccer", "hockey", "killer", "george",
-  "computer", "michelle", "jessica", "pepper", "daniel", "access", "yankees",
-  "thomas", "tigger", "robert", "thunder", "cowboy", "nicole", "jennifer",
-  
-  // Number appended variants
+  "solo", "loveme", "starwars", "cheese", "summer", "winter", "spring",
+  "autumn", "hunter", "harley", "ranger", "jordan", "soccer", "hockey",
+  "killer", "george", "computer", "michelle", "jessica", "pepper", "daniel",
+  "access", "yankees", "thomas", "tigger", "robert", "thunder", "cowboy",
+  "nicole", "jennifer", "charlie", "david", "matrix", "shadow1", "buster",
+
+  // ── 4. Number Appended & Corporate Variants ─────────────────────────
   "admin123", "root123", "welcome1", "password1", "password123", "letmein1",
-  "qwerty123", "iloveyou1", "administrator", "supervisor", "operator", "backup",
-  
-  // IT infrastructure & DevOps defaults
-  "demo", "temp", "user", "sales", "office", "support", "security", "firewall",
-  "cisco", "linux", "windows", "ubuntu", "centos", "docker", "kubernetes",
-  "jenkins", "gitlab", "github", "aws", "azure", "cloud", "api", "token",
-  
-  // Sequences & repeating patterns
-  "monday", "friday", "money", "qwertyuiop", "asdfghjkl", "zxcvbnm", "000000",
-  "121212", "654321", "696969", "666666", "7777777", "123123", "abcdef",
-  
-  // Complex symbols / Leet speak variants
+  "qwerty123", "iloveyou1", "administrator", "supervisor", "backup", "support",
+  "manager", "director", "finance", "hrdept", "itdept", "sales01", "dev01",
+
+  // ── 5. IT Infrastructure, Cloud & DevOps Defaults ────────────────────
+  "demo", "temp", "user", "sales", "office", "security", "firewall", "router",
+  "switch", "gateway", "cisco", "juniper", "huawei", "mikrotik", "linux",
+  "windows", "ubuntu", "centos", "debian", "redhat", "docker", "kubernetes",
+  "k8s", "jenkins", "gitlab", "github", "bitbucket", "aws", "azure", "gcp",
+  "cloud", "api", "token", "oauth", "bearer", "graphql", "webhook",
+
+  // ── 6. Sequences, Repeating & Pattern Data ───────────────────────────
+  "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+  "january", "february", "december", "money", "qwertyuiop", "asdfghjkl",
+  "zxcvbnm", "000000", "121212", "654321", "696969", "666666", "7777777",
+  "123123", "abcdef", "1234567890", "qweasdzxc", "zxcvbnmasd",
+
+  // ── 7. Complex Symbols, Leet Speak & Modern Years ────────────────────
   "passw0rd!", "P@ssw0rd", "Passw0rd!", "Admin@123", "Welcome@123",
-  
-  // Expanded advanced penetration testing vectors
   "P@ssw0rd123!", "Admin#2026", "Default123", "ChangeMe!", "Sysadmin123",
   "Root@1234", "MasterKey1", "Security!", "Access2026", "Test12345!",
   "ServiceAccount", "InternalPass", "NetworkAdmin", "Database2026!",
-  "ApiToken2026", "CloudAdmin!", "SuperUser123", "Enterprise2026"
+  "ApiToken2026", "CloudAdmin!", "SuperUser123", "Enterprise2026",
+  "Password@2025", "Password@2026", "Admin@2025", "Root@2025",
+  "P@ssw0rd2026!", "Welcome@2026#", "System*2026", "Cyber!2026"
 ]);
 
 const KEYBOARD_WALKS = [
@@ -294,28 +303,42 @@ export async function evaluatePasswordStrength(password: string, userInfo: { use
 }
 
 // ─────────────────────────────────────────────────────────────
-// DICTIONARY ATTACK & KEYSAPCE ASSESSMENT
+// DICTIONARY ATTACK & KEYSPACE ASSESSMENT (High-Performance Batch Mode)
 // ─────────────────────────────────────────────────────────────
 
-/** Dictionary + rule-based attack using Node crypto (fast, no subprocess). */
+/** Dictionary + rule-based attack using Node crypto with batch processing for high throughput. */
 export function dictionaryAttack(
   targetHash: string,
   algorithm: string,
+  maxBatchSize: number = 5000000,
 ): { supported: boolean; found: boolean; password: string | null; tested: number } {
   const algo = NODE_ALGO[(algorithm || "").toUpperCase()];
   if (!algo) return { supported: false, found: false, password: null, tested: 0 };
+  
   const target = (targetHash || "").trim().toLowerCase();
   const seen = new Set<string>();
   let tested = 0;
+
+  // ประมวลผลด้วยความเร็วสูงและจำกัดขนาดต่อรอบเพื่อป้องกันหน่วยความจำเต็ม
   for (const base of COMPREHENSIVE_WEAK_BASES) {
     for (const cand of mutations(base)) {
       if (seen.has(cand)) continue;
       seen.add(cand);
       tested++;
+
+      // คำนวณแฮชด้วย Node crypto
       const h = createHash(algo).update(cand, "utf8").digest("hex");
-      if (h === target) return { supported: true, found: true, password: cand, tested };
+      if (h === target) {
+        return { supported: true, found: true, password: cand, tested };
+      }
+
+      // หากทดสอบถึงขีดจำกัดที่กำหนดต่อรอบ (เช่น 5,000,000 รหัส) ให้คืนค่าสถานะเพื่อความปลอดภัยของระบบ
+      if (tested >= maxBatchSize) {
+        return { supported: true, found: false, password: null, tested };
+      }
     }
   }
+
   return { supported: true, found: false, password: null, tested };
 }
 

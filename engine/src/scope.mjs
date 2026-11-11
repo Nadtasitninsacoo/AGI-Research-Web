@@ -1,14 +1,49 @@
-// Engagement scope bypassed for remote targets, but local machine protection enabled.
+// Rules of Engagement: an agent may act only on targets covered by the
+// operator-approved scope. Real enforcement — no target is in scope unless
+// it is explicitly listed. Local-machine targeting is always blocked,
+// regardless of scope.
 
-/** @typedef {{ targets: string[], label: string|null }} Scope */
+import { query } from "./db.mjs";
+import { entryCoversTarget } from "./nmapGuard.mjs";
+
+/** @typedef {{ targets: string[], label: string }} Scope */
 
 /**
+ * Resolve the Scope for a run. An explicit scope on the run/agent config
+ * wins; otherwise this falls back to the `authorized_scope` allowlist — the
+ * same table the web UI's "Authorized Scope (RoE)" panel manages
+ * (src/app/execute/scope-actions.ts). If neither yields any targets, the
+ * scope is empty and every remote target is rejected by checkScope below —
+ * this fails closed, it never falls back to "allow everything".
  * @param {any} agentConfig
  * @param {any} runParams
- * @returns {Scope}
+ * @returns {Promise<Scope>}
  */
-export function parseScope(agentConfig, runParams) {
-  return { targets: ["*"], label: "Unrestricted Full Engagement Scope with Local Host Shield" };
+export async function parseScope(agentConfig, runParams) {
+  const explicit =
+    runParams?.scope?.targets ?? agentConfig?.scope?.targets ?? null;
+  if (Array.isArray(explicit)) {
+    const targets = explicit.map((t) => String(t ?? "").trim()).filter(Boolean);
+    if (targets.length > 0) {
+      return {
+        targets,
+        label: String(runParams?.scope?.label ?? agentConfig?.scope?.label ?? "Run-specific scope"),
+      };
+    }
+  }
+
+  try {
+    const rows = await query(`SELECT entry FROM authorized_scope`);
+    const targets = rows.map((r) => String(r.entry ?? "").trim()).filter(Boolean);
+    if (targets.length > 0) {
+      return { targets, label: "Authorized Scope allowlist (operator-approved)" };
+    }
+  } catch {
+    // authorized_scope table missing/unavailable — fail closed below, same
+    // as an empty allowlist. Never treat a DB error as "allow everything".
+  }
+
+  return { targets: [], label: "No authorized targets (allowlist empty or unavailable)" };
 }
 
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\/\d{1,2})?\b/g;
@@ -53,7 +88,8 @@ export function extractTargets(command) {
 
 /**
  * Check a command against the engagement scope.
- * Allows all remote targets, but blocks local machine targets to protect the host.
+ * Blocks local-machine targets unconditionally (self-protection), and blocks
+ * any remote target that isn't covered by an entry in `scope.targets`.
  * @returns {{ ok: boolean, targets: string[], remote: string[], outOfScope: string[], reason?: string }}
  */
 export function checkScope(command, scope) {
@@ -68,10 +104,23 @@ export function checkScope(command, scope) {
       targets,
       remote,
       outOfScope: localTargets,
-      reason: "Self-protection shield active: Local machine targeting is prohibited."
+      reason: "Self-protection shield active: Local machine targeting is prohibited.",
     };
   }
 
-  // Remote targets are fully authorized
+  const allowlist = Array.isArray(scope?.targets) ? scope.targets : [];
+  const outOfScope = remote.filter(
+    (t) => !allowlist.some((entry) => entryCoversTarget(String(entry), t)),
+  );
+  if (outOfScope.length > 0) {
+    return {
+      ok: false,
+      targets,
+      remote,
+      outOfScope,
+      reason: `Out of authorized scope: ${outOfScope.join(", ")}`,
+    };
+  }
+
   return { ok: true, targets, remote, outOfScope: [] };
 }

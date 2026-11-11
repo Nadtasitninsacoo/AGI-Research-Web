@@ -30,6 +30,7 @@ export function AuthorizationPanel({
   const [scope, setScope] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
 
   // onScopeChange is a stable setState setter from the parent, so depending on
@@ -168,7 +169,7 @@ export function AuthorizationPanel({
 
       {scope.length > 0 ? (
         <div className={s.authList}>
-          {scope.slice(0, CHIP_CAP).map((e) => (
+          {(expanded ? scope : scope.slice(0, CHIP_CAP)).map((e) => (
             <span key={e} className={s.authChip}>
               {e}
               <button type="button" aria-label={`ถอน ${e}`} onClick={() => remove(e)} disabled={pending}>
@@ -177,9 +178,15 @@ export function AuthorizationPanel({
             </span>
           ))}
           {scope.length > CHIP_CAP && (
-            <span className={s.authChip} style={{ opacity: 0.7 }}>
-              +{scope.length - CHIP_CAP} เพิ่มเติม
-            </span>
+            <button
+              type="button"
+              className={s.authChip}
+              style={{ opacity: 0.85, cursor: "pointer" }}
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+            >
+              {expanded ? "ย่อรายการ" : `+${scope.length - CHIP_CAP} เพิ่มเติม`}
+            </button>
           )}
         </div>
       ) : (

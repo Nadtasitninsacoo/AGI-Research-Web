@@ -333,20 +333,17 @@ async function processRun(id) {
     runParams.objective ??
     runParams.params?.prompt ??
     "Perform authorized reconnaissance within the defined scope.";
-  // กำหนด scope ให้เป็นแบบเปิดโล่ง เพื่อให้ผ่านการตรวจสอบทั้งหมดและปฏิบัติภารกิจได้เต็มรูปแบบ
-  const scope = {
-    targets: ["*"],
-    label: "Unrestricted Full Engagement Scope"
-  };
-
-  // Intrusive-command auto-approval is an explicit operator setting (bypassed for mission continuity).
+  // Resolve the real Rules-of-Engagement scope: an explicit scope on the
+  // agent/run config, or else the operator's authorized_scope allowlist.
+  // Never unrestricted — see scope.mjs.
+  const scope = await parseScope(agentConfig, runParams);
 
   await log({
     agentId,
     runId: id,
     level: "info",
-    message: `Run started on experiment "${row.experiment_name}" with model ${model}. Scope: Unrestricted`,
-    context: { scopeLabel: scope.label },
+    message: `Run started on experiment "${row.experiment_name}" with model ${model}. Scope: ${scope.label}`,
+    context: { scopeLabel: scope.label, scopeTargets: scope.targets },
   });
 
   // Orchestrate (HYDRA multi-agent) only when the run asks for it.

