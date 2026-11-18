@@ -53,7 +53,8 @@ export default function LoginPage() {
         display: "grid",
         placeItems: "center",
         padding: "24px",
-        background: "var(--bg, #0a0c11)",
+        background:
+          "linear-gradient(rgba(5,6,10,0.25), rgba(5,6,10,0.4)), url('/login-bg.png') center / cover no-repeat fixed, #0a0c11",
       }}
     >
       {/* popup แจ้งผล (สำเร็จ/ไม่สำเร็จ) */}
@@ -94,10 +95,12 @@ export default function LoginPage() {
           width: "100%",
           maxWidth: 390,
           padding: "30px 26px",
-          border: "1px solid var(--line, rgba(255,255,255,0.1))",
+          border: "1px solid rgba(255,255,255,0.22)",
           borderRadius: 14,
-          background: "var(--grad-card, linear-gradient(180deg,#1b1f28,#12151b))",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+          background: "linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04))",
+          backdropFilter: "blur(18px) saturate(140%)",
+          WebkitBackdropFilter: "blur(18px) saturate(140%)",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.25)",
         }}
       >
         {/* โลโก้ */}
@@ -209,8 +212,8 @@ const inputStyle: React.CSSProperties = {
   height: 40,
   padding: "0 12px",
   borderRadius: 8,
-  border: "1px solid var(--line-strong, rgba(255,255,255,0.16))",
-  background: "rgba(8,10,15,0.9)",
+  border: "1px solid rgba(255,255,255,0.2)",
+  background: "rgba(8,10,15,0.35)",
   color: "var(--text, #dcdce2)",
   fontSize: 14,
   outline: "none",
