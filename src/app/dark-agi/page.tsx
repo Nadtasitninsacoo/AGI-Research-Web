@@ -138,6 +138,30 @@ export default function DarkAgiPage() {
     }
   }, []);
 
+  // Re-scan the DARK AGI host for newly installed tools, then reload the list.
+  const discoverTools = useCallback(async () => {
+    setOpsLoading(true);
+    setOpsError("");
+    try {
+      const res = await fetch("/api/dark-agi/tools/discover", { method: "POST", cache: "no-store" });
+      if (!res.ok) {
+        const payload: unknown = await res.json().catch(() => null);
+        setOpsError(
+          isRecord(payload) && typeof payload.message === "string"
+            ? payload.message
+            : `ค้นหาโปรแกรมไม่สำเร็จ (${res.status})`,
+        );
+        setOpsLoading(false);
+        return;
+      }
+    } catch (err) {
+      setOpsError(err instanceof Error ? err.message : "ค้นหาโปรแกรมไม่สำเร็จ");
+      setOpsLoading(false);
+      return;
+    }
+    await loadOperations();
+  }, [loadOperations]);
+
   useEffect(() => {
     const controller = new AbortController();
     void loadOperations(controller.signal);
@@ -225,6 +249,16 @@ export default function DarkAgiPage() {
                 >
                   <RefreshCw className={opsLoading ? "op-spin" : ""} size={12} />
                   REFRESH
+                </button>
+                <button
+                  type="button"
+                  className="op-btn op-btnXs"
+                  onClick={() => void discoverTools()}
+                  disabled={opsLoading}
+                  style={{ flex: "none" }}
+                  title="ให้ DARK AGI สแกนหาโปรแกรมที่ติดตั้งบนเครื่องใหม่ (ใช้หลังลงโปรแกรมเพิ่ม)"
+                >
+                  DISCOVER TOOLS
                 </button>
               </div>
 
