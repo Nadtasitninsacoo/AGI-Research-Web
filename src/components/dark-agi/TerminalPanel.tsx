@@ -3,8 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Send, Sparkles, Zap, Search, Trash2 } from "lucide-react";
+import {
+  usePendingScopePick,
+  useAutoApprove,
+  useEngineState,
+  emergencyStop,
+  resumeEngine,
+} from "./useDarkAgiTerminal";
+import { AUTO_APPROVE_DEFAULT_MIN, AUTO_APPROVE_DURATIONS_MIN, formatRemaining } from "./autoApprove";
 import type { LogEntry, TerminalMode } from "./useDarkAgiTerminal";
 import { JobBanner } from "./JobBanner";
+import { ScopeTargetPicker } from "./ScopeTargetPicker";
 import { ConfirmModal } from "@/components/hud/ConfirmModal";
 
 /** The terminal's log + input, with no outer chrome — the full /dark-agi page
@@ -36,10 +45,22 @@ export function TerminalPanel({
 }) {
   const logBoxRef = useRef<HTMLDivElement | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const scopePick = usePendingScopePick();
+  const auto = useAutoApprove();
+  const [autoMin, setAutoMin] = useState<number>(AUTO_APPROVE_DEFAULT_MIN);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (auto.until === null) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [auto.until]);
+  const autoLeft = auto.until === null ? null : auto.until - now;
+  const engine = useEngineState();
+  const [stopping, setStopping] = useState(false);
 
   useEffect(() => {
     logBoxRef.current?.scrollTo({ top: logBoxRef.current.scrollHeight });
-  }, [log]);
+  }, [log, scopePick.pick]);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -124,6 +145,125 @@ export function TerminalPanel({
         </button>
       </div>
 
+      {/* แถวเดียว: AUTO-APPROVE (ซ้าย ยืดได้) + EMERGENCY STOP (ขวา บาง) */}
+      <div style={{ display: "flex", alignItems: "stretch", gap: 8, marginBottom: 8, flex: "none" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "nowrap",
+          flex: 1,
+          minWidth: 0,
+          padding: "2px 8px",
+          minHeight: 30,
+          borderRadius: 8,
+          fontSize: 12,
+          border: `1px solid ${auto.until !== null ? "rgba(255,176,32,0.6)" : "rgba(255,255,255,0.08)"}`,
+          background: auto.until !== null ? "rgba(255,176,32,0.08)" : "rgba(255,255,255,0.03)",
+        }}
+      >
+        {auto.until === null ? (
+          <>
+            <span style={{ color: "#8a8f99", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title="อนุมัติเองเฉพาะ nmap port-inventory / service-identification / os-fingerprint — งานเสี่ยงสูงอื่นยังต้องกดเอง">
+              AUTO-APPROVE: ปิด
+            </span>
+            <select
+              value={autoMin}
+              onChange={(e) => setAutoMin(Number(e.target.value))}
+              aria-label="ระยะเวลา auto-approve"
+              style={{
+                width: "auto",
+                flex: "none",
+                height: 26,
+                background: "#0b0d12",
+                color: "#e8e8ee",
+                border: "1px solid rgba(255,255,255,0.15)",
+                borderRadius: 6,
+                padding: "0 6px",
+                fontSize: 12,
+              }}
+            >
+              {AUTO_APPROVE_DURATIONS_MIN.map((m) => (
+                <option key={m} value={m}>{m} นาที</option>
+              ))}
+            </select>
+            <button type="button" className="op-btn op-btnXs" onClick={() => auto.arm(autoMin)}>
+              ⚡ เปิด
+            </button>
+          </>
+        ) : (
+          <>
+            <span style={{ color: "#ffb020", fontWeight: 700 }}>
+              ⚡ AUTO-APPROVE เปิดอยู่ — เหลือ {formatRemaining(autoLeft ?? 0)}
+            </span>
+            <button type="button" className="op-btn op-btnXs" onClick={auto.disarm}>
+              ■ ปิดทันที
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* หยุดฉุกเฉิน: ขึ้นเฉพาะตอนมีงานรัน/คิวอยู่ — กดแล้วหยุดทันทีไม่ถามซ้ำ */}
+      {engine && engine.active > 0 && !engine.paused && (
+        <button
+          type="button"
+          disabled={stopping}
+          onClick={async () => {
+            setStopping(true);
+            try {
+              await emergencyStop();
+            } finally {
+              setStopping(false);
+            }
+          }}
+          style={{
+            flex: "none",
+            padding: "0 12px",
+            minHeight: 30,
+            fontSize: 12,
+            whiteSpace: "nowrap",
+            border: "1px solid #ff2d46",
+            borderRadius: 8,
+            background: "linear-gradient(180deg,#ff2d46,#a50f1e)",
+            color: "#fff",
+            fontWeight: 800,
+            letterSpacing: "0.05em",
+            cursor: stopping ? "wait" : "pointer",
+            boxShadow: "0 0 10px rgba(255,45,70,0.4)",
+          }}
+          title={`หยุดทุกงานและ process ที่กำลังรันทันที แล้วพักเครื่องยนต์ (${engine.active} งานกำลังรัน/รอคิว)`}
+        >
+          🛑 STOP ({engine.active})
+        </button>
+      )}
+      </div>
+
+      {engine?.paused && (
+        <div
+          style={{
+            flex: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+            marginBottom: 8,
+            padding: "8px 10px",
+            border: "1px solid #ff2d46",
+            borderRadius: 8,
+            background: "rgba(255,45,70,0.1)",
+            fontSize: 12,
+          }}
+        >
+          <span style={{ color: "#ff9aa5", fontWeight: 700 }}>
+            🛑 ENGINE PAUSED — ปฏิเสธงานใหม่ทั้งหมด{engine.reason ? ` (${engine.reason})` : ""}
+          </span>
+          <button type="button" className="op-btn op-btnOk op-btnXs" onClick={() => void resumeEngine()}>
+            ▶ เดินเครื่องต่อ
+          </button>
+        </div>
+      )}
+
       <ConfirmModal
         open={confirmClear}
         title="ล้างประวัติ Terminal ทั้งหมด?"
@@ -143,7 +283,9 @@ export function TerminalPanel({
         ref={logBoxRef}
         className="op-mono"
         style={{
-          flex: 1,
+          // flex-basis 0 + a modest floor: the log shrinks to make room for the
+          // control bars above it instead of pushing the input row off the card.
+          flex: "1 1 0",
           overflowY: "auto",
           background: "#05060a",
           border: "1px solid rgba(255,255,255,0.08)",
@@ -152,7 +294,7 @@ export function TerminalPanel({
           fontSize: 12.5,
           lineHeight: 1.6,
           whiteSpace: "pre-wrap",
-          minHeight,
+          minHeight: Math.min(minHeight, 160),
         }}
       >
         {log.map((entry) => {
@@ -207,6 +349,16 @@ export function TerminalPanel({
             </div>
           );
         })}
+        {scopePick.pick && (
+          <ScopeTargetPicker
+            key={`${scopePick.pick.toolId}:${scopePick.pick.operationId}:${scopePick.pick.scopes.length}`}
+            title={`เลือก scope สำหรับ ${scopePick.pick.toolId}:${scopePick.pick.operationId}`}
+            scopes={scopePick.pick.scopes}
+            field={scopePick.pick.field}
+            onResolve={(r) => void scopePick.resolve(r)}
+            onCancel={scopePick.cancel}
+          />
+        )}
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, marginTop: 10 }}>

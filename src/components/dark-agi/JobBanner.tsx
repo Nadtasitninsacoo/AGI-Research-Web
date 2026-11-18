@@ -1,4 +1,6 @@
-import type { Job, JobStatus } from "./useDarkAgiTerminal";
+import { useState } from "react";
+import { jobAction } from "./useDarkAgiTerminal";
+import type { Job, JobAction, JobStatus } from "./useDarkAgiTerminal";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -54,7 +56,7 @@ function summarize(job: Job): string {
     }
   }
 
-  if (job.status === "AWAITING_APPROVAL") return "รออนุมัติจากผู้ปฏิบัติงานใน DARK AGI console — ยังทำงานอยู่ ไม่ใช่ค้าง";
+  if (job.status === "AWAITING_APPROVAL") return "รออนุมัติจากผู้ปฏิบัติงาน — กด อนุมัติ / ปฏิเสธ ด้านล่าง (ยังไม่ได้รัน ไม่ใช่ค้าง)";
   if (job.status === "QUEUED")
     return "กำลังรอคิว — ระบบรันพร้อมกันได้สูงสุด 2 งานทั่วทั้งแพลตฟอร์ม อาจรอสักครู่ถึงหลายนาที ไม่ใช่ค้าง";
   if (job.status === "RUNNING") return "กำลังทำงาน...";
@@ -103,8 +105,68 @@ export function JobBanner({ job }: { job: Job }) {
         <span className="job-banner-label">SUMMARY</span>
         <span className="job-banner-value">{summarize(job)}</span>
       </div>
+
+      <JobActions job={job} />
     </div>
   );
+}
+
+/** Lifecycle buttons. Approve/Reject are deliberate human decisions: each asks
+ * for confirmation (showing exactly what will run) and nothing auto-approves. */
+function JobActions({ job }: { job: Job }) {
+  const [busy, setBusy] = useState(false);
+
+  async function run(action: JobAction, confirmText?: string) {
+    if (busy) return;
+    let note: string | undefined;
+    if (confirmText) {
+      const answer = window.prompt(`${confirmText}\n\nหมายเหตุ (ไม่บังคับ) — กด OK เพื่อยืนยัน, Cancel เพื่อยกเลิก`, "");
+      if (answer === null) return;
+      note = answer.trim() || undefined;
+    }
+    setBusy(true);
+    try {
+      await jobAction(job.id, action, note);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const what = `${job.toolId}:${job.operationId}${job.targets.length > 0 ? ` → ${job.targets.join(", ")}` : ""} (risk: ${job.risk})`;
+  const btn: React.CSSProperties = { marginRight: 8 };
+
+  let buttons: React.ReactNode = null;
+  if (job.status === "AWAITING_APPROVAL") {
+    buttons = (
+      <>
+        <button type="button" disabled={busy} className="op-btn op-btnOk op-btnXs" style={btn}
+          onClick={() => void run("approve", `อนุมัติให้รัน?\n${what}`)}>
+          ✓ อนุมัติ
+        </button>
+        <button type="button" disabled={busy} className="op-btn op-btnXs" style={btn}
+          onClick={() => void run("reject", `ปฏิเสธงานนี้?\n${what}`)}>
+          ✕ ปฏิเสธ
+        </button>
+        <button type="button" disabled={busy} className="op-btn op-btnXs" onClick={() => void run("cancel")}>
+          ยกเลิก
+        </button>
+      </>
+    );
+  } else if (job.status === "QUEUED" || job.status === "RUNNING") {
+    buttons = (
+      <button type="button" disabled={busy} className="op-btn op-btnXs" onClick={() => void run("cancel")}>
+        ■ ยกเลิก
+      </button>
+    );
+  } else if (job.status === "FAILED" || job.status === "CANCELLED" || job.status === "REJECTED") {
+    buttons = (
+      <button type="button" disabled={busy} className="op-btn op-btnXs" onClick={() => void run("retry")}>
+        ↻ ลองใหม่
+      </button>
+    );
+  }
+  if (!buttons) return null;
+  return <div style={{ marginTop: 8 }}>{buttons}</div>;
 }
 
 function TerminalGlyph() {

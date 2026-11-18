@@ -1,5 +1,17 @@
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { isDagiCommand, operationsFrom, parseDagiCommand } from "./dagiCommand.ts";
+import { AUTO_APPROVE_DEFAULT_MIN, canAutoApprove } from "./autoApprove.ts";
+import {
+  activeScopesFrom,
+  hasUserTarget,
+  inputFor,
+  isScopeAmbiguityError,
+  targetFieldOf,
+  type PickOperation,
+  type PickResolution,
+  type Scope,
+  type TargetField,
+} from "./scopePick.ts";
 
 // Shared terminal logic for DARK AGI's human-operated command mode.
 //
@@ -170,15 +182,37 @@ function matchesSearch(entry: LogEntry, query: string): boolean {
 
 // ── The one true store — log + submitting only ──────────────────────────
 
+/** A network operation waiting for the operator to choose which active scope(s)
+ * to run against. Shared (module-level) so whichever terminal surface is open
+ * shows the same picker. */
+export type PendingPick = {
+  label: string;
+  toolId: string;
+  operationId: string;
+  /** The user's other input fields, preserved when the pick is resolved. */
+  input: Record<string, unknown>;
+  field: TargetField;
+  scopes: Scope[];
+};
+
 type Store = {
   submitting: boolean;
   log: LogEntry[];
+  pick: PendingPick | null;
+  /** Epoch ms until which timed auto-approve is armed; null = off. Memory only
+   * — never persisted, so a reload always starts with it OFF. */
+  autoUntil: number | null;
 };
 
 let store: Store = {
   submitting: false,
   log: loadPersistedLog() ?? [welcomeEntry()],
+  pick: null,
+  autoUntil: null,
 };
+
+const autoHandled = new Set<string>();
+let autoTimer: ReturnType<typeof setTimeout> | null = null;
 
 let logIdCounter = nextLogId(store.log);
 const jobEntryIndex = buildJobIndex(store.log);
@@ -230,6 +264,142 @@ function upsertJobEntry(job: Job) {
     const next: LogEntry = { id, kind: "job", job, at: nowLabel() };
     return [...prev, next].slice(-MAX_LOG_ENTRIES);
   });
+  maybeAutoApprove(job);
+}
+
+/** If timed auto-approve is armed and this job matches the fixed allowlist,
+ * approve it once. A deterministic rule (see autoApprove.ts), not an AI call. */
+function maybeAutoApprove(job: Job) {
+  if (!canAutoApprove(job, store.autoUntil, Date.now(), autoHandled)) return;
+  autoHandled.add(job.id);
+  appendLog(
+    "info",
+    `⚡ AUTO-APPROVE: อนุมัติ ${job.toolId}:${job.operationId} → ${job.targets.join(", ")} (โหมดอัตโนมัติที่เปิดไว้)`,
+  );
+  void jobAction(job.id, "approve", "auto-approved by timed auto mode");
+}
+
+function disarmAutoApprove(reason = "ปิดโดยผู้ใช้") {
+  if (autoTimer) clearTimeout(autoTimer);
+  autoTimer = null;
+  if (store.autoUntil === null) return;
+  appendLog("info", `■ AUTO-APPROVE ปิดแล้ว (${reason}) — งานถัดไปต้องกดอนุมัติเอง`);
+  patchStore({ autoUntil: null });
+}
+
+function armAutoApprove(minutes: number = AUTO_APPROVE_DEFAULT_MIN) {
+  if (autoTimer) clearTimeout(autoTimer);
+  const ms = minutes * 60_000;
+  autoTimer = setTimeout(() => disarmAutoApprove("หมดเวลา"), ms);
+  appendLog("info", `⚡ AUTO-APPROVE เปิด ${minutes} นาที — เฉพาะ nmap port-inventory / service-identification / os-fingerprint`);
+  patchStore({ autoUntil: Date.now() + ms });
+
+  // Also cover jobs already waiting. The log's status can be stale (restored
+  // from history), so never trust it: re-read each open job's REAL status from
+  // DARK AGI. upsertJobEntry then approves only those that are still
+  // AWAITING_APPROVAL and on the allowlist, exactly like a live job.
+  for (const entry of store.log) {
+    if (entry.kind !== "job" || TERMINAL_STATUSES.has(entry.job.status)) continue;
+    void fetch(`/api/dark-agi/jobs/${encodeURIComponent(entry.job.id)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j) upsertJobEntry(j as Job);
+      })
+      .catch(() => undefined);
+  }
+}
+
+// ── Emergency stop ──────────────────────────────────────────────────────
+
+export type EngineView = { paused: boolean; reason: string | null; active: number };
+
+/** Active = running + queued, the work the stop button can actually halt. */
+function engineViewFrom(payload: unknown): EngineView | null {
+  if (!isRecord(payload) || typeof payload.paused !== "boolean") return null;
+  const counts = isRecord(payload.counts) ? payload.counts : {};
+  const n = (k: string) => (typeof counts[k] === "number" ? (counts[k] as number) : 0);
+  return {
+    paused: payload.paused,
+    reason: typeof payload.reason === "string" ? payload.reason : null,
+    active: n("RUNNING") + n("QUEUED"),
+  };
+}
+
+/** Polls the engine so the stop button shows ONLY while something is running
+ * (or the engine is paused and needs resuming). Cheap: one tiny GET / 2s. */
+export function useEngineState(): EngineView | null {
+  const [view, setView] = useState<EngineView | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const res = await fetch("/api/dark-agi/engine", { cache: "no-store" });
+        const next = res.ok ? engineViewFrom(await res.json().catch(() => null)) : null;
+        if (alive && next) setView(next);
+      } catch {
+        // transient — keep the last known state
+      }
+    };
+    void tick();
+    const t = setInterval(tick, 2000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+  return view;
+}
+
+/** Hard brake: turn timed auto-approve OFF first (so nothing gets re-approved),
+ * then pause the engine, cancel every queued/awaiting job and abort every
+ * running process. The engine stays paused until resumeEngine(). */
+export async function emergencyStop(): Promise<void> {
+  disarmAutoApprove("หยุดฉุกเฉิน");
+  appendLog("error", "🛑 EMERGENCY STOP — กำลังหยุดทุกงานและ process ที่กำลังรัน…");
+  try {
+    const res = await fetch("/api/dark-agi/engine/stop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "Emergency stop from AGI Research terminal" }),
+    });
+    const payload: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      appendLog("error", formatApiError(payload, `หยุดฉุกเฉินไม่สำเร็จ (${res.status}) — ลองกดซ้ำ`));
+      return;
+    }
+    appendLog("info", "🛑 หยุดแล้ว: ทุกงานถูกยกเลิก และเครื่องยนต์ถูกพักไว้ (ปฏิเสธงานใหม่) — กด 'เดินเครื่องต่อ' เมื่อพร้อม");
+    // Refresh any job banners still showing an open status.
+    for (const entry of store.log) {
+      if (entry.kind === "job" && !TERMINAL_STATUSES.has(entry.job.status)) {
+        void fetch(`/api/dark-agi/jobs/${encodeURIComponent(entry.job.id)}`, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j) => j && upsertJobEntry(j as Job))
+          .catch(() => undefined);
+      }
+    }
+    patchStore({ submitting: false });
+  } catch (err) {
+    appendLog("error", err instanceof Error ? err.message : "หยุดฉุกเฉินไม่สำเร็จ — ลองกดซ้ำ");
+  }
+}
+
+export async function resumeEngine(): Promise<void> {
+  try {
+    const res = await fetch("/api/dark-agi/engine/resume", { method: "POST" });
+    const payload: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      appendLog("error", formatApiError(payload, `เดินเครื่องต่อไม่สำเร็จ (${res.status})`));
+      return;
+    }
+    appendLog("info", "▶ เดินเครื่องต่อแล้ว — รับงานใหม่ได้ (AUTO-APPROVE ยังปิดอยู่ ต้องเปิดใหม่เอง)");
+  } catch (err) {
+    appendLog("error", err instanceof Error ? err.message : "เดินเครื่องต่อไม่สำเร็จ");
+  }
+}
+
+export function useAutoApprove() {
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return { until: snapshot.autoUntil, arm: armAutoApprove, disarm: () => disarmAutoApprove() };
 }
 
 function describeJob(job: Job): boolean {
@@ -305,7 +475,16 @@ async function runCommand(instruction: string) {
     });
     const payload: unknown = await res.json().catch(() => null);
     if (!res.ok) {
-      appendLog("error", formatApiError(payload, `คำสั่งไม่สำเร็จ (${res.status})`));
+      const text = formatApiError(payload, `คำสั่งไม่สำเร็จ (${res.status})`);
+      appendLog("error", text);
+      // AI mode can't tell us which operation the model picked, so it can't open
+      // the picker itself — point at DIRECT mode, which can.
+      if (isScopeAmbiguityError(res.status, isRecord(payload) ? payload.message : null)) {
+        appendLog(
+          "info",
+          "💡 มีหลาย scope เปิดอยู่ — สลับเป็นโหมด DIRECT (หรือกด รันทันที จาก Command Reference) แล้วพิมพ์ toolId:operationId โดยไม่ใส่ target ระบบจะให้เลือก scope เอง หรือระบุเองเช่น \"on 10.0.0.5\"",
+        );
+      }
       patchStore({ submitting: false });
       return;
     }
@@ -344,6 +523,11 @@ async function runDirect(
     });
     const payload: unknown = await res.json().catch(() => null);
     if (!res.ok) {
+      const message = isRecord(payload) ? payload.message : null;
+      // Several scopes active → offer the picker instead of a dead-end error.
+      if (isScopeAmbiguityError(res.status, message)) {
+        if (await openScopePicker(toolId, operationId, label, input ?? {})) return;
+      }
       appendLog("error", formatApiError(payload, `${label} ไม่สำเร็จ (${res.status})`));
       patchStore({ submitting: false });
       return;
@@ -356,6 +540,166 @@ async function runDirect(
     appendLog("error", err instanceof Error ? err.message : `${label} ไม่สำเร็จ`);
     patchStore({ submitting: false });
   }
+}
+
+/** Fetch the op metadata + active scopes and, when a pick is genuinely needed,
+ * park a PendingPick in the store. Returns true if the picker was opened (the
+ * caller must then stop and NOT print the red error); false to fall back to
+ * showing the backend message as-is. */
+async function openScopePicker(
+  toolId: string,
+  operationId: string,
+  label: string,
+  input: Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    const [opsRes, scopesRes] = await Promise.all([
+      fetch("/api/dark-agi/operations", { cache: "no-store" }),
+      fetch("/api/dark-agi/scopes", { cache: "no-store" }),
+    ]);
+    if (!opsRes.ok || !scopesRes.ok) return false;
+    const ops = operationsFrom(await opsRes.json().catch(() => null)) as (PickOperation & {
+      toolId: string;
+      operationId: string;
+    })[];
+    const op = ops.find((o) => o.toolId === toolId && o.operationId === operationId);
+    const field = op ? targetFieldOf(op) : null;
+    // Local op, or no target field → nothing to pick. A target the user typed
+    // themselves is never overridden (and never reaches this path anyway).
+    if (!field || hasUserTarget(input, field)) return false;
+
+    const active = activeScopesFrom(await scopesRes.json().catch(() => null));
+    if (active.length < 2) return false; // 0 → backend message as-is; 1 → backend already resolves
+
+    appendLog(
+      "info",
+      `เลือก scope สำหรับ ${toolId}:${operationId} — มี ${active.length} scope เปิดอยู่`,
+    );
+    patchStore({ submitting: false, pick: { label, toolId, operationId, input, field, scopes: active } });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function cancelScopePick() {
+  if (!store.pick) return;
+  appendLog("info", "ยกเลิกการเลือก scope");
+  patchStore({ pick: null });
+}
+
+/** The operator chose: submit one merged job, or a ≤20-step sequence. */
+async function resolveScopePick(resolution: PickResolution) {
+  const pending = store.pick;
+  if (!pending) return;
+  patchStore({ pick: null });
+  const { toolId, operationId, label, input, field } = pending;
+
+  if (resolution.mode === "single") {
+    await runDirect(toolId, operationId, label, inputFor(input, field, resolution.targets));
+    return;
+  }
+
+  // Sequence: one step per job, submitted via POST /sequences.
+  patchStore({ submitting: true });
+  appendLog("input", `$ ${toolId}:${operationId} — รันทีละอัน ${resolution.steps.length} steps`);
+  if (resolution.truncated) {
+    appendLog("info", "เกิน 20 steps — ตัดเหลือ 20 อันแรก (รันที่เหลือแยกอีกรอบ)");
+  }
+  try {
+    const res = await fetch("/api/dark-agi/sequences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `${toolId}:${operationId}`,
+        steps: resolution.steps.map((s) => ({
+          toolId,
+          operationId,
+          input: inputFor(input, field, s.targets),
+        })),
+      }),
+    });
+    const payload: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      appendLog("error", formatApiError(payload, `สร้าง sequence ไม่สำเร็จ (${res.status})`));
+      patchStore({ submitting: false });
+      return;
+    }
+    const seqId = isRecord(payload) && typeof payload.id === "string" ? payload.id : null;
+    appendLog(
+      "info",
+      `สร้าง sequence แล้ว (${resolution.steps.map((s) => s.label).join(" → ")})${seqId ? ` — id ${seqId.slice(0, 8)}` : ""}`,
+    );
+    patchStore({ submitting: false });
+    if (seqId) pollSequence(seqId);
+  } catch (err) {
+    appendLog("error", err instanceof Error ? err.message : "สร้าง sequence ไม่สำเร็จ");
+    patchStore({ submitting: false });
+  }
+}
+
+/** Follow a sequence: as each step gets a job, show/update it in the log like a
+ * normal job. Stops when every step is terminal (or after repeated failures). */
+function pollSequence(seqId: string) {
+  const STEP_DONE = new Set(["SUCCEEDED", "FAILED", "SKIPPED"]);
+  let failures = 0;
+  const tick = async () => {
+    try {
+      const res = await fetch(`/api/dark-agi/sequences/${encodeURIComponent(seqId)}`, { cache: "no-store" });
+      const payload: unknown = await res.json().catch(() => null);
+      if (!res.ok || !isRecord(payload) || !Array.isArray(payload.steps)) throw new Error("seq");
+      failures = 0;
+      const steps = payload.steps.filter(isRecord);
+      await Promise.all(
+        steps.map(async (s) => {
+          if (typeof s.jobId !== "string") return;
+          const jr = await fetch(`/api/dark-agi/jobs/${encodeURIComponent(s.jobId)}`, { cache: "no-store" });
+          if (jr.ok) upsertJobEntry((await jr.json()) as Job);
+        }),
+      );
+      const done = steps.length > 0 && steps.every((s) => typeof s.status === "string" && STEP_DONE.has(s.status));
+      if (!done) setTimeout(tick, POLL_MS);
+    } catch {
+      failures += 1;
+      if (failures <= MAX_TRANSIENT_FAILURES) setTimeout(tick, POLL_MS);
+    }
+  };
+  setTimeout(tick, POLL_MS);
+}
+
+export type JobAction = "approve" | "reject" | "cancel" | "retry";
+
+/** A human-initiated lifecycle action on one job (approve/reject/cancel/retry).
+ * Relays to DARK AGI, which still enforces permission + audit. The updated job
+ * replaces its banner in place; a retry returns a NEW job that is followed. */
+export async function jobAction(jobId: string, action: JobAction, note?: string): Promise<void> {
+  try {
+    const res = await fetch(`/api/dark-agi/jobs/${encodeURIComponent(jobId)}/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(note ? { note } : {}),
+    });
+    const payload: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      appendLog("error", formatApiError(payload, `${action} ไม่สำเร็จ (${res.status})`));
+      return;
+    }
+    const job = payload as Job;
+    const finished = describeJob(job);
+    if (!finished) pollJob(job.id);
+  } catch (err) {
+    appendLog("error", err instanceof Error ? err.message : `${action} ไม่สำเร็จ`);
+  }
+}
+
+/** Read the pending scope pick from the shared store (for TerminalPanel). */
+export function usePendingScopePick() {
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return {
+    pick: snapshot.pick,
+    resolve: resolveScopePick,
+    cancel: cancelScopePick,
+  };
 }
 
 /** Runs a `dagi …` shorthand line: field types come from the live /operations
